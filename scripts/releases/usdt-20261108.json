@@ -1,0 +1,808 @@
+{
+ "catalogue": {
+  "commit": "bdb298483ac6cf82e70732df378aa8b443f7ec1c",
+  "commit_source": "--commit",
+  "log": "catalogue-bdb29848.log",
+  "log_sha256": "3617d846d9029eedab240008fed2c9b12ce3dd32db1cc6cc7f2cc65a5d42f962",
+  "verdict": "GATES OK: 29 rows, 13 executed, 15 reused, 1 build-certified from valid evidence, 834.0s"
+ },
+ "census_sha256": "891952bd3d6f4c2d34532e9dd89fda1d449b3be73c8a8c52f575302224fe01b1",
+ "claim_map_file": {
+  "path": "docs/claim-map/usdt.md",
+  "sha256": "30f720384795682feb4bf1817c0265a49a9f1a32b2e7a77db9112759613d53e0"
+ },
+ "commit": "bdb298483ac6cf82e70732df378aa8b443f7ec1c",
+ "compositions_declaring_key_elsewhere": {
+  "Composition.Curve3Pool3CrvCoinExactExit": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvCoinExactFloor": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvCoinExactSwap": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvU3Mid": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolAddCoins": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolAddCost": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolAddMain": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolAddRequest": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolBacked": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolBackedDai": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolBackedEnv": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolBackedFlat": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolBackedUsdc": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolBackedUsdt": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolBackedWalk": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolBackedWindow": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolBlockAnchor": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolCalleeFloorProfiles": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolCoinExactKit": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolCoinExchange": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolCoinFloorKit": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolCoinKeep": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolDaiCoinExact": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitCoins": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitCold": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitFits": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitMain": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitMoment": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitRequest": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitSites": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitTx": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitView": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitWorks": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolImbalanceMain": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolJointRoot": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolKeepAt": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolKeepHistory": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolOneCoinMain": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolPublic": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolPublicBridge": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolPublicEffects": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolPublicGas": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolPublicObservers": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolPublicPremises": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolPublicPrice": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolPublicTx": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolRemoveMessage": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSupplyMid": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapBack": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapBound": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapChain": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapCoins": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapCold": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapEval": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapFits": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapMain": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapPay": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapRequest": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapSites": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolUsdcCoinExact": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolUsdtCoin": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolUsdtCoinExact": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolUsdtCoinExchange": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPrice": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceDeploy": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFalls": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsChain": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsData": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts0": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts1": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts10": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts2": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts3": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts4": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts5": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts6": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts7": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts8": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts9": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsWorld": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFrames": "scripts/releases/curve-3pool-20261108.json"
+ },
+ "counts": {
+  "claim_pins": 0,
+  "composition_modules": 0,
+  "contract_modules": 23,
+  "declarations": 1019,
+  "definition_leaves": 0,
+  "modules": 23,
+  "theorem_leaves": 16
+ },
+ "date": "20261108",
+ "departure_record": "scripts/releases/curve-3pool-20261108.departure.json",
+ "files": [
+  {
+   "path": "Blanc/Lift/CurveCoins/ApprovalLogsUsdt.lean",
+   "sha256": "62ecba24166aa477cdb8361e66753b071c5d2fe962ab1404078c8fc2832294e4"
+  },
+  {
+   "path": "Blanc/Lift/CurveCoins/KeepUsdt.lean",
+   "sha256": "6b671c9a31aa19a01b17d4ba82cf1d1437f07c3a066ce575f913fc80aa595411"
+  },
+  {
+   "path": "Blanc/Lift/CurveCoins/Usdt.lean",
+   "sha256": "d958091856728851a8f8587523212817e0623b9198b28a1639d21ddd5bd4360c"
+  },
+  {
+   "path": "Blanc/Lift/CurveCoins/UsdtLocality.lean",
+   "sha256": "25fc839f213335a3a2588bf1899f1c20dcc977020f4161271e64821d74cef71f"
+  },
+  {
+   "path": "Blanc/Lift/CurveCoins/UsdtPremises.lean",
+   "sha256": "c0ff5ffc7f59379e922ffa05a5bedccfa89d39cf603a56e04052e2ac31495d0e"
+  },
+  {
+   "path": "Blanc/Lift/CurveCoins/UsdtQuiet.lean",
+   "sha256": "3af08249caa5a24a169876a0c3624dc2c774f70bd934a686837e6b9b12bef4e8"
+  },
+  {
+   "path": "Blanc/Lift/Usdt/Cert.lean",
+   "sha256": "6d8fb6856dc03c2542429d63aa907b869641bb0659511236f55f77a30928bdb9"
+  },
+  {
+   "path": "Blanc/Lift/Usdt/Check.lean",
+   "sha256": "6ac9d5fc68ce2d678bfd9b968682b6ca909d048b5dc363a1606b9db3f8527c50"
+  },
+  {
+   "path": "Blanc/Lift/Usdt/CheckPart0.lean",
+   "sha256": "7184f3bae81a58c1d638b883eef82dc1a3b5d8318d7f06a16ea596ff08e4fdef"
+  },
+  {
+   "path": "Blanc/Lift/Usdt/CheckPart1.lean",
+   "sha256": "781702c358557254a056c4848d8956e333b9a2e836fd8d032b9780a7074156a9"
+  },
+  {
+   "path": "Blanc/Lift/Usdt/CheckTries.lean",
+   "sha256": "3ea45da66ea5123b3d8ada44bbb4c7dd9e93528eb958c02ce82da04c7f56e6bc"
+  },
+  {
+   "path": "Blanc/Lift/Usdt/Jumps.lean",
+   "sha256": "25fd94bfeb73fbddcb8f56cc3cc2886c2731688e530013fc0c3e566f470f1dc8"
+  },
+  {
+   "path": "Blanc/Lift/UsdtExact.lean",
+   "sha256": "843a7af3af1d88cf9f3af03cdd6c871afb3abe606ef6175b474c288411987259"
+  },
+  {
+   "path": "Blanc/Lift/UsdtForward.lean",
+   "sha256": "f4e07d235bae614152434aff97a980adf71369b1a008ce3eb447c245cdf94b55"
+  },
+  {
+   "path": "Blanc/Lift/UsdtForwardLaws.lean",
+   "sha256": "fd02ced2ac6a387e6bb45c5577d378b210170c39dcdd237be2e72921f19f7268"
+  },
+  {
+   "path": "Blanc/Lift/UsdtForwardSteps.lean",
+   "sha256": "d697cf8a26719c761121cfeae710ddc8c5a7d2c5e6de4419069d4d1258342c7a"
+  },
+  {
+   "path": "Blanc/Lift/UsdtFrames.lean",
+   "sha256": "159c550cf219e9639fd70fc5b0e6ee1a91a1197cfac9a29f557bb2501d53c6fb"
+  },
+  {
+   "path": "Blanc/Lift/UsdtOwnerFrames.lean",
+   "sha256": "735594c422e3ce01eabb73d742317e6b2d730beb7570d742b94695ab8dffab7d"
+  },
+  {
+   "path": "Blanc/Lift/UsdtWs.lean",
+   "sha256": "3d1759981688264d002419dc25ab000f8cfd4596dce4756c52570ebab97219a1"
+  },
+  {
+   "path": "Blanc/Lift/UsdtWs/Ann.lean",
+   "sha256": "7d865557a6df7e5569bd5174c8ccfb48651f30beee1251acfa576e3197882e0c"
+  },
+  {
+   "path": "Blanc/Lift/UsdtWs/Check.lean",
+   "sha256": "8e5638954da17437d80704c57b5a4955b1b4bcab0bf3aa22afb6afc0c6071b46"
+  },
+  {
+   "path": "Blanc/Lift/UsdtWs/Check0.lean",
+   "sha256": "5fb4669148568e9a3f61eec31fc627dd9c86feea7c41ed6a685d38cd4eb3a4ec"
+  },
+  {
+   "path": "Blanc/Lift/UsdtWs/Check1.lean",
+   "sha256": "74d8f3b21cf08fb14ebb0ba91fee8d9f05cff2e03d0b42154d66643c22993827"
+  },
+  {
+   "path": "docs/claim-map/usdt.md",
+   "sha256": "30f720384795682feb4bf1817c0265a49a9f1a32b2e7a77db9112759613d53e0"
+  },
+  {
+   "path": "scripts/claim-map-families/usdt.py",
+   "sha256": "e23d84eff856bc98a99904d0361c6450f20c825760adb2c7cb2848efc9db6011"
+  }
+ ],
+ "jaune_rev": "e8db2742bab025fe3c0e399f00d0dba7ca908926",
+ "key": "usdt",
+ "layering": {
+  "compositions": {},
+  "contracts": [
+   "Lift.CurveCoins.ApprovalLogsUsdt",
+   "Lift.CurveCoins.KeepUsdt",
+   "Lift.CurveCoins.Usdt",
+   "Lift.CurveCoins.UsdtLocality",
+   "Lift.CurveCoins.UsdtPremises",
+   "Lift.CurveCoins.UsdtQuiet",
+   "Lift.Usdt.Cert",
+   "Lift.Usdt.Check",
+   "Lift.Usdt.CheckPart0",
+   "Lift.Usdt.CheckPart1",
+   "Lift.Usdt.CheckTries",
+   "Lift.Usdt.Jumps",
+   "Lift.UsdtExact",
+   "Lift.UsdtForward",
+   "Lift.UsdtForwardLaws",
+   "Lift.UsdtForwardSteps",
+   "Lift.UsdtFrames",
+   "Lift.UsdtOwnerFrames",
+   "Lift.UsdtWs",
+   "Lift.UsdtWs.Ann",
+   "Lift.UsdtWs.Check",
+   "Lift.UsdtWs.Check0",
+   "Lift.UsdtWs.Check1"
+  ]
+ },
+ "lean_toolchain": "leanprover/lean4:v4.35.0",
+ "live_reason": "usdt = \"USDT (member of the 3pool compositions)\"",
+ "modules": [
+  "Lift.CurveCoins.ApprovalLogsUsdt",
+  "Lift.CurveCoins.KeepUsdt",
+  "Lift.CurveCoins.Usdt",
+  "Lift.CurveCoins.UsdtLocality",
+  "Lift.CurveCoins.UsdtPremises",
+  "Lift.CurveCoins.UsdtQuiet",
+  "Lift.Usdt.Cert",
+  "Lift.Usdt.Check",
+  "Lift.Usdt.CheckPart0",
+  "Lift.Usdt.CheckPart1",
+  "Lift.Usdt.CheckTries",
+  "Lift.Usdt.Jumps",
+  "Lift.UsdtExact",
+  "Lift.UsdtForward",
+  "Lift.UsdtForwardLaws",
+  "Lift.UsdtForwardSteps",
+  "Lift.UsdtFrames",
+  "Lift.UsdtOwnerFrames",
+  "Lift.UsdtWs",
+  "Lift.UsdtWs.Ann",
+  "Lift.UsdtWs.Check",
+  "Lift.UsdtWs.Check0",
+  "Lift.UsdtWs.Check1"
+ ],
+ "outstanding_allowed": [],
+ "release_keys": [
+  "curve-3pool",
+  "curve-3crv",
+  "usdc",
+  "dai",
+  "usdt",
+  "vyper-nonreentrant-deployed"
+ ],
+ "rows": {
+  "Blanc.lean": [
+   [
+    935,
+    "import Blanc.Lift.CurveCoins.ApprovalLogsUsdt"
+   ],
+   [
+    943,
+    "import Blanc.Lift.CurveCoins.KeepUsdt"
+   ],
+   [
+    948,
+    "import Blanc.Lift.CurveCoins.Usdt"
+   ],
+   [
+    949,
+    "import Blanc.Lift.CurveCoins.UsdtLocality"
+   ],
+   [
+    950,
+    "import Blanc.Lift.CurveCoins.UsdtPremises"
+   ],
+   [
+    951,
+    "import Blanc.Lift.CurveCoins.UsdtQuiet"
+   ],
+   [
+    1629,
+    "import Blanc.Lift.Usdt.Cert"
+   ],
+   [
+    1630,
+    "import Blanc.Lift.Usdt.Check"
+   ],
+   [
+    1631,
+    "import Blanc.Lift.Usdt.CheckPart0"
+   ],
+   [
+    1632,
+    "import Blanc.Lift.Usdt.CheckPart1"
+   ],
+   [
+    1633,
+    "import Blanc.Lift.Usdt.CheckTries"
+   ],
+   [
+    1634,
+    "import Blanc.Lift.Usdt.Jumps"
+   ],
+   [
+    1635,
+    "import Blanc.Lift.UsdtExact"
+   ],
+   [
+    1636,
+    "import Blanc.Lift.UsdtForward"
+   ],
+   [
+    1637,
+    "import Blanc.Lift.UsdtForwardLaws"
+   ],
+   [
+    1638,
+    "import Blanc.Lift.UsdtForwardSteps"
+   ],
+   [
+    1639,
+    "import Blanc.Lift.UsdtFrames"
+   ],
+   [
+    1640,
+    "import Blanc.Lift.UsdtOwnerFrames"
+   ],
+   [
+    1641,
+    "import Blanc.Lift.UsdtWs"
+   ],
+   [
+    1642,
+    "import Blanc.Lift.UsdtWs.Ann"
+   ],
+   [
+    1643,
+    "import Blanc.Lift.UsdtWs.Check"
+   ],
+   [
+    1644,
+    "import Blanc.Lift.UsdtWs.Check0"
+   ],
+   [
+    1645,
+    "import Blanc.Lift.UsdtWs.Check1"
+   ]
+  ],
+  "scripts/proof-module-size-baseline.json": [
+   [
+    841,
+    "    \"Blanc/Lift/CurveCoins/ApprovalLogsUsdt.lean\","
+   ],
+   [
+    849,
+    "    \"Blanc/Lift/CurveCoins/KeepUsdt.lean\","
+   ],
+   [
+    854,
+    "    \"Blanc/Lift/CurveCoins/Usdt.lean\","
+   ],
+   [
+    855,
+    "    \"Blanc/Lift/CurveCoins/UsdtLocality.lean\","
+   ],
+   [
+    856,
+    "    \"Blanc/Lift/CurveCoins/UsdtPremises.lean\","
+   ],
+   [
+    857,
+    "    \"Blanc/Lift/CurveCoins/UsdtQuiet.lean\","
+   ],
+   [
+    1519,
+    "    \"Blanc/Lift/Usdt/Cert.lean\","
+   ],
+   [
+    1520,
+    "    \"Blanc/Lift/Usdt/Check.lean\","
+   ],
+   [
+    1521,
+    "    \"Blanc/Lift/Usdt/CheckPart0.lean\","
+   ],
+   [
+    1522,
+    "    \"Blanc/Lift/Usdt/CheckPart1.lean\","
+   ],
+   [
+    1523,
+    "    \"Blanc/Lift/Usdt/CheckTries.lean\","
+   ],
+   [
+    1524,
+    "    \"Blanc/Lift/Usdt/Jumps.lean\","
+   ],
+   [
+    1525,
+    "    \"Blanc/Lift/UsdtExact.lean\","
+   ],
+   [
+    1526,
+    "    \"Blanc/Lift/UsdtForward.lean\","
+   ],
+   [
+    1527,
+    "    \"Blanc/Lift/UsdtForwardLaws.lean\","
+   ],
+   [
+    1528,
+    "    \"Blanc/Lift/UsdtForwardSteps.lean\","
+   ],
+   [
+    1529,
+    "    \"Blanc/Lift/UsdtFrames.lean\","
+   ],
+   [
+    1530,
+    "    \"Blanc/Lift/UsdtOwnerFrames.lean\","
+   ],
+   [
+    1531,
+    "    \"Blanc/Lift/UsdtWs.lean\","
+   ],
+   [
+    1532,
+    "    \"Blanc/Lift/UsdtWs/Ann.lean\","
+   ],
+   [
+    1533,
+    "    \"Blanc/Lift/UsdtWs/Check.lean\","
+   ],
+   [
+    1534,
+    "    \"Blanc/Lift/UsdtWs/Check0.lean\","
+   ],
+   [
+    1535,
+    "    \"Blanc/Lift/UsdtWs/Check1.lean\","
+   ]
+  ]
+ },
+ "schema": "blanc-release-manifest-v1",
+ "shared_used": {
+  "Blanc.B256.and_comm": "000000001d5f77ec",
+  "Blanc.B256.eq_zero_of_toNat": "000000002da7bad9",
+  "Blanc.CodeSem": "00000000ea5019a6",
+  "Blanc.CoveredFork": "00000000c40c3bc2",
+  "Blanc.Devm.EqModGas": "000000004a084e20",
+  "Blanc.Devm.EqModGas.of_normalized_eq": "00000000ac6e4863",
+  "Blanc.Devm.PopBurn": "00000000f5f549a2",
+  "Blanc.Devm.addLog_getStor": "00000000cb1280c5",
+  "Blanc.Exec.Deriv.ParentPrefix.sevm_eq": "00000000ca5630a0",
+  "Blanc.Exec.Deriv.successfulSstore?": "0000000030c16e3d",
+  "Blanc.Exec.Frame.rootDeriv": "000000001f454bec",
+  "Blanc.Exec.NoOpaqueAbove": "0000000069e3ad5e",
+  "Blanc.Exec.StorageWrite": "00000000ea5019a6",
+  "Blanc.Exec.mem_rawFrameDescendants_of_mem_descendantFrames": "00000000d2ec4682",
+  "Blanc.Exec.rawFrameDescendants": "00000000954a0660",
+  "Blanc.ExecutionTrace.BodyStageCapabilities": "0000000084eeb3ff",
+  "Blanc.ExecutionTrace.MidHistoryTraceIn": "000000009c563a76",
+  "Blanc.ExecutionTrace.MidHistoryTraceIn.NoLogInReceipts": "0000000073754f10",
+  "Blanc.ExecutionTrace.MidHistoryTraceIn.no_log_at": "000000001a64ed2e",
+  "Blanc.ExecutionTrace.MidHistoryTraceIn.settledFrames": "00000000aa159d17",
+  "Blanc.ExecutionTrace.MidHistoryTraceIn.settled_ownCodeIn": "00000000cff234f6",
+  "Blanc.ExecutionTrace.MidHistoryTraceIn.systemRawFrames": "00000000afab5f48",
+  "Blanc.ExecutionTrace.OwnCodeAtIn": "00000000c0779859",
+  "Blanc.ExecutionTrace.OwnSpawnsIn": "00000000f2670f0d",
+  "Blanc.HistFork": "00000000c40c3bc2",
+  "Blanc.HistFork.bal_none": "00000000d9f92034",
+  "Blanc.HistFork.stateGas_none": "00000000490bf84f",
+  "Blanc.InstalledRuntimeSafety": "00000000b5f2c6c5",
+  "Blanc.Lift.AVal": "00000000ea5019a6",
+  "Blanc.Lift.AccumulatedWalk.FpM": "00000000fae0632a",
+  "Blanc.Lift.AccumulatedWalk.FpM.init": "00000000f49d1f3b",
+  "Blanc.Lift.AccumulatedWalk.FpM.write": "000000001b6c1b33",
+  "Blanc.Lift.AccumulatedWalk.FrameLands": "00000000d4cf5159",
+  "Blanc.Lift.AccumulatedWalk.Keeps": "00000000228f8548",
+  "Blanc.Lift.AccumulatedWalk.Keeps.log": "0000000008ecd705",
+  "Blanc.Lift.AccumulatedWalk.Keeps.refl": "000000003713b56d",
+  "Blanc.Lift.AccumulatedWalk.Keeps.sload": "0000000014917619",
+  "Blanc.Lift.AccumulatedWalk.Keeps.sstore": "000000003a28f0e5",
+  "Blanc.Lift.AccumulatedWalk.afterSload_of_warm": "000000006e55239f",
+  "Blanc.Lift.AccumulatedWalk.afterSload_withGasLeft": "00000000b56aa4bf",
+  "Blanc.Lift.AccumulatedWalk.afterSstore_withGasLeft": "00000000e2417246",
+  "Blanc.Lift.AccumulatedWalk.curVal_afterSload": "0000000020484de7",
+  "Blanc.Lift.AccumulatedWalk.curVal_afterSstore_ne": "000000009f0eb7b0",
+  "Blanc.Lift.AccumulatedWalk.eqCheck_ne": "0000000051ca9e37",
+  "Blanc.Lift.AccumulatedWalk.eqCheck_one": "00000000ae7e47c2",
+  "Blanc.Lift.AccumulatedWalk.frameLands_of": "00000000752f5fa6",
+  "Blanc.Lift.AccumulatedWalk.ltCheck_add_zero": "00000000dc19970d",
+  "Blanc.Lift.AccumulatedWalk.mem_afterSload": "000000003f6f33bb",
+  "Blanc.Lift.AccumulatedWalk.mem_afterSload_of_mem": "0000000043663f10",
+  "Blanc.Lift.AccumulatedWalk.mem_afterSstore_of_mem": "0000000083df6200",
+  "Blanc.Lift.AccumulatedWalk.move_charges_cold": "000000001c4f0f22",
+  "Blanc.Lift.AccumulatedWalk.notMem_afterSload": "00000000fb67fe69",
+  "Blanc.Lift.AccumulatedWalk.origVal_afterSload": "000000004a56c2bd",
+  "Blanc.Lift.AccumulatedWalk.rk": "00000000d08b4f4a",
+  "Blanc.Lift.AccumulatedWalk.rk0": "00000000d8ec1994",
+  "Blanc.Lift.AccumulatedWalk.rx_branchTo_zero'": "000000009a5349a9",
+  "Blanc.Lift.AccumulatedWalk.rx_branch_zero'": "0000000053995cfb",
+  "Blanc.Lift.AccumulatedWalk.rx_callK": "00000000eae6b079",
+  "Blanc.Lift.AccumulatedWalk.rx_callKT": "000000001a3bb6d3",
+  "Blanc.Lift.AccumulatedWalk.rx_keccakP": "00000000e3b5c484",
+  "Blanc.Lift.AccumulatedWalk.rx_log3At": "00000000cf8fd6d2",
+  "Blanc.Lift.AccumulatedWalk.rx_mloadP": "000000006fea7cdf",
+  "Blanc.Lift.AccumulatedWalk.rx_mstoreGrow": "00000000a60d2e6d",
+  "Blanc.Lift.AccumulatedWalk.rx_mstoreInit": "000000009f3c9b3e",
+  "Blanc.Lift.AccumulatedWalk.rx_mstoreP": "00000000d541ebf7",
+  "Blanc.Lift.AccumulatedWalk.rx_retK": "000000002f3296ea",
+  "Blanc.Lift.AccumulatedWalk.rx_returnAt": "00000000aa43a099",
+  "Blanc.Lift.AccumulatedWalk.short_of_len": "00000000a2370c39",
+  "Blanc.Lift.AccumulatedWalk.sloadCost_cold": "000000008e01ccf5",
+  "Blanc.Lift.AccumulatedWalk.sloadCost_le_lit": "0000000002420090",
+  "Blanc.Lift.AccumulatedWalk.sloadCost_of_warm": "00000000fbb3af14",
+  "Blanc.Lift.AccumulatedWalk.sstoreCost_le_lit": "00000000ecdaa09c",
+  "Blanc.Lift.AccumulatedWalk.sstoreCost_warm_eq": "00000000d5686ffd",
+  "Blanc.Lift.AccumulatedWalk.sstore_ge": "000000000d2d5e04",
+  "Blanc.Lift.AccumulatedWalk.sum_atom": "000000000232d9c1",
+  "Blanc.Lift.AccumulatedWalk.sum_close": "000000004cf8e3f0",
+  "Blanc.Lift.AccumulatedWalk.sum_step": "000000000c4dab84",
+  "Blanc.Lift.AccumulatedWalk.sum_stepL": "00000000c3a7e627",
+  "Blanc.Lift.AccumulatedWalk.sum_stepR": "00000000df2622a3",
+  "Blanc.Lift.ApprovalLog": "0000000077331e00",
+  "Blanc.Lift.AtExec": "000000005cf5b3ca",
+  "Blanc.Lift.CallerOf": "00000000587baf50",
+  "Blanc.Lift.Cert": "00000000ea5019a6",
+  "Blanc.Lift.Cert.check": "00000000302c18dc",
+  "Blanc.Lift.Cert.checkM_of_rangeOk": "00000000d5b90045",
+  "Blanc.Lift.Cert.check_of_rangeOk": "00000000127cc0ed",
+  "Blanc.Lift.Cert.entries": "00000000ceee0713",
+  "Blanc.Lift.Cert.jumpsOk": "00000000302c18dc",
+  "Blanc.Lift.Cert.jumpsOk_of_rangeOk": "000000001364d3a2",
+  "Blanc.Lift.Cert.prog": "00000000e24fa292",
+  "Blanc.Lift.Cert.rangeOk": "00000000ee6dae12",
+  "Blanc.Lift.Cert.rangeOkT": "000000002d62f1fd",
+  "Blanc.Lift.Cert.rangeOkT_eq": "00000000d08d3c63",
+  "Blanc.Lift.Cert.rangeOk_drop_of_le": "00000000280a1147",
+  "Blanc.Lift.Cert.rangeOk_drop_take": "000000009c6b8d9c",
+  "Blanc.Lift.CertFrame": "000000008ff9b061",
+  "Blanc.Lift.ChainNoExec": "0000000008f6f53a",
+  "Blanc.Lift.CodeFrame": "00000000267d7dc1",
+  "Blanc.Lift.CodeTries": "000000000e57b33f",
+  "Blanc.Lift.CodeTries.ofData": "000000002be2dde4",
+  "Blanc.Lift.CoinKey": "00000000ea5019a6",
+  "Blanc.Lift.CoinKey.slot": "000000006fedc71e",
+  "Blanc.Lift.CoinKeysFresh": "000000008ba0d341",
+  "Blanc.Lift.CoinKeysFresh.site_mem": "00000000a94aea5c",
+  "Blanc.Lift.Conf": "00000000ea5019a6",
+  "Blanc.Lift.Cont": "00000000ea5019a6",
+  "Blanc.Lift.Cursor": "00000000ea5019a6",
+  "Blanc.Lift.Cursor.start": "000000007d5272e6",
+  "Blanc.Lift.CurveCoins.FrameLogsApproval": "000000002d9d1dfb",
+  "Blanc.Lift.CurveCoins.PoolCoinSel": "00000000c3f0b8e3",
+  "Blanc.Lift.CurveCoins.approvalTopic": "000000000b5d047d",
+  "Blanc.Lift.CurveCoins.approvalTopic_bytes": "00000000e19be500",
+  "Blanc.Lift.Entry": "00000000ea5019a6",
+  "Blanc.Lift.EntryLocal": "00000000491d7a6c",
+  "Blanc.Lift.Exec.Deriv.ParentPrefix.noPush": "000000002e2f3ce5",
+  "Blanc.Lift.Exec.rawFrameDescendants_eq_nil_of_noExec": "0000000000168ea5",
+  "Blanc.Lift.ExecFreeSet": "00000000ae729382",
+  "Blanc.Lift.ExecFreeSet.lookup": "00000000c201b26d",
+  "Blanc.Lift.FrameChain": "0000000059521455",
+  "Blanc.Lift.FrameChain.fold": "000000009b3945f0",
+  "Blanc.Lift.FrameKeepsForeign": "000000005de952df",
+  "Blanc.Lift.FreePtr.Fact": "00000000ea5019a6",
+  "Blanc.Lift.LTrie": "000000008ae3e146",
+  "Blanc.Lift.LTrie.ofList": "00000000ad99184a",
+  "Blanc.Lift.Mem.Wf.read_snd": "0000000061ca97a4",
+  "Blanc.Lift.Mem.read_write_word_disjoint": "000000007d24b58b",
+  "Blanc.Lift.Mem.read_write_word_of_wf": "0000000053e835de",
+  "Blanc.Lift.MemMap": "00000000ea5019a6",
+  "Blanc.Lift.Ninst.Run.state_of_regSilent": "00000000c91d7182",
+  "Blanc.Lift.Ninst.storageFree": "0000000057479e7d",
+  "Blanc.Lift.NoHaltSet": "00000000ae729382",
+  "Blanc.Lift.Outcome": "00000000ea5019a6",
+  "Blanc.Lift.PoolAuthorityEmpty": "000000009f6f5a2b",
+  "Blanc.Lift.Reach": "00000000419c19e0",
+  "Blanc.Lift.Reach.false_of_execFree": "00000000c641aefe",
+  "Blanc.Lift.Reach.gotoTree": "000000004dea9d80",
+  "Blanc.Lift.SFunc": "00000000ea5019a6",
+  "Blanc.Lift.SFunc.Run": "000000004ec99252",
+  "Blanc.Lift.SFunc.Run.cut": "00000000b9da501d",
+  "Blanc.Lift.SFunc.RunCut": "00000000e05e8dba",
+  "Blanc.Lift.SFunc.RunCutP": "0000000033b7e323",
+  "Blanc.Lift.SFunc.RunCutP.false_of_noOk": "00000000b2870f1f",
+  "Blanc.Lift.SFunc.RunExact": "000000004ec99252",
+  "Blanc.Lift.SFunc.RunP": "00000000739c9527",
+  "Blanc.Lift.SFunc.RunP.not_halted_entry": "000000005fa7089a",
+  "Blanc.Lift.SFunc.execFreeIn": "00000000c7d05f7f",
+  "Blanc.Lift.SFunc.gotoTree": "000000009ef2b2f7",
+  "Blanc.Lift.SFunc.noOk": "00000000b966aa0b",
+  "Blanc.Lift.SProg.RunExact": "00000000981e17d4",
+  "Blanc.Lift.SProg.RunP": "0000000005eec9ac",
+  "Blanc.Lift.Seg": "00000000ea5019a6",
+  "Blanc.Lift.SettledChain": "00000000f2488914",
+  "Blanc.Lift.St": "000000001b7f5104",
+  "Blanc.Lift.St.self'": "00000000d02b788b",
+  "Blanc.Lift.StepIn": "0000000026c3c248",
+  "Blanc.Lift.StepIn.toRun": "00000000aea7b838",
+  "Blanc.Lift.StorWords": "00000000ea5019a6",
+  "Blanc.Lift.Usdc.CodeSem.ofBytes": "0000000042722c94",
+  "Blanc.Lift.WriteSite.AllowedFrame": "000000005b1667ab",
+  "Blanc.Lift.WriteSite.B256.toNat_sub_of_le": "00000000e4a1ffad",
+  "Blanc.Lift.WriteSite.BalancePath": "00000000ea5019a6",
+  "Blanc.Lift.WriteSite.BalanceRow": "00000000ea5019a6",
+  "Blanc.Lift.WriteSite.BalanceRow.shapeOk": "00000000bb5048ec",
+  "Blanc.Lift.WriteSite.Env": "00000000ea5019a6",
+  "Blanc.Lift.WriteSite.Env.root": "00000000bb550b32",
+  "Blanc.Lift.WriteSite.Op2": "00000000ea5019a6",
+  "Blanc.Lift.WriteSite.SelTable": "00000000ea5019a6",
+  "Blanc.Lift.WriteSite.Site": "00000000ea5019a6",
+  "Blanc.Lift.WriteSite.Site.GuardsHold": "00000000a2b15e99",
+  "Blanc.Lift.WriteSite.Term": "00000000ea5019a6",
+  "Blanc.Lift.WriteSite.Term.Den": "000000004d805b4e",
+  "Blanc.Lift.WriteSite.Term.eval": "000000001f670d94",
+  "Blanc.Lift.WriteSite.Term.known": "00000000a00d6c6c",
+  "Blanc.Lift.WriteSite.WAnn": "00000000ea5019a6",
+  "Blanc.Lift.WriteSite.WRet": "00000000ea5019a6",
+  "Blanc.Lift.WriteSite.WSt": "00000000ea5019a6",
+  "Blanc.Lift.WriteSite.WSt.init": "00000000683e2e2a",
+  "Blanc.Lift.WriteSite.WsStep": "00000000755d34c6",
+  "Blanc.Lift.WriteSite.addrMaskT": "000000007b578ad7",
+  "Blanc.Lift.WriteSite.addrMaskT_eval": "00000000b82c7132",
+  "Blanc.Lift.WriteSite.hasSel": "000000002afe532d",
+  "Blanc.Lift.WriteSite.hasSel_sound": "00000000607748d4",
+  "Blanc.Lift.WriteSite.instDecidableEqSite": "00000000aa013cfe",
+  "Blanc.Lift.WriteSite.instDecidableEqTerm": "0000000067c959c5",
+  "Blanc.Lift.WriteSite.instDecidableEqWSt": "0000000044745e42",
+  "Blanc.Lift.WriteSite.lift_sound_ws": "00000000e19214e0",
+  "Blanc.Lift.WriteSite.mappingKey?": "00000000a858b4ef",
+  "Blanc.Lift.WriteSite.mappingSites": "000000007895b44b",
+  "Blanc.Lift.WriteSite.rowSiteOk": "00000000c818c747",
+  "Blanc.Lift.WriteSite.rowSlot": "00000000dfed9dd8",
+  "Blanc.Lift.WriteSite.successfulSstore_mappingSite": "00000000b662a524",
+  "Blanc.Lift.WriteSite.successfulSstore_site": "00000000e19e4a13",
+  "Blanc.Lift.WriteSite.wsCert": "00000000a04b8d49",
+  "Blanc.Lift.WriteSite.wsCert_of_wsFrom": "00000000fcacec60",
+  "Blanc.Lift.WriteSite.wsFrom": "000000000b57c161",
+  "Blanc.Lift.WriteSite.wsFrom_of_le": "000000001c5e62ca",
+  "Blanc.Lift.WriteSite.wsFrom_range": "00000000b9b8cf9f",
+  "Blanc.Lift.WriteSite.wsRange": "0000000046c5fe09",
+  "Blanc.Lift.WriteSite.wsRoot": "0000000070e7a8fc",
+  "Blanc.Lift.accountAccessH": "00000000cc201526",
+  "Blanc.Lift.accountAccessH_getStor": "00000000c3dbe23b",
+  "Blanc.Lift.add_nof_of_ltCheck": "000000009a032a56",
+  "Blanc.Lift.afterSloadH": "000000002759f877",
+  "Blanc.Lift.afterSloadH_getStor": "000000003dd47b28",
+  "Blanc.Lift.afterSload_refundCounter": "0000000028327925",
+  "Blanc.Lift.afterSstoreH": "000000004e37fb05",
+  "Blanc.Lift.afterSstoreH_getStor_self": "00000000b7510274",
+  "Blanc.Lift.callKindsCheck": "000000003ff25231",
+  "Blanc.Lift.callKinds_of_check": "0000000099ddcbda",
+  "Blanc.Lift.caller_eval": "0000000045b81d72",
+  "Blanc.Lift.cd_eval": "000000005dadc3da",
+  "Blanc.Lift.chain_of_static": "000000009398897b",
+  "Blanc.Lift.coinFrames": "00000000221e16e6",
+  "Blanc.Lift.coinFrames_append": "00000000504ded37",
+  "Blanc.Lift.coinObs": "00000000adaa5aca",
+  "Blanc.Lift.div_bexp_zero": "00000000160410c3",
+  "Blanc.Lift.entryLocal_of_frames": "0000000086ad9903",
+  "Blanc.Lift.eq_of_iszero2": "000000008f3ee4d9",
+  "Blanc.Lift.eq_zero_of_iszero_lit": "000000004ca273b3",
+  "Blanc.Lift.eq_zero_of_iszero_ne_zero": "00000000d187ca79",
+  "Blanc.Lift.frameKeeps_of_noExec": "000000007a8e9ece",
+  "Blanc.Lift.frameSiteKeys": "00000000e478c86e",
+  "Blanc.Lift.frame_cellInv": "00000000fab1ac4f",
+  "Blanc.Lift.frame_cell_keep": "0000000059584bcb",
+  "Blanc.Lift.frame_row_mem": "000000004d3026c2",
+  "Blanc.Lift.frame_rows_zero": "000000008a084110",
+  "Blanc.Lift.getStorVal_afterSload": "00000000d1866345",
+  "Blanc.Lift.gsv": "000000009381a849",
+  "Blanc.Lift.heldKeys": "00000000374bff7a",
+  "Blanc.Lift.held_mem": "00000000fa7fa097",
+  "Blanc.Lift.instDecidableEqAVal": "000000002e47e7ef",
+  "Blanc.Lift.keccak_u": "00000000ed18f326",
+  "Blanc.Lift.legacy_selector_word": "00000000a0dc8f9b",
+  "Blanc.Lift.lit0": "000000005188ef33",
+  "Blanc.Lift.mapSlot": "00000000dbe56c6c",
+  "Blanc.Lift.map_inj": "00000000f9782764",
+  "Blanc.Lift.map_key_mem": "00000000c1fe75b1",
+  "Blanc.Lift.memRead_snd_fst": "00000000c8370372",
+  "Blanc.Lift.mem_coinFrames": "000000000d044482",
+  "Blanc.Lift.mid_frameChain": "000000007f1025dc",
+  "Blanc.Lift.noExec_of_reach": "0000000092f8d72b",
+  "Blanc.Lift.pre_eq_St": "00000000130a0a36",
+  "Blanc.Lift.regSilent": "0000000057479e7d",
+  "Blanc.Lift.ret_named": "00000000e602239a",
+  "Blanc.Lift.ri_exp": "000000003dee763f",
+  "Blanc.Lift.ri_extcodesizeH": "00000000876857dc",
+  "Blanc.Lift.ri_gas": "000000000d9ba499",
+  "Blanc.Lift.ri_log1": "0000000016d57cc9",
+  "Blanc.Lift.ri_mul": "00000000acd71ae9",
+  "Blanc.Lift.ri_return": "0000000040bf741b",
+  "Blanc.Lift.ri_sloadH": "000000002b9949ac",
+  "Blanc.Lift.ri_stepXH": "00000000a71a466a",
+  "Blanc.Lift.ri_stepX_free": "000000001f236838",
+  "Blanc.Lift.ric_branch": "00000000be1822d2",
+  "Blanc.Lift.ric_branchTo": "000000005ee1ce0b",
+  "Blanc.Lift.ric_call": "0000000097df7f8c",
+  "Blanc.Lift.ric_callR": "00000000fd090d65",
+  "Blanc.Lift.ric_call_step": "000000003eedddca",
+  "Blanc.Lift.ric_cmp_eq": "00000000fe2fd636",
+  "Blanc.Lift.ric_dest": "0000000019604047",
+  "Blanc.Lift.ric_jump": "0000000046a82084",
+  "Blanc.Lift.ric_log1_keep": "0000000038f4828f",
+  "Blanc.Lift.ric_next": "00000000d90bab01",
+  "Blanc.Lift.ric_ret": "00000000dabee153",
+  "Blanc.Lift.ric_return_getStor": "0000000093972caf",
+  "Blanc.Lift.ric_stop": "00000000c3b83c79",
+  "Blanc.Lift.ric_stop_keeps": "00000000810964da",
+  "Blanc.Lift.rowSep_of_keys": "000000008b80353b",
+  "Blanc.Lift.rr_branch": "0000000030424514",
+  "Blanc.Lift.rr_callInto": "00000000ea116572",
+  "Blanc.Lift.rr_cmp_eq": "0000000073b4fcfc",
+  "Blanc.Lift.rr_dest": "00000000ac669973",
+  "Blanc.Lift.rr_next": "0000000058ded024",
+  "Blanc.Lift.run_of_frame": "0000000064f3784d",
+  "Blanc.Lift.runtimeSafety_of_sizes": "0000000057410ca1",
+  "Blanc.Lift.rx_add": "00000000b375e7d5",
+  "Blanc.Lift.rx_and": "0000000076a74c83",
+  "Blanc.Lift.rx_branchTo_succ": "00000000797c17a9",
+  "Blanc.Lift.rx_branch_succ": "00000000e7f330ad",
+  "Blanc.Lift.rx_calldataload": "0000000093229aff",
+  "Blanc.Lift.rx_calldatasize": "0000000078e6837d",
+  "Blanc.Lift.rx_caller": "000000009e5bf88f",
+  "Blanc.Lift.rx_callvalue": "00000000adc48f6a",
+  "Blanc.Lift.rx_dest": "000000003760383c",
+  "Blanc.Lift.rx_div": "00000000a1c966fb",
+  "Blanc.Lift.rx_dup": "00000000bdf142db",
+  "Blanc.Lift.rx_eq": "00000000313212e3",
+  "Blanc.Lift.rx_exp'": "00000000d1fc6666",
+  "Blanc.Lift.rx_gt": "00000000199c345a",
+  "Blanc.Lift.rx_iszero": "00000000f3b698b9",
+  "Blanc.Lift.rx_jump": "000000007ae14413",
+  "Blanc.Lift.rx_lt": "00000000c3ac04be",
+  "Blanc.Lift.rx_mul": "00000000c139e98b",
+  "Blanc.Lift.rx_pop": "00000000c787bf8f",
+  "Blanc.Lift.rx_push": "00000000f13fccc2",
+  "Blanc.Lift.rx_sload_sel": "00000000e5142f7b",
+  "Blanc.Lift.rx_sstore": "000000006fcb8fad",
+  "Blanc.Lift.rx_stop": "00000000bf0f5b14",
+  "Blanc.Lift.rx_sub": "00000000d2db728d",
+  "Blanc.Lift.rx_swap": "0000000001190a30",
+  "Blanc.Lift.selfdestructFreeCheck": "000000003ff25231",
+  "Blanc.Lift.settled_wf": "00000000be190a9b",
+  "Blanc.Lift.site_key_mem": "00000000a280fe8a",
+  "Blanc.Lift.slot_ne_of_keys": "000000002c2e681b",
+  "Blanc.Lift.stepX": "00000000e61c71a9",
+  "Blanc.Lift.stepXH": "00000000e61c71a9",
+  "Blanc.Lift.termKey": "00000000fb21c2d7",
+  "Blanc.Lift.termKey_slot": "00000000976944d7",
+  "Blanc.Lift.toNat_ge_of_ltCheck_eq_zero": "00000000a531d6ed",
+  "Blanc.Lift.toNat_le_of_gtCheck_eq_zero": "000000003e445e1c",
+  "Blanc.Lift.wordsAt": "00000000d067751d",
+  "Blanc.Lift.zero_of_iszero3": "000000000c669e17",
+  "Blanc.Mem.Wf": "00000000e1bceb41",
+  "Blanc.Mem.Wf.write": "0000000079ed3867",
+  "Blanc.Mem.read_two_word_writes_at_raw": "00000000783baaac",
+  "Blanc.Sevm.dataWord": "00000000762721c4",
+  "Blanc.Sevm.selector": "0000000098bee365",
+  "Blanc.ShanghaiOnwards": "00000000c40c3bc2",
+  "Blanc.SlotFootprint.Fresh": "000000004772b7c8",
+  "Blanc.SlotFootprint.FreshKeys": "000000009237c033",
+  "Blanc.Stack.Pop": "0000000008145c6e",
+  "Blanc.afterSload": "000000002759f877",
+  "Blanc.afterSload_createdAccounts": "00000000e6470bba",
+  "Blanc.afterSload_error": "000000009e5bf847",
+  "Blanc.afterSload_getCode": "00000000f0ccae19",
+  "Blanc.afterSload_getStor": "0000000061fbfdc9",
+  "Blanc.afterSload_output": "00000000ac10f3f5",
+  "Blanc.afterSstore": "000000004e37fb05",
+  "Blanc.afterSstore_createdAccounts": "00000000ae3210ec",
+  "Blanc.afterSstore_getStor_self": "00000000fa8edb8b",
+  "Blanc.afterSstore_output": "000000001422cb5d",
+  "Blanc.ff20_and_word": "000000009dc136b3",
+  "Blanc.getDelegatedCodeAddress_eq_none_of_size_ne": "00000000a13d69a2",
+  "Blanc.noPushBefore_zero": "00000000ab0a61f7",
+  "Blanc.sloadCost": "000000004893eeed",
+  "Blanc.sstoreCost": "000000008753c794",
+  "Blanc.sstoreValueCost": "0000000036f421f8"
+ },
+ "tag": "release/usdt-20261108"
+}

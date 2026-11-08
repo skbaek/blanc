@@ -117,17 +117,6 @@ the lines when next changed or relied on, not by a wholesale rewrite.
 - Registered symbols: `module:Blanc/ForwardCall.lean`, `module:Blanc/StaticcallObservation.lean`, `declaration:Blanc.StaticcallObservation`, `declaration:Blanc.StaticcallRouting`, `declaration:Blanc.Ninst.staticcall_observation`, `declaration:Blanc.Exec.NinstOccurrence.staticcall_observation`, `declaration:Blanc.staticcall_routing_of_process`, `declaration:Blanc.Xinst.step_staticcall_spawn_frame_zero`, `module:Blanc/DelegatecallEnvelope.lean`, `declaration:Func.ExecSat`, `declaration:Prog.ExecSat`, `declaration:Func.ExecWitness`, `declaration:Prog.ExecWitness`, `declaration:DelegatecallSpawnDescriptor.afterAccess_memory`, `declaration:DelegatecallSpawnDescriptor.step`, `declaration:DelegatecallSpawnDescriptor.child_data`, `declaration:DelegatecallSpawnDescriptor.crossing`, `declaration:DelegatecallSpawnDescriptor.runCompiled_of_certificate`, `declaration:DelegatecallSettledBoundary`, `declaration:DelegatecallSpawnDescriptor.settled_of_runCompiled`, `declaration:DelegatecallSettledBoundary.memory`, `declaration:DelegatecallSettledBoundary.memory_eq_parent_of_outputSize_zero`, `declaration:DelegatecallSettledBoundary.memory_image_of_outputSize_zero`, `module:Blanc/LadderBase.lean`, `module:Blanc/CommonProofs/Messages.lean`, `declaration:Blanc.of_run_call_val_with_depth_frame`, `declaration:Blanc.of_run_call_val_with_depth`, `declaration:Blanc.of_run_call_val`, `declaration:Blanc.StatcallFailureCause`, `declaration:Blanc.of_run_staticcall_val_with_depth_cause`, `declaration:Blanc.of_step_call_val_with_depth_frame`, `declaration:Blanc.of_step_staticcall_val_with_depth_frame_cause`, `declaration:Blanc.Xinst.call_none_precompile`, `declaration:Blanc.Xinst.staticcall_none_precompile`, `declaration:Blanc.of_run_staticcall_val_with_depth`, `declaration:Blanc.Xinst.step_spawn_source`, `declaration:Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget`, `declaration:Blanc.Evm.step_spawn_child`, `module:Blanc/ExecutionDirectCode.lean`, `declaration:Blanc.Xinst.step_staticcall_sameTarget_code`, `module:Blanc/Lift/CallRestriction.lean`, `declaration:Blanc.Lift.Cursor.execsSatisfy_of_reachable`, `declaration:Blanc.Lift.CursorOK.execsSatisfy`
 - Review: `proof-infrastructure` on `2026-11-08`
 
-## `changed-frame-projection`
-
-- Status: `active`
-- Triggers: `goal-shape:changed-frame-projection`
-- Preferred path: Import `Blanc.Lift.NodeWalkOrig` and rewrite the exposed projection with `Jaune.Sevm.withOrig_code`, `Blanc.Lift.Witness.CallPrep.re_adrs`, or `Blanc.Lift.NodeWalk.resumeCallB_re`. For nested fork/original-state code transport, compose `Jaune.Sevm.withOrig_code` with `Blanc.ForkUniform.Sevm.withFork_code`, then the known code equality, as in Fund/Add's `frameBalD` and `frameDB`. Keep the source machine symbolic while applying these named equalities; compose a resume equality with the known resumed configuration rather than asking kernel conversion to compare concrete machines.
-- Boundary: Advice matches only a direct equality whose left side is Sevm.code applied to an explicit Sevm.withOrig, CallPrep.adrs applied to an explicit CallPrep.re, or resumeCallB whose parent and both output-window projections come from the same explicit CallPrep.re. It does not match reversed equalities, plain projections, unrelated updates, or updates hidden by aliases. Unfold only the local binding hiding the relevant update or projection and run blanc_suggest again; do not normalize a concrete machine. These projection laws establish no fork coverage, original-storage agreement, frame entry, settlement, or execution.
-- Owner module: [Blanc/Lift/NodeWalkOrig.lean](../Blanc/Lift/NodeWalkOrig.lean)
-- Canonical example: [Blanc/Lift/VyperNonreentrantDeployed/Fixed/Fund/Add.lean](../Blanc/Lift/VyperNonreentrantDeployed/Fixed/Fund/Add.lean) — `frameDB`
-- Registered symbols: `module:Blanc/Lift/NodeWalkOrig.lean`, `declaration:_root_.Jaune.Sevm.withOrig_code`, `declaration:Blanc.ForkUniform.Sevm.withFork_code`, `declaration:Blanc.Lift.Witness.CallPrep.re_adrs`, `declaration:Blanc.Lift.NodeWalk.resumeCallB_re`
-- Review: `proof-infrastructure` on `2026-10-15`
-
 ## `compile-shape-prepend-congruence`
 
 - Status: `active`
@@ -304,17 +293,6 @@ the lines when next changed or relied on, not by a wholesale rewrite.
 - Registered symbols: `module:Blanc/LedgerConservation.lean`, `declaration:Blanc.ledgerSumOn`, `declaration:Blanc.ledgerSumOn_congr`, `declaration:Blanc.ledgerSumOn_increase`, `declaration:Blanc.ledgerSumOn_decrease`, `declaration:Blanc.ledgerSumOn_transfer`, `declaration:Blanc.LedgerConserved.sumNof`
 - Review: `proof-infrastructure` on `2026-09-16`
 
-## `extcodesize-compiled-step`
-
-- Status: `active`
-- Triggers: `goal-shape:extcodesize-compiled-step`
-- Preferred path: For flat pricing use Blanc.Ninst.runCompiled_extcodesize_flat from Blanc/ForwardFlatAccess.lean with rules.access = .flat prices, rules.bal = none, the actual stack, exact entry gas G + prices.extCode + rules.gas.codeReadSurcharge, and stack room. It returns the actual pre-state code-size word over d.setMach and preserves d.stateGas. Compose a continuation through existing Ninst.exec_of_stepRun. Blanc.Lift.Usdc.ProxyCreation.isContract_runExact is a concrete flat-pricing source-fragment consumer; it does not by itself prove an actual bytecode entry/return or whole constructor run. For warm/cold pricing use Blanc.Lift.temporal_extcodesize_runCompiled from Blanc/Lift/CodeSizeWalk.lean for the actual code-size word and warm/cold account-access image. Supply the covered-fork fact, selected code-size equality and stack room, and align the entry gas with residual gas plus temporalAccountAccessCost. temporalAccountAccessBase names the possibly warmed successor; temporalAccountAccessBase_state, temporalAccountAccessBase_output and temporalAccountAccessBase_logs project its unchanged state, output and logs. For a lifted exact continuation use rx_extcodesize; for an existing successful instruction use ri_extcodesize directly.
-- Boundary: This advice matches only a literal EXTCODESIZE Ninst.RunCompiled goal. It does not solve fork, word, stack, gas or successor-state obligations, match another opcode, invert Ninst.Run, or identify a generic SFunc.RunExact goal as an EXTCODESIZE walk. It does not establish nonzero code size or callee liveness. Probe: Blanc/Lift/Usdc/ProxyCreation/CodeSize.lean:isContract_runExact. Measured cost: unmeasured guidance; this adaptation reanchors existing advice and reports no new timing. Simplest alternative tried: no new comparison run; the cited existing declaration is the direct manual route. Date: 2026-11-06.
-- Owner module: [Blanc/Lift/CodeSizeWalk.lean](../Blanc/Lift/CodeSizeWalk.lean)
-- Canonical example: [Blanc/Lift/Usdc/ProxyCreation/CodeSize.lean](../Blanc/Lift/Usdc/ProxyCreation/CodeSize.lean) — `isContract_runExact`
-- Registered symbols: `module:Blanc/Lift/CodeSizeWalk.lean`, `module:Blanc/ForwardFlatAccess.lean`, `declaration:Blanc.Ninst.runCompiled_extcodesize_flat`, `module:Blanc/Lift/Usdc/ProxyCreation/CodeSize.lean`, `declaration:Blanc.Lift.Usdc.ProxyCreation.isContract_runExact`, `declaration:Blanc.Lift.temporalAccountAccessBase`, `declaration:Blanc.Lift.temporalAccountAccessBase_state`, `declaration:Blanc.Lift.temporalAccountAccessBase_output`, `declaration:Blanc.Lift.temporalAccountAccessBase_logs`, `declaration:Blanc.Lift.temporalAccountAccessCost`, `declaration:Blanc.Lift.temporal_extcodesize_runCompiled`, `declaration:Blanc.Lift.ri_extcodesize`, `declaration:Blanc.Lift.rx_extcodesize`
-- Review: `proof-infrastructure` on `2026-11-06`
-
 ## `machine-state-debit`
 
 - Status: `active`
@@ -381,17 +359,6 @@ the lines when next changed or relied on, not by a wholesale rewrite.
 - Registered symbols: `module:Blanc/ExecutionSenderOccurrences.lean`, `declaration:Blanc.ExecutionTrace.SenderOccurrence.recovered`, `declaration:Blanc.ExecutionTrace.ApplyTransactionsTrace.senderOccurrences_indexed`, `declaration:Blanc.ExecutionTrace.ApplyTransactionsTrace.senderQueries_at`, `declaration:Blanc.ExecutionTrace.ApplyTransactionsTrace.noSenderAt_of_senderQueries`, `declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.noSenderAt_of_senderQueries`, `declaration:Blanc.ExecutionTrace.ConfiguredHistoryTrace.toIn_noSenderAt_iff`, `declaration:Blanc.ExecutionTrace.ConfiguredHistoryTrace.noSenderAt_of_senderQueries`
 - Review: `proof-infrastructure` on `2026-10-23`
 
-## `ecrecover-return-layout`
-
-- Status: `active`
-- Triggers: `goal-head:Lift.EcrecoverCall.ReturnChecks`
-- Preferred path: Use EcrecoverCall.ReturnChecks.mk to supply the two rejected subtrees' haltsOnly facts and the exact answer tail's execFreeIn [] and noHalt checks. Bind the actual source with EcrecoverCall.entry and its concrete ReturnLayout first; then use EcrecoverCall.consumes with the original checked cursor, memory, nondelegation and actual caller premises.
-- Boundary: Advice recognizes only the direct EcrecoverCall.ReturnChecks head, without unfolding aliases or searching nested propositions. It does not prove arbitrary layouts valid, infer any recovered address, successful query, affordable gas, caller continuation or historical coverage, or establish complete selector/write relevance. Its four facts are structural checks; the common consumer separately derives the actual invocation and answer from the real run.
-- Owner module: [Blanc/Lift/EcrecoverCall.lean](../Blanc/Lift/EcrecoverCall.lean)
-- Canonical example: [Blanc/Lift/Usdc/RecoveryV2.lean](../Blanc/Lift/Usdc/RecoveryV2.lean) — `recoveryV2_consumes`
-- Registered symbols: `module:Blanc/Lift/EcrecoverCall.lean`, `declaration:Blanc.Lift.EcrecoverCall.ReturnLayout`, `declaration:Blanc.Lift.EcrecoverCall.entry`, `declaration:Blanc.Lift.EcrecoverCall.ReturnChecks`, `declaration:Blanc.Lift.EcrecoverCall.consumes`
-- Review: `proof-infrastructure` on `2026-10-23`
-
 ## `historical-fork-domain`
 
 - Status: `active`
@@ -446,17 +413,6 @@ the lines when next changed or relied on, not by a wholesale rewrite.
 - Canonical example: [Blanc/ExecutionHistoryInEraBounds.lean](../Blanc/ExecutionHistoryInEraBounds.lean) — `ConfiguredHistoryTraceIn.systemStagesDisabled_of_mainnet_tip_before_cancun`
 - Registered symbols: `module:Blanc/ExecutionHistoryInEraBounds.lean`, `declaration:Blanc.mainnetChainConfig_preCancun_of_timestamp_lt`, `declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.systemStagesDisabled_of_mainnet_timestamp_lt`, `declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.systemStagesDisabled_of_mainnet_tip_before_cancun`
 - Review: `proof-infrastructure` on `2026-10-27`
-
-## `solc-runtime-return`
-
-- Status: `active`
-- Triggers: `goal-shape:solc-runtime-return`
-- Preferred path: Apply Blanc.Lift.solcRuntimeReturn_runExact to the named solcRuntimeReturn terminal body, supplying the two PUSH-word equalities, nonzero length, aligned symbolic memory and four-word stack room. Its charge is actual memory expansion plus gasCopy * ceilDiv length 32 + 19, and its output is the executing code window at the supplied offset. To invert an existing successful source run, use solcRuntimeReturn_effects for the exact returned bytes and storage preservation, without fork or memory-alignment assumptions.
-- Boundary: Advice matches only a direct SFunc.RunExact goal whose body is the named solcRuntimeReturn and whose outcome is halted. It does not unfold arbitrary certificate entries, match an arbitrary exact walk or returned outcome, prove literal bytecode identity, or establish CREATE settlement or historical installation. Concrete consumers identify their registered source tree with this body and discharge word encodings separately.
-- Owner module: [Blanc/Lift/Deploy.lean](../Blanc/Lift/Deploy.lean)
-- Canonical example: [Blanc/Lift/Usdc/ProxyCreation/RuntimeReturn.lean](../Blanc/Lift/Usdc/ProxyCreation/RuntimeReturn.lean) — `runtimeReturn_runExact`
-- Registered symbols: `module:Blanc/Lift/Deploy.lean`, `declaration:Blanc.Lift.solcRuntimeReturn`, `declaration:Blanc.Lift.solcRuntimeReturn_runExact`, `declaration:Blanc.Lift.solcRuntimeReturn_effects`
-- Review: `proof-infrastructure` on `2026-10-28`
 
 ## `historical-creation-metadata`
 

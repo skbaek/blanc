@@ -1,0 +1,2530 @@
+{
+ "catalogue": {
+  "commit": "bdb298483ac6cf82e70732df378aa8b443f7ec1c",
+  "commit_source": "--commit",
+  "log": "catalogue-bdb29848.log",
+  "log_sha256": "3617d846d9029eedab240008fed2c9b12ce3dd32db1cc6cc7f2cc65a5d42f962",
+  "verdict": "GATES OK: 29 rows, 13 executed, 15 reused, 1 build-certified from valid evidence, 834.0s"
+ },
+ "census_sha256": "891952bd3d6f4c2d34532e9dd89fda1d449b3be73c8a8c52f575302224fe01b1",
+ "claim_map_file": {
+  "path": "docs/claim-map/curve-3crv.md",
+  "sha256": "9fda95a4993a1359710f8456639518db0e21283c1a3c0092ad3bd0494d52cd1c"
+ },
+ "claim_pins": {
+  "claimcheck": [
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv: c3crv_history_committed_derived",
+    "lines": [
+     752,
+     767
+    ],
+    "mentions": [
+     "Blanc.Curve3Crv.Conserved",
+     "Blanc.Curve3Crv.State",
+     "Blanc.Lift.Curve3Crv.FreshKeys",
+     "Blanc.Lift.Curve3Crv.InvRun",
+     "Blanc.Lift.Curve3Crv.Key",
+     "Blanc.Lift.Curve3Crv.Key.extend",
+     "Blanc.Lift.Curve3Crv.VyInv",
+     "Blanc.Lift.Curve3Crv.c3crvSem",
+     "Blanc.Lift.Curve3Crv.c3crv_history_committed_derived",
+     "Blanc.Lift.Curve3Crv.committedInvocations",
+     "Blanc.Lift.Curve3Crv.historyTouchedKeys",
+     "Blanc.Lift.Curve3Crv.invocationKeys",
+     "Blanc.Lift.Curve3Crv.runInvocations"
+    ],
+    "text": "-- Curve 3Crv: c3crv_history_committed_derived\nexample {ca : Adr} {cfg : ChainConfig}\n    {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State}\n    {initialKeys : Key → Prop}\n    (trace : ConfiguredHistoryTrace cfg checkpoint future)\n    (installed : some (checkpoint.state.getCode ca).toList = c3crvSem.image)\n    (invariant : VyInv (checkpoint.state.getStor ca) initial initialKeys)\n    (fresh : FreshKeys initialKeys (historyTouchedKeys ca trace)) :\n    some (future.state.getCode ca).toList = c3crvSem.image ∧\n      ∃ s, InvRun initial (committedInvocations ca trace) s ∧\n        runInvocations initial (committedInvocations ca trace) = some s ∧\n        VyInv (future.state.getStor ca) s\n          (Key.extend initialKeys (invocationKeys (committedInvocations ca trace))) ∧\n        Blanc.Curve3Crv.Conserved s :=\n  c3crv_history_committed_derived trace installed invariant fresh\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv: c3crv_frame_refines",
+    "lines": [
+     774,
+     796
+    ],
+    "mentions": [
+     "Blanc.Curve3Crv.State",
+     "Blanc.Curve3Crv.step",
+     "Blanc.Lift.Curve3Crv.FreshKeys",
+     "Blanc.Lift.Curve3Crv.IsWriter",
+     "Blanc.Lift.Curve3Crv.Key",
+     "Blanc.Lift.Curve3Crv.Key.extend",
+     "Blanc.Lift.Curve3Crv.OwnerAnswer",
+     "Blanc.Lift.Curve3Crv.RetOut",
+     "Blanc.Lift.Curve3Crv.VyInv",
+     "Blanc.Lift.Curve3Crv.c3crv_frame_refines",
+     "Blanc.Lift.Curve3Crv.c3ctx",
+     "Blanc.Lift.Curve3Crv.callKeys",
+     "Blanc.Lift.Curve3Crv.code",
+     "Blanc.Lift.Curve3Crv.decodeCall",
+     "Blanc.Lift.Curve3Crv.eventLog"
+    ],
+    "text": "-- Curve 3Crv: c3crv_frame_refines\nexample {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.State}\n    {K : Key → Prop}\n    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)\n    (hcd : sevm.data.length < 2 ^ 256) (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty)\n    (houtput : pre.output = [])\n    (hinv : VyInv (Devm.getStor pre sevm.currentTarget) s K)\n    (hfresh : FreshKeys K (callKeys sevm.caller (decodeCall sevm)))\n    (exc : Exec 0 sevm pre (.ok post)) :\n    (IsWriter (decodeCall sevm) →\n      ∃ ow : Option B256, (∀ w, ow = some w → OwnerAnswer sevm pre s.minter w) ∧\n        ∃ o, Curve3Crv.step (c3ctx sevm ow) (decodeCall sevm) s = .ok o ∧\n          VyInv (Devm.getStor post sevm.currentTarget) o.1\n            (Key.extend K (callKeys sevm.caller (decodeCall sevm))) ∧\n          (∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a) ∧\n          post.logs = pre.logs ++ o.2.1.map (eventLog sevm.currentTarget) ∧\n          RetOut post.output o.2.2) ∧\n    (¬ IsWriter (decodeCall sevm) →\n      (∀ a, Devm.getStor post a = Devm.getStor pre a) ∧ post.logs = pre.logs ∧\n        ∃ o, Curve3Crv.step (c3ctx sevm none) (decodeCall sevm) s = .ok o ∧\n          RetOut post.output o.2.2) :=\n  c3crv_frame_refines hcode hfork hcd hstack hmem houtput hinv hfresh exc\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv.Creation",
+    "label": "-- Curve 3Crv: curve_deploy_covered",
+    "lines": [
+     802,
+     810
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.Creation.curveDeployedState",
+     "Blanc.Lift.Curve3Crv.Creation.curve_deploy_covered",
+     "Blanc.Lift.Curve3Crv.Creation.deployMsg",
+     "Blanc.Lift.Curve3Crv.Creation.deployedStor",
+     "Blanc.Lift.Curve3Crv.Creation.deployer",
+     "Blanc.Lift.Curve3Crv.Creation.tokenAddress",
+     "Blanc.Lift.Curve3Crv.VyInv",
+     "Blanc.Lift.Curve3Crv.code"
+    ],
+    "text": "-- Curve 3Crv: curve_deploy_covered\nexample (f : Fork) (hf : CoveredFork f) :\n    tokenAddress = computeContractAddress deployer 42 ∧\n    ∃ post, processCreateMessage (deployMsg.withFork f) = .ok post ∧\n      (post.getCode tokenAddress).toList = Blanc.Lift.Curve3Crv.code.toList ∧\n      Devm.getStor post tokenAddress = deployedStor deployer.toB256 ∧\n      VyInv (Devm.getStor post tokenAddress) (curveDeployedState deployer) (fun _ => False) :=\n  curve_deploy_covered f hf\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv constructor: C3crvDeploymentTo.mk",
+    "lines": [
+     816,
+     835
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.C3crvDeploymentTo",
+     "Blanc.Lift.Curve3Crv.Creation.HistoricalTx.tx",
+     "Blanc.Lift.Curve3Crv.Creation.tokenAddress",
+     "Blanc.Lift.Curve3Crv.FreshKeys",
+     "Blanc.Lift.Curve3Crv.midTouchedKeysIn"
+    ],
+    "text": "-- Curve 3Crv constructor: C3crvDeploymentTo.mk\nexample {checkpoint : BlockChain} (pre completed : BlockChain)\n    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre completed)\n    (number : block.block.header.number = 10809467)\n    (time : block.block.header.timestamp = 1599414946)\n    (entry : Bytes ⊕ Tx) (slot : block.block.txs[76]? = some entry)\n    (decoded : decodeTx block.fork.ruleSet entry = .ok HistoricalTx.tx)\n    (receipt : Fin 5 × Receipt)\n    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes (76 : Nat).toBytes)]? =\n      some receipt)\n    (succeeded : receipt.2.succeeded = true)\n    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed checkpoint)\n    (fresh : FreshKeys (fun _ => False)\n      (midTouchedKeysIn tokenAddress\n        ((MidHistoryTraceIn.tail block (block.bodyTrace.txSplitOfSlot slot decoded)).append\n          history))) :\n    C3crvDeploymentTo checkpoint :=\n  ⟨pre, completed, block, number, time, entry, slot, decoded, receipt, lookup, succeeded,\n    history, fresh⟩\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv.Creation.HistoricalTx",
+    "label": "-- Curve 3Crv: HistoricalTx.actual_block_cut",
+    "lines": [
+     841,
+     855
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.Creation.HistoricalTx.actual_block_cut",
+     "Blanc.Lift.Curve3Crv.Creation.HistoricalTx.creationLog",
+     "Blanc.Lift.Curve3Crv.Creation.HistoricalTx.tx",
+     "Blanc.Lift.Curve3Crv.Creation.deployedStor",
+     "Blanc.Lift.Curve3Crv.Creation.deployer",
+     "Blanc.Lift.Curve3Crv.Creation.tokenAddress",
+     "Blanc.Lift.Curve3Crv.code"
+    ],
+    "text": "-- Curve 3Crv: HistoricalTx.actual_block_cut\nexample {pre D : BlockChain}\n    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre D)\n    (number : block.block.header.number = 10809467)\n    (timestamp : block.block.header.timestamp = 1599414946) {i : Nat}\n    (cut : block.bodyTrace.transactions.TxSplit i) (sameTx : cut.tx = tx)\n    {receipt : Fin 5 × Receipt}\n    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? =\n      some receipt) (succeeded : receipt.2.succeeded = true) :\n    (cut.txState.getCode tokenAddress).toList = Blanc.Lift.Curve3Crv.code.toList ∧\n      cut.txState.getStor tokenAddress = deployedStor deployer.toB256 ∧\n      cut.txBout.blockLogs = cut.bout.blockLogs ++ [creationLog] ∧\n      cut.txBout.blockGasUsed = cut.bout.blockGasUsed + 678343 :=\n  actual_block_cut block number timestamp cut sameTx lookup succeeded\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv definition: VyInv",
+    "lines": [
+     1197,
+     1212
+    ],
+    "mentions": [
+     "Blanc.Curve3Crv.Conserved",
+     "Blanc.Curve3Crv.State",
+     "Blanc.Lift.Curve3Crv.Key",
+     "Blanc.Lift.Curve3Crv.VyInv",
+     "Blanc.Lift.Curve3Crv.VyStr",
+     "Blanc.Lift.Curve3Crv.vyDecimalsSlot",
+     "Blanc.Lift.Curve3Crv.vyFixedSlots",
+     "Blanc.Lift.Curve3Crv.vyMinterSlot",
+     "Blanc.Lift.Curve3Crv.vyNameBase",
+     "Blanc.Lift.Curve3Crv.vySupplySlot",
+     "Blanc.Lift.Curve3Crv.vySymbolBase"
+    ],
+    "text": "-- Curve 3Crv definition: VyInv\nexample (stor : Stor) (s : Curve3Crv.State) (K : Key → Prop) :\n    VyInv stor s K ↔\n      (stor.get vyDecimalsSlot = s.decimals) ∧\n      (stor.get vySupplySlot = s.totalSupply) ∧\n      (stor.get vyMinterSlot = s.minter.toB256) ∧\n      (VyStr stor vyNameBase 2 s.name) ∧\n      (VyStr stor vySymbolBase 1 s.symbol) ∧\n      (∀ k, K k → stor.get k.slot = k.val s) ∧\n      (∀ k, ¬ K k → k.val s = 0) ∧\n      (∀ x, stor.get x ≠ 0 → x ∈ vyFixedSlots ∨ ∃ k, K k ∧ k.slot = x) ∧\n      (∀ k k', K k → K k' → k.slot = k'.slot → k = k') ∧\n      (∀ k, K k → k.slot ∉ vyFixedSlots) ∧\n      (Conserved s) :=\n  ⟨fun h => ⟨h.decimals, h.supply, h.minter, h.name, h.symbol, h.known, h.unknown, h.support, h.inj, h.apart, h.conserved⟩, fun ⟨h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10⟩ => ⟨h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10⟩⟩\n"
+   },
+   {
+    "block": "Blanc.Curve3Crv",
+    "label": "-- Curve 3Crv definition: Conserved",
+    "lines": [
+     1218,
+     1223
+    ],
+    "mentions": [
+     "Blanc.Curve3Crv.Conserved",
+     "Blanc.Curve3Crv.State"
+    ],
+    "text": "-- Curve 3Crv definition: Conserved\nexample (s : State) :\n    Conserved s ↔\n      (s.totalSupply.toNat = sum s.balanceOf) :=\n  Iff.rfl\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv definition: OwnerAnswer",
+    "lines": [
+     1230,
+     1236
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.OwnerAnswer",
+     "Blanc.Lift.Curve3Crv.ownerCalldata"
+    ],
+    "text": "-- Curve 3Crv definition: OwnerAnswer\nexample (sevm : Sevm) (b : Devm) (m : Adr) (w : B256) :\n    OwnerAnswer sevm b m w ↔\n      (∃ out, StaticAnswered sevm b m ownerCalldata out ∧ 32 ≤ out.length ∧\n    Bytes.toB256 (out.take 32) = w) :=\n  Iff.rfl\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv definition: OwnerAnswerH",
+    "lines": [
+     1237,
+     1243
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.OwnerAnswerH",
+     "Blanc.Lift.Curve3Crv.ownerCalldata"
+    ],
+    "text": "-- Curve 3Crv definition: OwnerAnswerH\nexample (sevm : Sevm) (b : Devm) (m : Adr) (w : B256) :\n    OwnerAnswerH sevm b m w ↔\n      (∃ out, StaticAnsweredH sevm b m ownerCalldata out ∧ 32 ≤ out.length ∧\n    Bytes.toB256 (out.take 32) = w) :=\n  Iff.rfl\n"
+   },
+   {
+    "block": "Blanc.Composition.Curve3CrvToken",
+    "label": "example : ∀ {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State} {initialKeys : Key → Prop} (trace : ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode ca).toList = c3crvSem.image) (invariant : VyInv (checkpoint.state.getStor ca) initial initialKeys) (fresh : FreshKeys initialKeys (historyTouchedKeys ca trace)) (keeps : ∀ inv ∈ committedInvocations ca trace, inv.sevm.caller = initial.minter →",
+    "lines": [
+     3785,
+     3794
+    ],
+    "mentions": [
+     "Blanc.Composition.Curve3CrvToken.c3crvSupply",
+     "Blanc.Composition.Curve3CrvToken.c3crv_history_supply",
+     "Blanc.Composition.Curve3CrvToken.invMessages",
+     "Blanc.Curve3Crv.State",
+     "Blanc.Lift.Curve3Crv.FreshKeys",
+     "Blanc.Lift.Curve3Crv.Key",
+     "Blanc.Lift.Curve3Crv.Key.extend",
+     "Blanc.Lift.Curve3Crv.VyInv",
+     "Blanc.Lift.Curve3Crv.c3crvSem",
+     "Blanc.Lift.Curve3Crv.committedInvocations",
+     "Blanc.Lift.Curve3Crv.historyTouchedKeys",
+     "Blanc.Lift.Curve3Crv.invocationKeys",
+     "Blanc.Lift.Curve3Crv.runInvocations"
+    ],
+    "text": "example : ∀ {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State} {initialKeys : Key → Prop} (trace : ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode ca).toList = c3crvSem.image) (invariant : VyInv (checkpoint.state.getStor ca) initial initialKeys) (fresh : FreshKeys initialKeys (historyTouchedKeys ca trace)) (keeps : ∀ inv ∈ committedInvocations ca trace, inv.sevm.caller = initial.minter →\n      c3crvSupply.KeepsMinter inv.sevm),\n    ∃ s, runInvocations initial (committedInvocations ca trace) = some s ∧\n      VyInv (future.state.getStor ca) s\n        (Key.extend initialKeys (invocationKeys (committedInvocations ca trace))) ∧\n      s.minter = initial.minter ∧\n      s.totalSupply.toNat + c3crvSupply.burned (invMessages (committedInvocations ca trace)) =\n        initial.totalSupply.toNat + c3crvSupply.minted (invMessages (committedInvocations ca trace)) :=\n  @Blanc.Composition.Curve3CrvToken.c3crv_history_supply\n"
+   },
+   {
+    "block": "Blanc.Composition.Curve3CrvToken",
+    "label": "example : ∀ {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State} {initialKeys : Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode ca).toList = c3crvSem.image) (invariant : VyInv (checkpoint.state.getStor ca) initial initialKeys) (fresh : FreshKeys initialKeys (historyTouchedKeys ca trace)),",
+    "lines": [
+     3800,
+     3808
+    ],
+    "mentions": [
+     "Blanc.Composition.Curve3CrvToken.c3crv_history_at",
+     "Blanc.Composition.Curve3CrvToken.viewFrameObs",
+     "Blanc.Curve3Crv.State",
+     "Blanc.Lift.Curve3Crv.FreshKeys",
+     "Blanc.Lift.Curve3Crv.InvRun",
+     "Blanc.Lift.Curve3Crv.Key",
+     "Blanc.Lift.Curve3Crv.Key.extend",
+     "Blanc.Lift.Curve3Crv.VyInv",
+     "Blanc.Lift.Curve3Crv.c3crvSem",
+     "Blanc.Lift.Curve3Crv.historyTouchedKeys",
+     "Blanc.Lift.Curve3Crv.invocationKeys"
+    ],
+    "text": "example : ∀ {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State} {initialKeys : Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode ca).toList = c3crvSem.image) (invariant : VyInv (checkpoint.state.getStor ca) initial initialKeys) (fresh : FreshKeys initialKeys (historyTouchedKeys ca trace)),\n    ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),\n      trace.settledFrames = before ++ f :: after →\n      (∀ A ∈ before, A.Encloses f → ¬ (A.sevm.currentTarget = ca ∧ A.sevm.isStatic = false)) →\n      ∃ s, InvRun initial (before.flatMap (viewFrameObs ca)) s ∧\n        VyInv (f.pre.state.getStor ca) s\n          (Key.extend initialKeys (invocationKeys (before.flatMap (viewFrameObs ca)))) :=\n  @Blanc.Composition.Curve3CrvToken.c3crv_history_at\n"
+   },
+   {
+    "block": "Blanc.Composition.Curve3CrvToken",
+    "label": "example : ¬ ∃ F : SupplyFacet mutantBook, F.minter = (·.minter) ∧ F.mintOf = c3crvMintOf :=",
+    "lines": [
+     3815,
+     3817
+    ],
+    "mentions": [
+     "Blanc.Composition.Curve3CrvToken.c3crvMintOf",
+     "Blanc.Composition.Curve3CrvToken.control_mutant_no_supplyFacet",
+     "Blanc.Composition.Curve3CrvToken.mutantBook"
+    ],
+    "text": "example : ¬ ∃ F : SupplyFacet mutantBook, F.minter = (·.minter) ∧ F.mintOf = c3crvMintOf :=\n  @Blanc.Composition.Curve3CrvToken.control_mutant_no_supplyFacet\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv definition: Key.holder (bal)",
+    "lines": [
+     5790,
+     5793
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.Key.holder"
+    ],
+    "text": "-- Curve 3Crv definition: Key.holder (bal)\nexample (a : Adr) : Key.holder (.bal a) = some a :=\n  rfl\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv definition: Key.holder (allow)",
+    "lines": [
+     5794,
+     5797
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.Key.holder"
+    ],
+    "text": "-- Curve 3Crv definition: Key.holder (allow)\nexample (o p : Adr) : Key.holder (.allow o p) = none :=\n  rfl\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv definition: SupplyConserved",
+    "lines": [
+     5798,
+     5803
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.SupplyConserved",
+     "Blanc.Lift.Curve3Crv.vyBalSlot",
+     "Blanc.Lift.Curve3Crv.vySupplySlot"
+    ],
+    "text": "-- Curve 3Crv definition: SupplyConserved\nexample (stor : Stor) (holders : Finset Adr) :\n    SupplyConserved stor holders ↔\n      ((stor.get vySupplySlot).toNat = ledgerSumOn holders fun a => stor.get (vyBalSlot a)) :=\n  Iff.rfl\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv definition: C3crvDeploymentTo.touched",
+    "lines": [
+     5804,
+     5808
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.C3crvDeploymentTo",
+     "Blanc.Lift.Curve3Crv.Creation.tokenAddress",
+     "Blanc.Lift.Curve3Crv.midTouchedKeysIn"
+    ],
+    "text": "-- Curve 3Crv definition: C3crvDeploymentTo.touched\nexample {checkpoint : BlockChain} (d : C3crvDeploymentTo checkpoint) :\n    d.touched = midTouchedKeysIn tokenAddress d.trace :=\n  rfl\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv definition: C3crvDeploymentTo.holders",
+    "lines": [
+     5809,
+     5813
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.C3crvDeploymentTo",
+     "Blanc.Lift.Curve3Crv.Key.holder"
+    ],
+    "text": "-- Curve 3Crv definition: C3crvDeploymentTo.holders\nexample {checkpoint : BlockChain} (d : C3crvDeploymentTo checkpoint) :\n    d.holders = (d.touched.filterMap Key.holder).toFinset :=\n  rfl\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv definition: C3crvDeploymentTo.invocations",
+    "lines": [
+     5814,
+     5818
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.C3crvDeploymentTo",
+     "Blanc.Lift.Curve3Crv.Creation.tokenAddress",
+     "Blanc.Lift.Curve3Crv.midCommittedInvocationsIn"
+    ],
+    "text": "-- Curve 3Crv definition: C3crvDeploymentTo.invocations\nexample {checkpoint : BlockChain} (d : C3crvDeploymentTo checkpoint) :\n    d.invocations = midCommittedInvocationsIn tokenAddress d.trace :=\n  rfl\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv definition: WriterInvocation.preWord",
+    "lines": [
+     5819,
+     5823
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.Creation.tokenAddress",
+     "Blanc.Lift.Curve3Crv.WriterInvocation"
+    ],
+    "text": "-- Curve 3Crv definition: WriterInvocation.preWord\nexample (inv : WriterInvocation) (x : B256) :\n    inv.preWord x = (Devm.getStor inv.pre tokenAddress).get x :=\n  rfl\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv definition: WriterInvocation.postWord",
+    "lines": [
+     5824,
+     5828
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.Creation.tokenAddress",
+     "Blanc.Lift.Curve3Crv.WriterInvocation"
+    ],
+    "text": "-- Curve 3Crv definition: WriterInvocation.postWord\nexample (inv : WriterInvocation) (x : B256) :\n    inv.postWord x = (Devm.getStor inv.post tokenAddress).get x :=\n  rfl\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv definition: OnlyMinterMovesSupply",
+    "lines": [
+     5829,
+     5836
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.OnlyMinterMovesSupply",
+     "Blanc.Lift.Curve3Crv.WriterInvocation",
+     "Blanc.Lift.Curve3Crv.decodeCall",
+     "Blanc.Lift.Curve3Crv.vyMinterSlot",
+     "Blanc.Lift.Curve3Crv.vySupplySlot"
+    ],
+    "text": "-- Curve 3Crv definition: OnlyMinterMovesSupply\nexample (inv : WriterInvocation) :\n    OnlyMinterMovesSupply inv ↔\n      (inv.postWord vySupplySlot ≠ inv.preWord vySupplySlot →\n        inv.sevm.caller.toB256 = inv.preWord vyMinterSlot ∧\n          ∃ a v, decodeCall inv.sevm = .mint a v ∨ decodeCall inv.sevm = .burnFrom a v) :=\n  Iff.rfl\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv definition: OnlyMinterMovesMinter",
+    "lines": [
+     5837,
+     5843
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.OnlyMinterMovesMinter",
+     "Blanc.Lift.Curve3Crv.WriterInvocation",
+     "Blanc.Lift.Curve3Crv.vyMinterSlot"
+    ],
+    "text": "-- Curve 3Crv definition: OnlyMinterMovesMinter\nexample (inv : WriterInvocation) :\n    OnlyMinterMovesMinter inv ↔\n      (inv.postWord vyMinterSlot ≠ inv.preWord vyMinterSlot →\n        inv.sevm.caller.toB256 = inv.preWord vyMinterSlot) :=\n  Iff.rfl\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv definition: TransferFromSpendsAllowance",
+    "lines": [
+     5844,
+     5853
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.TransferFromSpendsAllowance",
+     "Blanc.Lift.Curve3Crv.WriterInvocation",
+     "Blanc.Lift.Curve3Crv.decodeCall",
+     "Blanc.Lift.Curve3Crv.vyAllowSlot",
+     "Blanc.Lift.Curve3Crv.vyMinterSlot"
+    ],
+    "text": "-- Curve 3Crv definition: TransferFromSpendsAllowance\nexample (inv : WriterInvocation) :\n    TransferFromSpendsAllowance inv ↔\n      (∀ f dst v, decodeCall inv.sevm = .transferFrom f dst v →\n        inv.sevm.caller.toB256 ≠ inv.preWord vyMinterSlot →\n          v ≤ inv.preWord (vyAllowSlot f.toAdr inv.sevm.caller) ∧\n            inv.postWord (vyAllowSlot f.toAdr inv.sevm.caller) =\n              inv.preWord (vyAllowSlot f.toAdr inv.sevm.caller) - v) :=\n  Iff.rfl\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv definition: AllowanceMovesAuthorized",
+    "lines": [
+     5854,
+     5863
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.AllowanceMovesAuthorized",
+     "Blanc.Lift.Curve3Crv.Key",
+     "Blanc.Lift.Curve3Crv.WriterInvocation",
+     "Blanc.Lift.Curve3Crv.decodeCall",
+     "Blanc.Lift.Curve3Crv.vyAllowSlot",
+     "Blanc.Lift.Curve3Crv.vyMinterSlot"
+    ],
+    "text": "-- Curve 3Crv definition: AllowanceMovesAuthorized\nexample (tracked : List Key) (inv : WriterInvocation) :\n    AllowanceMovesAuthorized tracked inv ↔\n      (∀ o p, Key.allow o p ∈ tracked →\n        inv.postWord (vyAllowSlot o p) ≠ inv.preWord (vyAllowSlot o p) →\n          (inv.sevm.caller = o ∧ ∃ w v, decodeCall inv.sevm = .approve w v ∧ w.toAdr = p) ∨\n            (inv.sevm.caller = p ∧ inv.sevm.caller.toB256 ≠ inv.preWord vyMinterSlot ∧\n              ∃ f dst v, decodeCall inv.sevm = .transferFrom f dst v ∧ f.toAdr = o)) :=\n  Iff.rfl\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv definition: C3crvFramePolicy",
+    "lines": [
+     5864,
+     5870
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.AllowanceMovesAuthorized",
+     "Blanc.Lift.Curve3Crv.C3crvFramePolicy",
+     "Blanc.Lift.Curve3Crv.Key",
+     "Blanc.Lift.Curve3Crv.OnlyMinterMovesMinter",
+     "Blanc.Lift.Curve3Crv.OnlyMinterMovesSupply",
+     "Blanc.Lift.Curve3Crv.TransferFromSpendsAllowance",
+     "Blanc.Lift.Curve3Crv.WriterInvocation"
+    ],
+    "text": "-- Curve 3Crv definition: C3crvFramePolicy\nexample (tracked : List Key) (inv : WriterInvocation) :\n    C3crvFramePolicy tracked inv ↔\n      (OnlyMinterMovesSupply inv ∧ OnlyMinterMovesMinter inv ∧ TransferFromSpendsAllowance inv ∧\n        AllowanceMovesAuthorized tracked inv) :=\n  Iff.rfl\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv: c3crv_conserved",
+    "lines": [
+     5871,
+     5875
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.C3crvDeploymentTo",
+     "Blanc.Lift.Curve3Crv.Creation.tokenAddress",
+     "Blanc.Lift.Curve3Crv.SupplyConserved",
+     "Blanc.Lift.Curve3Crv.c3crv_conserved"
+    ],
+    "text": "-- Curve 3Crv: c3crv_conserved\nexample {checkpoint : BlockChain} (d : C3crvDeploymentTo checkpoint) :\n    SupplyConserved (checkpoint.state.getStor tokenAddress) d.holders :=\n  c3crv_conserved d\n"
+   },
+   {
+    "block": "Blanc.Lift.Curve3Crv",
+    "label": "-- Curve 3Crv: c3crv_policy",
+    "lines": [
+     5876,
+     5880
+    ],
+    "mentions": [
+     "Blanc.Lift.Curve3Crv.C3crvDeploymentTo",
+     "Blanc.Lift.Curve3Crv.C3crvFramePolicy",
+     "Blanc.Lift.Curve3Crv.c3crv_policy"
+    ],
+    "text": "-- Curve 3Crv: c3crv_policy\nexample {checkpoint : BlockChain} (d : C3crvDeploymentTo checkpoint) :\n    ∀ inv ∈ d.invocations, C3crvFramePolicy d.touched inv :=\n  c3crv_policy d\n"
+   }
+  ],
+  "roots_tsv": [
+   "eq:Blanc.Lift.Curve3Crv.C3crvDeploymentTo.holders\t276\t5810\tBlanc.Lift.Curve3Crv\tca9f9df9b5e96221abb55a2f6cced227479c9a219e8754890cf60d936dba1e18",
+   "eq:Blanc.Lift.Curve3Crv.C3crvDeploymentTo.invocations\t277\t5815\tBlanc.Lift.Curve3Crv\t85248e2ae53fd9e55710ef752487ddc57ec2de30dea937324a8528ffe238fd13",
+   "eq:Blanc.Lift.Curve3Crv.C3crvDeploymentTo.touched\t275\t5805\tBlanc.Lift.Curve3Crv\t2bf8068c3c1f59f7ff277731415c314b6ae52b14379a46001efa705f8e327a7a",
+   "eq:Blanc.Lift.Curve3Crv.Key.holder#02b2237341a919f6\t273\t5795\tBlanc.Lift.Curve3Crv\t02b2237341a919f6b9579a2cd998a03e46789b7e8cf132e0290ae62a63dc95c5",
+   "eq:Blanc.Lift.Curve3Crv.Key.holder#4d15f9712cd0c591\t272\t5791\tBlanc.Lift.Curve3Crv\t4d15f9712cd0c591a3b259618a272b253f96e9da0b6e01eb021a0031484a7390",
+   "eq:Blanc.Lift.Curve3Crv.WriterInvocation.postWord\t279\t5825\tBlanc.Lift.Curve3Crv\tddeac86bff41704d714338ed10052e85e604d6112fe28fe167d7ead84a5f3a45",
+   "eq:Blanc.Lift.Curve3Crv.WriterInvocation.preWord\t278\t5820\tBlanc.Lift.Curve3Crv\t757ef555f2a72a3ff2e7601ec3a19d3f461935e76c8c59b45226c281ed753d71",
+   "iff:Blanc.Curve3Crv.Conserved\t30\t1219\tBlanc.Curve3Crv\t6cf823ae31db2b0fd2a94ce96df3253ab3e6ddef43173bf5fafddcd04867a459",
+   "iff:Blanc.Lift.Curve3Crv.AllowanceMovesAuthorized\t283\t5855\tBlanc.Lift.Curve3Crv\t9201b79e4edb5714f204826d7d3ddef0076c7cae3669bcbe3ce0882f4d540681",
+   "iff:Blanc.Lift.Curve3Crv.C3crvFramePolicy\t284\t5865\tBlanc.Lift.Curve3Crv\t154dd5cb290c21dc83936392bbb33e11ed916d05d8f9411686924732526305e9",
+   "iff:Blanc.Lift.Curve3Crv.OnlyMinterMovesMinter\t281\t5838\tBlanc.Lift.Curve3Crv\tb4d79c562319594d071ec06f03304c9dba0203f64feaa020af823c40f7a81935",
+   "iff:Blanc.Lift.Curve3Crv.OnlyMinterMovesSupply\t280\t5830\tBlanc.Lift.Curve3Crv\tc8f4a12f835b4f05db56f3f9fca07082e3d39320de639335d6cb78fa96ae02d3",
+   "iff:Blanc.Lift.Curve3Crv.OwnerAnswer\t31\t1231\tBlanc.Lift.Curve3Crv\t6022b8a26441c2633e352c1e10ed6dc083a19f505d29a35be9138f0a227705ac",
+   "iff:Blanc.Lift.Curve3Crv.OwnerAnswerH\t32\t1238\tBlanc.Lift.Curve3Crv\t3d76ad69f9207a7043818fe39aa2f8340cde629c271e88f1fa02cb7e01db3c7a",
+   "iff:Blanc.Lift.Curve3Crv.SupplyConserved\t274\t5799\tBlanc.Lift.Curve3Crv\tfcd8cd1ddfa6458d295f7ae4d9cb396050df75af2075c03a4d8d2c69658ac0f2",
+   "iff:Blanc.Lift.Curve3Crv.TransferFromSpendsAllowance\t282\t5845\tBlanc.Lift.Curve3Crv\t3f545b22250f34360987efb6861195f57b6afa44804ee8beb99fcfdd7f03201d",
+   "iff:Blanc.Lift.Curve3Crv.VyInv\t29\t1198\tBlanc.Lift.Curve3Crv\t2b5f3965e4433d46da3bc37809bc5256d07bd5705444f3b7f0f7cf11e460e487",
+   "thm:Blanc.Composition.Curve3CrvToken.c3crv_history_at\t188\t3800\tBlanc.Composition.Curve3CrvToken\tdb15b752f1768a417279c5624406bf6ff61eee1cdc05a52821d3de20bc394a66",
+   "thm:Blanc.Composition.Curve3CrvToken.c3crv_history_supply\t187\t3785\tBlanc.Composition.Curve3CrvToken\t663d7c38fae625b18c09b911738348cfe39435f6149ed7d2adddeaee563a3637",
+   "thm:Blanc.Composition.Curve3CrvToken.control_mutant_no_supplyFacet\t189\t3815\tBlanc.Composition.Curve3CrvToken\tcf0ac497be7d8db7b5670cf9283778f9c7ebac92cefcec038336f07fb4481b2a",
+   "thm:Blanc.Lift.Curve3Crv.C3crvDeploymentTo.mk\t13\t817\tBlanc.Lift.Curve3Crv\ta5a95fb00ec2e27167fc98d3ee319d7c1a1a7441c4eeda39efd6a9aa1de55daa",
+   "thm:Blanc.Lift.Curve3Crv.Creation.HistoricalTx.actual_block_cut\t14\t842\tBlanc.Lift.Curve3Crv.Creation.HistoricalTx\tb28501e757ec6e8774484b71073c354d7acd971749c0a07a4759647fbdc4b490",
+   "thm:Blanc.Lift.Curve3Crv.Creation.curve_deploy_covered\t12\t803\tBlanc.Lift.Curve3Crv.Creation\t764f477042336a45fd706d1223edaaba36319fcf50da67f27f1e24c8a5f44e77",
+   "thm:Blanc.Lift.Curve3Crv.c3crv_conserved\t285\t5872\tBlanc.Lift.Curve3Crv\te7ab1d99a17d23b3cb5908239bad602c36d18629977bfd6c62155574d9637e83",
+   "thm:Blanc.Lift.Curve3Crv.c3crv_frame_refines\t11\t775\tBlanc.Lift.Curve3Crv\tc7f9415063cb1839614ef8df061a49181751c280ef21d7fef7a145e457fc33f3",
+   "thm:Blanc.Lift.Curve3Crv.c3crv_history_committed_derived\t10\t753\tBlanc.Lift.Curve3Crv\tff324e6720b6012c6d3a6df4a61ab4de9f33f73b081fa7e1459c35fc198d8163",
+   "thm:Blanc.Lift.Curve3Crv.c3crv_policy\t286\t5877\tBlanc.Lift.Curve3Crv\t303252c2ab97394b9974abaab3b10c374d862bbb1e8199ed5f3d154e2f20fec3"
+  ]
+ },
+ "commit": "bdb298483ac6cf82e70732df378aa8b443f7ec1c",
+ "compositions_declaring_key_elsewhere": {
+  "Composition.Curve3Pool3CrvBlock": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvCapstone": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvCapstoneFrame": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvCapstoneModel": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvCapstoneTx": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvCheckpoint": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvCoinAnswers": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvCoinCalls": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvCoinExact": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvCoinExactExit": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvCoinExactFloor": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvCoinExactSwap": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvCoinExactTransport": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvExRoot": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvExactAssembly": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvExactLiteralHeadlines": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvExactLiteralWitness": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvExactWitness": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvHeadlines": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvHeadlinesExact": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvLiveConcrete": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvLiveEndAL": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvLiveEndEntry": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvLiveEndKeep": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvLiveEndKeepAL": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvLiveEndKeepRLI": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvLiveEndOC": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvLiveEndRL": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvLiveEndRLI": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvLiveWitness": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvSigningEncoding": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvSigningHash": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvSigningRecover": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvTraceEnv": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvTxData": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvTxFrame": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvU3": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvU3Mid": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvWorld": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3Pool3CrvWorldAgrees": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolAddCoins": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolAddCost": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolAddMain": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolAddRequest": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolBacked": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolBackedDai": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolBackedEnv": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolBackedFlat": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolBackedUsdc": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolBackedUsdt": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolBackedWalk": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolBackedWindow": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolBlockAnchor": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolCalleeExactProfiles": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolCalleeFloorProfiles": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolCalleeLive": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolCoinChild": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolCoinExactKit": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolCoinExchange": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolCoinFloorKit": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolCoinKeep": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolDaiCoin": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolDaiCoinExact": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitCoins": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitCold": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitFits": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitMain": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitMoment": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitRequest": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitSites": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitTx": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitView": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolExitWorks": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolImbalanceMain": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolJointRoot": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolKeepAt": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolKeepHistory": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolOneCoinMain": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolPublic": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolPublicBridge": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolPublicEffects": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolPublicGas": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolPublicObservers": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolPublicPremises": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolPublicPrice": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolPublicTx": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolRemoveMessage": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSupply": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSupplyCalls": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSupplyFrames": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSupplyMid": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSupplyStep": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapBack": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapBound": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapChain": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapCoins": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapCold": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapEval": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapFits": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapMain": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapPay": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapRequest": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolSwapSites": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolUsdc22Coin": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolUsdcCoin": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolUsdcCoinExact": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolUsdcProxy": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolUsdcV2Coin": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolUsdcV2_1Coin": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolUsdtCoin": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolUsdtCoinExact": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolUsdtCoinExchange": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPrice": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceDeploy": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFalls": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsChain": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsData": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts0": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts1": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts10": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts2": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts3": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts4": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts5": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts6": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts7": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts8": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsFacts9": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFallsWorld": "scripts/releases/curve-3pool-20261108.json",
+  "Composition.Curve3PoolVirtualPriceFrames": "scripts/releases/curve-3pool-20261108.json"
+ },
+ "counts": {
+  "claim_pins": 27,
+  "composition_modules": 2,
+  "contract_modules": 74,
+  "declarations": 3507,
+  "definition_leaves": 5,
+  "modules": 76,
+  "theorem_leaves": 23
+ },
+ "date": "20261108",
+ "departing_scripts": {
+  "scripts/lift/inputs/curve-3crv-creation.hex": "named only by departing files",
+  "scripts/lift/inputs/curve-3crv-runtime.hex": "named only by departing files"
+ },
+ "departure_record": "scripts/releases/curve-3pool-20261108.departure.json",
+ "files": [
+  {
+   "path": "Blanc/Composition/Curve3CrvPositional.lean",
+   "sha256": "b74efb9885260605b1abf5dc2d8126b0829329d99f47487f2b516550842808c1"
+  },
+  {
+   "path": "Blanc/Composition/Curve3CrvTokenCore.lean",
+   "sha256": "96f3e3280e1e01d4b00ead5fdf4522e5a55044e7c7313850f936f043b3b24351"
+  },
+  {
+   "path": "Blanc/Curve3Crv/Model.lean",
+   "sha256": "0a475000c25e67e331cad44e70a6aac71a5e9a2a97281b3f7db9dd192e45616b"
+  },
+  {
+   "path": "Blanc/Curve3Crv/Properties.lean",
+   "sha256": "fa6baa72cd7f8ef9c2bd9752143fce9fc24ddeb2688be45334d36bf878f3122f"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/CarriedHistory.lean",
+   "sha256": "7a84f2c1f86f9d89ced223cf04fb462c07924c4294aec9782bb00db901887f5b"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Cert.lean",
+   "sha256": "162b1114031e551732d346061fbac54b6fc3a05f0f7e60009867f8e60f73b83e"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Check.lean",
+   "sha256": "2f16682921e17ef8fecf41d6ebbb279fba992af4c591fb034f61623eea6cfaac"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/CommittedExec.lean",
+   "sha256": "f2a7136a5716b37b37aa3ea12d6f4a6c7dc2d2414658cc72304a430f4d5ae6de"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/CommittedHistory.lean",
+   "sha256": "7a40a642ddef900049ede48d6a0d15dbe8252ab19f4a25f457c865c91fd185dd"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/CommittedReplay.lean",
+   "sha256": "673363310573f369f1a92292361d6909504f744e24abd21810c87a6e5d18bf13"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/CostBounds.lean",
+   "sha256": "590cb137dacc0e9fdd8e7a76f8cdbe5c296500fa1bc5f8def206bfce9255f7f4"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/Block/Header.lean",
+   "sha256": "ab1326b8983c9f1ec91b15ac756fb06d7f1da7d3d71a052a045e00e9b0d0fae8"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/Block/ReceiptCert0.lean",
+   "sha256": "9f14ffeaefcdab7b7b4616af36f1dd7aa113cf1900bb36027fc816ccc3564277"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/Block/ReceiptCert1.lean",
+   "sha256": "acb622b61462023723b6ab466663ba0e451b6eb48c7fe4b060f556b97fac97ab"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/Block/ReceiptCert2.lean",
+   "sha256": "bf604ec20826864ae5e7dd60ef70befa47b69503232925419d3c62ecae33e113"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/Block/ReceiptCert3.lean",
+   "sha256": "deefde92de142eddaa40c6c7aa74cc974d50e5c4faa8d2e5e6d0ecce70a9d94a"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/Block/ReceiptCert4.lean",
+   "sha256": "042e3cbc544d3bf21be9099f35f61b3452611972e17509905c4c385747ed77cc"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/Block/ReceiptData.lean",
+   "sha256": "047daef1ff2095476c40e15a60fe7abacf49db07cff996ada9d16248cac95bcd"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/Block/ReceiptRoot.lean",
+   "sha256": "371b1643d8673a74aa8485fe7705cf6727c429f53c757ee9986a20ad20626508"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/Block/Slot.lean",
+   "sha256": "4bef1e6ac7210808aff511f6cf527e2263de1e81f9c0f58fda1aebfbefae98f8"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/Block/TxCert0.lean",
+   "sha256": "863fcc916c1fa5116392d5c1fd8a8914277368fe90556929254f00453552b087"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/Block/TxCert1.lean",
+   "sha256": "19fe7b5b6cf22802249fd3aa42ea22e80c5f4722fbb3034aa23d0a2434dfbee5"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/Block/TxData.lean",
+   "sha256": "114e20c1e1367c7ee13838c06f09f134119b34ce350a46a687bb3f4525b56b28"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/Block/TxRoot.lean",
+   "sha256": "65ad603343c3168cbe0ed7cbc55b1d9cf42a2224819d16dab57f81eac6cdf9b1"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/BlockMinter/Header.lean",
+   "sha256": "c3f04bbdffc9975ad14f6d6184379593e8e4ca6eb3311aec1c35a456890c4aab"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/BlockMinter/ReceiptCert0.lean",
+   "sha256": "32ccaf73c87d332406891d53125c69e2dc4d1d15dc5d819851785ccbdbf7871c"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/BlockMinter/ReceiptCert1.lean",
+   "sha256": "d4f16d7c8122f77638af5f3392fbb5db50e95bad056f5bdd7012bd32f3503c08"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/BlockMinter/ReceiptCert2.lean",
+   "sha256": "e1af9a0e3124631596e3bd2821db05fd51bf06d8c7ff1b220214ef7810d81acc"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/BlockMinter/ReceiptCert3.lean",
+   "sha256": "8ba6f03776f0b4e83759a1dc56c51823ec1cd3a7feb6d00ba5ab8d0a10fb007d"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/BlockMinter/ReceiptCert4.lean",
+   "sha256": "a95a0f20496607788f37695bba266bde0e22bbdc439b53f35125843a2fb4977f"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/BlockMinter/ReceiptData.lean",
+   "sha256": "47eabd103e22353009c909cc4511ee28f173cac05d8cbac06ea2564db21e5932"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/BlockMinter/ReceiptRoot.lean",
+   "sha256": "0309c0d03404c41dcf7cb7bab9b555f0bda07ee58d384f6295a8c2207c2280f6"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/BlockMinter/Slot.lean",
+   "sha256": "7df4f3907f503611b9e90762dbd305fdf68b696d1859fb4e349ba7203fd10471"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/BlockMinter/TxCert0.lean",
+   "sha256": "59cf5579db993389132700ee23645fc889652f8797a488d9386dfe6ea2147f98"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/BlockMinter/TxCert1.lean",
+   "sha256": "e1b73a1d7436adb7cb65094b59997cc7e120a4fa40f5fc3e566d578f62a15334"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/BlockMinter/TxData.lean",
+   "sha256": "8b03ecdc71b39af2c9d49c63271976944108cff3dd161ec124bda2543816523a"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/BlockMinter/TxRoot.lean",
+   "sha256": "d04a729ff12ecff7140ff7f68ece5e1641c400563dcb2115d00ef7b5e50fb69f"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/Cert.lean",
+   "sha256": "bc97cf476acae61f8cf9e240a563a6687521e635bdddee2e634e7ada30e25ad8"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/Check.lean",
+   "sha256": "a0218943761369117ccf2c8f455e017993c0228018160ccfe1738d5cf330f20c"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/Deploy.lean",
+   "sha256": "d535692684e1970566f076747aea17fb8fa674253ed5e5be733bf394d2910495"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/HistoricalDeploy.lean",
+   "sha256": "db764bcd49b675ee6049e1aa19b27dde001c610dad7a0fa0fbc7f64837bbf800"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/HistoricalTx.lean",
+   "sha256": "e126f73a1724a4bac6dcb37e2873e046e3aefbe7e0ada62c52b4c05a4fbc5449"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/HistoricalTxInput.lean",
+   "sha256": "a1d1137158dd6fb6a8c093b32ab2f3a339366969d842ad9ac346200ff77c5af0"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/HistoricalTxRaw.lean",
+   "sha256": "95d1d0c78ffc1f56f3fa7d34733ff6f4a631c4c8cc9b7402587f76d97f06fb2e"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/HistoricalTxRecover.lean",
+   "sha256": "92b50d4752d627cf74132e57f74c8ebabfbab24b1f19652b7542ec8d156a9c33"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/HistoricalTxSettle.lean",
+   "sha256": "6b16a5b9be1c58618d870cb4d45d7ab22e48c21f2b0b1fbfe82e845db0e7c6c0"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/HistoricalTxTrace.lean",
+   "sha256": "c80879d9e4f5e9ba8ed0d70df73bb26c24b19b234c9b7342dffbd7681f15d04f"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/HistoricalWalk.lean",
+   "sha256": "064f05763d7ac41f43c781b573967b87a0e69d44d2edbb925d5ecb91e6d945e1"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Creation/Walk.lean",
+   "sha256": "01014f54515ef790673a9d572e52e4efacc04c729581c92f266177ebe9b62456"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Decode.lean",
+   "sha256": "11cf7fba008a1a6cb9ef5c2fcb4b54fe2c90d3abcbe0ef0112bc0eecc2315da0"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Dispatch.lean",
+   "sha256": "029347695f4afe97efc461e19436a1be4fcf14d579c8ff7fdf1825200c1dd161"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Exec.lean",
+   "sha256": "c1657b6b613359ef6f31657125e59d800d93d6f258c5b5025e4452d0b61be250"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/FrameReplay.lean",
+   "sha256": "9eb732f3e5184686d8b1d1798c84537a5bff613b533a516f89f8433c65880b30"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Headline.lean",
+   "sha256": "9199a56a548c8e5c74c423feb6d16f33e0bc3404c2c1e33d9585b0c45adf13ec"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/HistCommittedHistory.lean",
+   "sha256": "bed89dce4f818e797b58ddd41e3d34829640a83be0a90d0cedaf8b39a706934c"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/HistDeployment.lean",
+   "sha256": "b5ec549f5f2cd2c54daae384f293568ac7c06bdc36ef993e599bdb0933143d50"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/HistFrameReady.lean",
+   "sha256": "69cf81d6268991b589ee6bf0d92efc3dbb51a110224e3ff7411e839a77994813"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/HistWindow.lean",
+   "sha256": "f1a697e41e20eca2759275cc9b7c7c50d233963d1527235a7e6aa6c806e6887b"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/HistoryKeys.lean",
+   "sha256": "6a5ed3e2617d2f5f7c989f01b31c15315625c53ceb5a773f174d63c881fbd131"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Init.lean",
+   "sha256": "7c502fa59df131e28443b8d13ddd8a6bc01a9f60e82998a1a3fb9fbe2b1ff395"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Jumps.lean",
+   "sha256": "b8e6e3e0b84074b5cdf01c73c5c3de07057d35f07d71f11001add382b15417d6"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Ladder.lean",
+   "sha256": "ef247f98cad38a012c38d3d69a7cc729a3767b212d4d7a989abd8877765e5303"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Layout.lean",
+   "sha256": "0e9d2356e9628f3a792d1284661a2274ca9a6381163664b533e7c8f2bee893e2"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Lift.lean",
+   "sha256": "4a8cd4acc966aa6340dcbfd95c0fef20dcf4b2f170d1e3b44568caee32a430eb"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/LiveBodies.lean",
+   "sha256": "17bec7d3e97e117c109d1a288116dca70eaa44956b3a98b46ed2c8d2933b9ca4"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Liveness.lean",
+   "sha256": "424490570e35a4d12e3edc3d7445ad0b1549763cb08e8280fc4ca066dd777c59"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Prog.lean",
+   "sha256": "a0e55acb5a4616c0ab9cc3ef01805248ece349d3bee4d895c0302ae2e58c256e"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Refine.lean",
+   "sha256": "b4e597c34f98c093c65d8a71c7405c62353fd12eaa92cef7e90d64cb5c36d599"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Safe.lean",
+   "sha256": "119bc6104a56c75d27f9c4500a4530c0ff5e378d9a0f70ac633e9e2fc2dd2d63"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/SafeBodies.lean",
+   "sha256": "021a39900cfcb88ab0e338a69b5400c85249d039c424fb82b59c9c6cf425d96e"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/SafeViewBodies.lean",
+   "sha256": "1116874c6450f618c727a1d41e6e8c3132d219add6931d7fcd872f6ef102e00d"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/SafeViews.lean",
+   "sha256": "6a302d3699d43fd2248ffa0c4938d7d68479acf9efa646bd013508cbdd50fc73"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/SetMinterTx.lean",
+   "sha256": "3d65bce4f6d524cc0a2f0ca4f8d14443a9e75703a44d3f2bff52a4ea010c6bc4"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Slots.lean",
+   "sha256": "03597aabf3619455da621f41d46d9ae801f53b14b3e13260338832db51ae4e34"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/Spec.lean",
+   "sha256": "040cd38f844cc2a04bfc11cd45c7a8337dabf6519bd1414edbb323995e157676"
+  },
+  {
+   "path": "Blanc/Lift/Curve3Crv/ViewBodies.lean",
+   "sha256": "988bbf3c03c2a0515dd1de32c99483c5026d7222783ff8f2dfe62f8d1696b97c"
+  },
+  {
+   "path": "docs/claim-map/curve-3crv.md",
+   "sha256": "9fda95a4993a1359710f8456639518db0e21283c1a3c0092ad3bd0494d52cd1c"
+  },
+  {
+   "path": "scripts/claim-map-families/curve-3crv.py",
+   "sha256": "a2bc843636d556096bde17950caa9b18488bc669613c26709a019578b464b459"
+  },
+  {
+   "path": "scripts/lift/inputs/curve-3crv-creation.hex",
+   "sha256": "89d8828846db375b44703260ab28f070b9e1d88ea0626ec10295ce9669c66ca7"
+  },
+  {
+   "path": "scripts/lift/inputs/curve-3crv-runtime.hex",
+   "sha256": "267babead7107126e4a59ec00cdcc929fc9df724355d08818a8238014f6ee1bc"
+  }
+ ],
+ "jaune_rev": "e8db2742bab025fe3c0e399f00d0dba7ca908926",
+ "key": "curve-3crv",
+ "layering": {
+  "compositions": {
+   "Composition.Curve3CrvPositional": [
+    "curve-3crv"
+   ],
+   "Composition.Curve3CrvTokenCore": [
+    "curve-3crv"
+   ]
+  },
+  "contracts": [
+   "Curve3Crv.Model",
+   "Curve3Crv.Properties",
+   "Lift.Curve3Crv.Cert",
+   "Lift.Curve3Crv.Check",
+   "Lift.Curve3Crv.Creation.Cert",
+   "Lift.Curve3Crv.Creation.Check",
+   "Lift.Curve3Crv.Creation.Deploy",
+   "Lift.Curve3Crv.Creation.HistoricalDeploy",
+   "Lift.Curve3Crv.Creation.HistoricalTx",
+   "Lift.Curve3Crv.Creation.HistoricalTxRaw",
+   "Lift.Curve3Crv.Creation.HistoricalTxRecover",
+   "Lift.Curve3Crv.Creation.HistoricalTxInput",
+   "Lift.Curve3Crv.Creation.HistoricalTxSettle",
+   "Lift.Curve3Crv.Creation.HistoricalTxTrace",
+   "Lift.Curve3Crv.Creation.HistoricalWalk",
+   "Lift.Curve3Crv.Creation.Walk",
+   "Lift.Curve3Crv.Jumps",
+   "Lift.Curve3Crv.Lift",
+   "Lift.Curve3Crv.Prog",
+   "Lift.Curve3Crv.Layout",
+   "Lift.Curve3Crv.Decode",
+   "Lift.Curve3Crv.Spec",
+   "Lift.Curve3Crv.ViewBodies",
+   "Lift.Curve3Crv.Dispatch",
+   "Lift.Curve3Crv.Refine",
+   "Lift.Curve3Crv.SafeBodies",
+   "Lift.Curve3Crv.SafeViewBodies",
+   "Lift.Curve3Crv.SafeViews",
+   "Lift.Curve3Crv.LiveBodies",
+   "Lift.Curve3Crv.Safe",
+   "Lift.Curve3Crv.Exec",
+   "Lift.Curve3Crv.Slots",
+   "Lift.Curve3Crv.Ladder",
+   "Lift.Curve3Crv.HistoryKeys",
+   "Lift.Curve3Crv.CarriedHistory",
+   "Lift.Curve3Crv.CommittedReplay",
+   "Lift.Curve3Crv.CommittedExec",
+   "Lift.Curve3Crv.CommittedHistory",
+   "Lift.Curve3Crv.HistCommittedHistory",
+   "Lift.Curve3Crv.HistDeployment",
+   "Lift.Curve3Crv.FrameReplay",
+   "Lift.Curve3Crv.Headline",
+   "Lift.Curve3Crv.Init",
+   "Lift.Curve3Crv.Liveness",
+   "Lift.Curve3Crv.CostBounds",
+   "Lift.Curve3Crv.Creation.Block.Header",
+   "Lift.Curve3Crv.Creation.Block.ReceiptCert0",
+   "Lift.Curve3Crv.Creation.Block.ReceiptCert1",
+   "Lift.Curve3Crv.Creation.Block.ReceiptCert2",
+   "Lift.Curve3Crv.Creation.Block.ReceiptCert3",
+   "Lift.Curve3Crv.Creation.Block.ReceiptCert4",
+   "Lift.Curve3Crv.Creation.Block.ReceiptData",
+   "Lift.Curve3Crv.Creation.Block.ReceiptRoot",
+   "Lift.Curve3Crv.Creation.Block.Slot",
+   "Lift.Curve3Crv.Creation.Block.TxCert0",
+   "Lift.Curve3Crv.Creation.Block.TxCert1",
+   "Lift.Curve3Crv.Creation.Block.TxData",
+   "Lift.Curve3Crv.Creation.Block.TxRoot",
+   "Lift.Curve3Crv.Creation.BlockMinter.Header",
+   "Lift.Curve3Crv.Creation.BlockMinter.ReceiptCert0",
+   "Lift.Curve3Crv.Creation.BlockMinter.ReceiptCert1",
+   "Lift.Curve3Crv.Creation.BlockMinter.ReceiptCert2",
+   "Lift.Curve3Crv.Creation.BlockMinter.ReceiptCert3",
+   "Lift.Curve3Crv.Creation.BlockMinter.ReceiptCert4",
+   "Lift.Curve3Crv.Creation.BlockMinter.ReceiptData",
+   "Lift.Curve3Crv.Creation.BlockMinter.ReceiptRoot",
+   "Lift.Curve3Crv.Creation.BlockMinter.Slot",
+   "Lift.Curve3Crv.Creation.BlockMinter.TxCert0",
+   "Lift.Curve3Crv.Creation.BlockMinter.TxCert1",
+   "Lift.Curve3Crv.Creation.BlockMinter.TxData",
+   "Lift.Curve3Crv.Creation.BlockMinter.TxRoot",
+   "Lift.Curve3Crv.HistFrameReady",
+   "Lift.Curve3Crv.HistWindow",
+   "Lift.Curve3Crv.SetMinterTx"
+  ]
+ },
+ "lean_toolchain": "leanprover/lean4:v4.35.0",
+ "lift_certificates": [
+  {
+   "entry": {
+    "cert": "Blanc/Lift/Curve3Crv/Cert.lean",
+    "header": "GENERATED by the vyper-3crv-bytecode-v1 lifter (Plans evidence/vyper-3crv-bytecode-v1/v1/lift.py) -- do not edit.",
+    "id": "curve-3crv",
+    "input": {
+     "file_sha256": "267babead7107126e4a59ec00cdcc929fc9df724355d08818a8238014f6ee1bc",
+     "hex": "scripts/lift/inputs/curve-3crv-runtime.hex",
+     "provenance": "Ethereum mainnet 3Crv LP token 0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490 (CurveTokenV2, Vyper 0.2.4, created block 10809467), eth_getCode at latest identical from five operators (Plans evidence/vyper-3crv-bytecode-v1/w0/report.md section 2). File is a byte copy of Plans evidence/vyper-3crv-bytecode-v1/w0/3crv-runtime.hex.",
+     "runtime_bytes": 2276,
+     "runtime_sha256": "bb95e5787fa843002128fbe09575a115700650f4bca6efb51e70da316497438f"
+    },
+    "namespace": "Blanc.Lift.Curve3Crv"
+   },
+   "inputs": [
+    {
+     "path": "scripts/lift/inputs/curve-3crv-runtime.hex",
+     "sha256": "267babead7107126e4a59ec00cdcc929fc9df724355d08818a8238014f6ee1bc"
+    }
+   ]
+  },
+  {
+   "entry": {
+    "cert": "Blanc/Lift/Curve3Crv/Creation/Cert.lean",
+    "header": "GENERATED by scripts/lift/lift.py (registered in scripts/lift/certificates.json) -- do not edit.\nThe producer is untrusted; Creation.Check.cert_check checks this data.",
+    "id": "curve-3crv-creation",
+    "input": {
+     "file_sha256": "89d8828846db375b44703260ab28f070b9e1d88ea0626ec10295ce9669c66ca7",
+     "hex": "scripts/lift/inputs/curve-3crv-creation.hex",
+     "provenance": "Ethereum mainnet 3Crv LP token 0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490 creation input (Vyper 0.2.4 initcode with its 256 bytes of ABI-encoded constructor arguments: name \"Curve.fi DAI/USDC/USDT\", symbol \"3Crv\", decimals 18, supply 0): the `input` of creation transaction 0xa7d90e460bed56181e41b74d143ec98fe097c8391700e4e0788f5282053694f8 (block 10809467, from 0xbabe61887f1de2713c6f97e567623453d3c79f67, nonce 42), fetched from dRPC and cross-checked byte-identical against BlastAPI (Plans evidence/deploy-init-v1/curve3crv-creation-drpc.json). Bytes [595, 2871) are byte-identical to the registered curve-3crv runtime; the constructor's deploy tail follows the runtime at 2871. Lifted as code: the entries are the constructor; the runtime and the arguments are unreachable data.",
+     "runtime_bytes": 3151,
+     "runtime_sha256": "3513bb0499b965656d8cefc21ba992b4caf13a522ea25fd676f2776c8da0d14f"
+    },
+    "namespace": "Blanc.Lift.Curve3Crv.Creation"
+   },
+   "inputs": [
+    {
+     "path": "scripts/lift/inputs/curve-3crv-creation.hex",
+     "sha256": "89d8828846db375b44703260ab28f070b9e1d88ea0626ec10295ce9669c66ca7"
+    }
+   ]
+  }
+ ],
+ "live_reason": "curve-3crv = \"Curve 3pool flagship (member of the 3pool compositions)\"",
+ "modules": [
+  "Curve3Crv.Model",
+  "Curve3Crv.Properties",
+  "Lift.Curve3Crv.Cert",
+  "Lift.Curve3Crv.Check",
+  "Lift.Curve3Crv.Creation.Cert",
+  "Lift.Curve3Crv.Creation.Check",
+  "Lift.Curve3Crv.Creation.Deploy",
+  "Lift.Curve3Crv.Creation.HistoricalDeploy",
+  "Lift.Curve3Crv.Creation.HistoricalTx",
+  "Lift.Curve3Crv.Creation.HistoricalTxRaw",
+  "Lift.Curve3Crv.Creation.HistoricalTxRecover",
+  "Lift.Curve3Crv.Creation.HistoricalTxInput",
+  "Lift.Curve3Crv.Creation.HistoricalTxSettle",
+  "Lift.Curve3Crv.Creation.HistoricalTxTrace",
+  "Lift.Curve3Crv.Creation.HistoricalWalk",
+  "Lift.Curve3Crv.Creation.Walk",
+  "Lift.Curve3Crv.Jumps",
+  "Lift.Curve3Crv.Lift",
+  "Lift.Curve3Crv.Prog",
+  "Lift.Curve3Crv.Layout",
+  "Lift.Curve3Crv.Decode",
+  "Lift.Curve3Crv.Spec",
+  "Lift.Curve3Crv.ViewBodies",
+  "Lift.Curve3Crv.Dispatch",
+  "Lift.Curve3Crv.Refine",
+  "Lift.Curve3Crv.SafeBodies",
+  "Lift.Curve3Crv.SafeViewBodies",
+  "Lift.Curve3Crv.SafeViews",
+  "Lift.Curve3Crv.LiveBodies",
+  "Lift.Curve3Crv.Safe",
+  "Lift.Curve3Crv.Exec",
+  "Lift.Curve3Crv.Slots",
+  "Lift.Curve3Crv.Ladder",
+  "Lift.Curve3Crv.HistoryKeys",
+  "Lift.Curve3Crv.CarriedHistory",
+  "Lift.Curve3Crv.CommittedReplay",
+  "Lift.Curve3Crv.CommittedExec",
+  "Lift.Curve3Crv.CommittedHistory",
+  "Lift.Curve3Crv.HistCommittedHistory",
+  "Lift.Curve3Crv.HistDeployment",
+  "Lift.Curve3Crv.FrameReplay",
+  "Lift.Curve3Crv.Headline",
+  "Lift.Curve3Crv.Init",
+  "Lift.Curve3Crv.Liveness",
+  "Lift.Curve3Crv.CostBounds",
+  "Lift.Curve3Crv.Creation.Block.Header",
+  "Lift.Curve3Crv.Creation.Block.ReceiptCert0",
+  "Lift.Curve3Crv.Creation.Block.ReceiptCert1",
+  "Lift.Curve3Crv.Creation.Block.ReceiptCert2",
+  "Lift.Curve3Crv.Creation.Block.ReceiptCert3",
+  "Lift.Curve3Crv.Creation.Block.ReceiptCert4",
+  "Lift.Curve3Crv.Creation.Block.ReceiptData",
+  "Lift.Curve3Crv.Creation.Block.ReceiptRoot",
+  "Lift.Curve3Crv.Creation.Block.Slot",
+  "Lift.Curve3Crv.Creation.Block.TxCert0",
+  "Lift.Curve3Crv.Creation.Block.TxCert1",
+  "Lift.Curve3Crv.Creation.Block.TxData",
+  "Lift.Curve3Crv.Creation.Block.TxRoot",
+  "Lift.Curve3Crv.Creation.BlockMinter.Header",
+  "Lift.Curve3Crv.Creation.BlockMinter.ReceiptCert0",
+  "Lift.Curve3Crv.Creation.BlockMinter.ReceiptCert1",
+  "Lift.Curve3Crv.Creation.BlockMinter.ReceiptCert2",
+  "Lift.Curve3Crv.Creation.BlockMinter.ReceiptCert3",
+  "Lift.Curve3Crv.Creation.BlockMinter.ReceiptCert4",
+  "Lift.Curve3Crv.Creation.BlockMinter.ReceiptData",
+  "Lift.Curve3Crv.Creation.BlockMinter.ReceiptRoot",
+  "Lift.Curve3Crv.Creation.BlockMinter.Slot",
+  "Lift.Curve3Crv.Creation.BlockMinter.TxCert0",
+  "Lift.Curve3Crv.Creation.BlockMinter.TxCert1",
+  "Lift.Curve3Crv.Creation.BlockMinter.TxData",
+  "Lift.Curve3Crv.Creation.BlockMinter.TxRoot",
+  "Lift.Curve3Crv.HistFrameReady",
+  "Lift.Curve3Crv.HistWindow",
+  "Lift.Curve3Crv.SetMinterTx",
+  "Composition.Curve3CrvPositional",
+  "Composition.Curve3CrvTokenCore"
+ ],
+ "outstanding_allowed": [],
+ "release_keys": [
+  "curve-3pool",
+  "curve-3crv",
+  "usdc",
+  "dai",
+  "usdt",
+  "vyper-nonreentrant-deployed"
+ ],
+ "rows": {
+  "Blanc.lean": [
+   [
+    34,
+    "import Blanc.Composition.Curve3CrvPositional"
+   ],
+   [
+    35,
+    "import Blanc.Composition.Curve3CrvTokenCore"
+   ],
+   [
+    184,
+    "import Blanc.Curve3Crv.Model"
+   ],
+   [
+    185,
+    "import Blanc.Curve3Crv.Properties"
+   ],
+   [
+    544,
+    "import Blanc.Lift.Curve3Crv.CarriedHistory"
+   ],
+   [
+    545,
+    "import Blanc.Lift.Curve3Crv.Cert"
+   ],
+   [
+    546,
+    "import Blanc.Lift.Curve3Crv.Check"
+   ],
+   [
+    547,
+    "import Blanc.Lift.Curve3Crv.CommittedExec"
+   ],
+   [
+    548,
+    "import Blanc.Lift.Curve3Crv.CommittedHistory"
+   ],
+   [
+    549,
+    "import Blanc.Lift.Curve3Crv.CommittedReplay"
+   ],
+   [
+    550,
+    "import Blanc.Lift.Curve3Crv.CostBounds"
+   ],
+   [
+    551,
+    "import Blanc.Lift.Curve3Crv.Creation.Block.Header"
+   ],
+   [
+    552,
+    "import Blanc.Lift.Curve3Crv.Creation.Block.ReceiptCert0"
+   ],
+   [
+    553,
+    "import Blanc.Lift.Curve3Crv.Creation.Block.ReceiptCert1"
+   ],
+   [
+    554,
+    "import Blanc.Lift.Curve3Crv.Creation.Block.ReceiptCert2"
+   ],
+   [
+    555,
+    "import Blanc.Lift.Curve3Crv.Creation.Block.ReceiptCert3"
+   ],
+   [
+    556,
+    "import Blanc.Lift.Curve3Crv.Creation.Block.ReceiptCert4"
+   ],
+   [
+    557,
+    "import Blanc.Lift.Curve3Crv.Creation.Block.ReceiptData"
+   ],
+   [
+    558,
+    "import Blanc.Lift.Curve3Crv.Creation.Block.ReceiptRoot"
+   ],
+   [
+    559,
+    "import Blanc.Lift.Curve3Crv.Creation.Block.Slot"
+   ],
+   [
+    560,
+    "import Blanc.Lift.Curve3Crv.Creation.Block.TxCert0"
+   ],
+   [
+    561,
+    "import Blanc.Lift.Curve3Crv.Creation.Block.TxCert1"
+   ],
+   [
+    562,
+    "import Blanc.Lift.Curve3Crv.Creation.Block.TxData"
+   ],
+   [
+    563,
+    "import Blanc.Lift.Curve3Crv.Creation.Block.TxRoot"
+   ],
+   [
+    564,
+    "import Blanc.Lift.Curve3Crv.Creation.BlockMinter.Header"
+   ],
+   [
+    565,
+    "import Blanc.Lift.Curve3Crv.Creation.BlockMinter.ReceiptCert0"
+   ],
+   [
+    566,
+    "import Blanc.Lift.Curve3Crv.Creation.BlockMinter.ReceiptCert1"
+   ],
+   [
+    567,
+    "import Blanc.Lift.Curve3Crv.Creation.BlockMinter.ReceiptCert2"
+   ],
+   [
+    568,
+    "import Blanc.Lift.Curve3Crv.Creation.BlockMinter.ReceiptCert3"
+   ],
+   [
+    569,
+    "import Blanc.Lift.Curve3Crv.Creation.BlockMinter.ReceiptCert4"
+   ],
+   [
+    570,
+    "import Blanc.Lift.Curve3Crv.Creation.BlockMinter.ReceiptData"
+   ],
+   [
+    571,
+    "import Blanc.Lift.Curve3Crv.Creation.BlockMinter.ReceiptRoot"
+   ],
+   [
+    572,
+    "import Blanc.Lift.Curve3Crv.Creation.BlockMinter.Slot"
+   ],
+   [
+    573,
+    "import Blanc.Lift.Curve3Crv.Creation.BlockMinter.TxCert0"
+   ],
+   [
+    574,
+    "import Blanc.Lift.Curve3Crv.Creation.BlockMinter.TxCert1"
+   ],
+   [
+    575,
+    "import Blanc.Lift.Curve3Crv.Creation.BlockMinter.TxData"
+   ],
+   [
+    576,
+    "import Blanc.Lift.Curve3Crv.Creation.BlockMinter.TxRoot"
+   ],
+   [
+    577,
+    "import Blanc.Lift.Curve3Crv.Creation.Cert"
+   ],
+   [
+    578,
+    "import Blanc.Lift.Curve3Crv.Creation.Check"
+   ],
+   [
+    579,
+    "import Blanc.Lift.Curve3Crv.Creation.Deploy"
+   ],
+   [
+    580,
+    "import Blanc.Lift.Curve3Crv.Creation.HistoricalDeploy"
+   ],
+   [
+    581,
+    "import Blanc.Lift.Curve3Crv.Creation.HistoricalTx"
+   ],
+   [
+    582,
+    "import Blanc.Lift.Curve3Crv.Creation.HistoricalTxInput"
+   ],
+   [
+    583,
+    "import Blanc.Lift.Curve3Crv.Creation.HistoricalTxRaw"
+   ],
+   [
+    584,
+    "import Blanc.Lift.Curve3Crv.Creation.HistoricalTxRecover"
+   ],
+   [
+    585,
+    "import Blanc.Lift.Curve3Crv.Creation.HistoricalTxSettle"
+   ],
+   [
+    586,
+    "import Blanc.Lift.Curve3Crv.Creation.HistoricalTxTrace"
+   ],
+   [
+    587,
+    "import Blanc.Lift.Curve3Crv.Creation.HistoricalWalk"
+   ],
+   [
+    588,
+    "import Blanc.Lift.Curve3Crv.Creation.Walk"
+   ],
+   [
+    589,
+    "import Blanc.Lift.Curve3Crv.Decode"
+   ],
+   [
+    590,
+    "import Blanc.Lift.Curve3Crv.Dispatch"
+   ],
+   [
+    591,
+    "import Blanc.Lift.Curve3Crv.Exec"
+   ],
+   [
+    592,
+    "import Blanc.Lift.Curve3Crv.FrameReplay"
+   ],
+   [
+    593,
+    "import Blanc.Lift.Curve3Crv.Headline"
+   ],
+   [
+    594,
+    "import Blanc.Lift.Curve3Crv.HistCommittedHistory"
+   ],
+   [
+    595,
+    "import Blanc.Lift.Curve3Crv.HistDeployment"
+   ],
+   [
+    596,
+    "import Blanc.Lift.Curve3Crv.HistFrameReady"
+   ],
+   [
+    597,
+    "import Blanc.Lift.Curve3Crv.HistWindow"
+   ],
+   [
+    598,
+    "import Blanc.Lift.Curve3Crv.HistoryKeys"
+   ],
+   [
+    599,
+    "import Blanc.Lift.Curve3Crv.Init"
+   ],
+   [
+    600,
+    "import Blanc.Lift.Curve3Crv.Jumps"
+   ],
+   [
+    601,
+    "import Blanc.Lift.Curve3Crv.Ladder"
+   ],
+   [
+    602,
+    "import Blanc.Lift.Curve3Crv.Layout"
+   ],
+   [
+    603,
+    "import Blanc.Lift.Curve3Crv.Lift"
+   ],
+   [
+    604,
+    "import Blanc.Lift.Curve3Crv.LiveBodies"
+   ],
+   [
+    605,
+    "import Blanc.Lift.Curve3Crv.Liveness"
+   ],
+   [
+    606,
+    "import Blanc.Lift.Curve3Crv.Prog"
+   ],
+   [
+    607,
+    "import Blanc.Lift.Curve3Crv.Refine"
+   ],
+   [
+    608,
+    "import Blanc.Lift.Curve3Crv.Safe"
+   ],
+   [
+    609,
+    "import Blanc.Lift.Curve3Crv.SafeBodies"
+   ],
+   [
+    610,
+    "import Blanc.Lift.Curve3Crv.SafeViewBodies"
+   ],
+   [
+    611,
+    "import Blanc.Lift.Curve3Crv.SafeViews"
+   ],
+   [
+    612,
+    "import Blanc.Lift.Curve3Crv.SetMinterTx"
+   ],
+   [
+    613,
+    "import Blanc.Lift.Curve3Crv.Slots"
+   ],
+   [
+    614,
+    "import Blanc.Lift.Curve3Crv.Spec"
+   ],
+   [
+    615,
+    "import Blanc.Lift.Curve3Crv.ViewBodies"
+   ]
+  ],
+  "scripts/ClaimCheck.lean": [
+   [
+    4,
+    "import Blanc.Lift.Curve3Crv.CommittedHistory"
+   ],
+   [
+    5,
+    "import Blanc.Lift.Curve3Crv.Safe"
+   ],
+   [
+    6,
+    "import Blanc.Lift.Curve3Crv.Creation.Deploy"
+   ],
+   [
+    7,
+    "import Blanc.Lift.Curve3Crv.HistDeployment"
+   ],
+   [
+    67,
+    "import Blanc.Composition.Curve3CrvTokenCore"
+   ],
+   [
+    68,
+    "import Blanc.Composition.Curve3CrvPositional"
+   ],
+   [
+    86,
+    "import Blanc.Lift.Curve3Crv.Headline"
+   ],
+   [
+    754,
+    "    {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State}"
+   ],
+   [
+    765,
+    "        Blanc.Curve3Crv.Conserved s :="
+   ],
+   [
+    838,
+    "namespace Blanc.Lift.Curve3Crv.Creation.HistoricalTx"
+   ],
+   [
+    856,
+    "end Blanc.Lift.Curve3Crv.Creation.HistoricalTx"
+   ],
+   [
+    2930,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace)) (env : PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress) {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool) (state : pre.state = future.state),"
+   ],
+   [
+    2959,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace)) (env : PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress) {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool) (state : pre.state = future.state),"
+   ],
+   [
+    3003,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace)) (env : PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress) {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool) (state : pre.state = future.state),"
+   ],
+   [
+    3041,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace)) (env : PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress) {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool) (state : pre.state = future.state),"
+   ],
+   [
+    3591,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = Curve3Pool.poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : FreshKeys K₀ (historyTouchedKeys c3 trace)) (env : Curve3Pool.PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress),"
+   ],
+   [
+    3618,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} {t₀ : Nat} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image) (joint : JointCheckpoint pool c3 (Creation.poolInitState t₀) cs₀ K₀ checkpoint.state) (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace)) (env : PoolTraceEnv trace pool (Creation.poolInitState t₀).coins"
+   ],
+   [
+    3745,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = Curve3Pool.poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : FreshKeys K₀ (historyTouchedKeys c3 trace)) (env : Curve3Pool.PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress),"
+   ],
+   [
+    3785,
+    "example : ∀ {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State} {initialKeys : Key → Prop} (trace : ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode ca).toList = c3crvSem.image) (invariant : VyInv (checkpoint.state.getStor ca) initial initialKeys) (fresh : FreshKeys initialKeys (historyTouchedKeys ca trace)) (keeps : ∀ inv ∈ committedInvocations ca trace, inv.sevm.caller = initial.minter →"
+   ],
+   [
+    3793,
+    "  @Blanc.Composition.Curve3CrvToken.c3crv_history_supply"
+   ],
+   [
+    3800,
+    "example : ∀ {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State} {initialKeys : Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode ca).toList = c3crvSem.image) (invariant : VyInv (checkpoint.state.getStor ca) initial initialKeys) (fresh : FreshKeys initialKeys (historyTouchedKeys ca trace)),"
+   ],
+   [
+    3807,
+    "  @Blanc.Composition.Curve3CrvToken.c3crv_history_at"
+   ],
+   [
+    3816,
+    "  @Blanc.Composition.Curve3CrvToken.control_mutant_no_supplyFacet"
+   ],
+   [
+    4476,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace)) (env : PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress) {msg : Msg} (target : msg.currentTarget = pool) (state : msg.benv.state = future.state),"
+   ],
+   [
+    4519,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace)) (env : PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress) {msg : Msg} (target : msg.currentTarget = pool) (state : msg.benv.state = future.state),"
+   ],
+   [
+    4613,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace)) (env : PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress) {msg : Msg} (target : msg.currentTarget = pool) (state : msg.benv.state = future.state),"
+   ],
+   [
+    4667,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace)) (env : PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress) {msg : Msg} (target : msg.currentTarget = pool) (state : msg.benv.state = future.state),"
+   ],
+   [
+    4813,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future)"
+   ],
+   [
+    4870,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future)"
+   ],
+   [
+    4977,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future)"
+   ],
+   [
+    5044,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future)"
+   ],
+   [
+    5129,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future)"
+   ],
+   [
+    5173,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future)"
+   ],
+   [
+    5231,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future)"
+   ],
+   [
+    5283,
+    "example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future)"
+   ]
+  ],
+  "scripts/gate-registry.json": [
+   [
+    994,
+    "          \"Blanc/Lift/Curve3Crv/Cert.lean\","
+   ]
+  ],
+  "scripts/leaf-review.json": [
+   [
+    532,
+    "  \"Blanc.Curve3Crv.allowance_change_authorized\": {"
+   ],
+   [
+    536,
+    "  \"Blanc.Curve3Crv.approve_ok_iff\": {"
+   ],
+   [
+    540,
+    "  \"Blanc.Curve3Crv.approve_zero_first\": {"
+   ],
+   [
+    544,
+    "  \"Blanc.Curve3Crv.balance_debit_authorized\": {"
+   ],
+   [
+    548,
+    "  \"Blanc.Curve3Crv.burnFrom_ok_iff\": {"
+   ],
+   [
+    552,
+    "  \"Blanc.Curve3Crv.init_conserved\": {"
+   ],
+   [
+    556,
+    "  \"Blanc.Curve3Crv.mint_ok_iff\": {"
+   ],
+   [
+    560,
+    "  \"Blanc.Curve3Crv.minter_change_by_minter\": {"
+   ],
+   [
+    564,
+    "  \"Blanc.Curve3Crv.supply_change_by_minter\": {"
+   ],
+   [
+    568,
+    "  \"Blanc.Curve3Crv.transferFrom_minter_keeps_allowances\": {"
+   ],
+   [
+    572,
+    "  \"Blanc.Curve3Crv.transferFrom_ok_iff\": {"
+   ],
+   [
+    576,
+    "  \"Blanc.Curve3Crv.transferFrom_spends_max_allowance\": {"
+   ],
+   [
+    580,
+    "  \"Blanc.Curve3Crv.transfer_ok_iff\": {"
+   ],
+   [
+    2016,
+    "  \"Blanc.Lift.Curve3Crv.c3crv_history_live\": {"
+   ],
+   [
+    2020,
+    "  \"Blanc.Lift.Curve3Crv.c3crv_history_setName_live\": {"
+   ],
+   [
+    2024,
+    "  \"Blanc.Lift.Curve3Crv.curve_init_vyInv\": {"
+   ],
+   [
+    2028,
+    "  \"Blanc.Lift.Curve3Crv.mem_committedInvocations\": {"
+   ]
+  ],
+  "scripts/lift/certificates.json": [
+   [
+    16,
+    "      \"cert\": \"Blanc/Lift/Curve3Crv/Cert.lean\","
+   ],
+   [
+    29,
+    "      \"cert\": \"Blanc/Lift/Curve3Crv/Creation/Cert.lean\","
+   ]
+  ],
+  "scripts/proof-module-size-baseline.json": [
+   [
+    36,
+    "    \"Blanc/Composition/Curve3CrvPositional.lean\","
+   ],
+   [
+    37,
+    "    \"Blanc/Composition/Curve3CrvTokenCore.lean\","
+   ],
+   [
+    183,
+    "    \"Blanc/Curve3Crv/Model.lean\","
+   ],
+   [
+    184,
+    "    \"Blanc/Curve3Crv/Properties.lean\","
+   ],
+   [
+    450,
+    "    \"Blanc/Lift/Curve3Crv/CarriedHistory.lean\","
+   ],
+   [
+    451,
+    "    \"Blanc/Lift/Curve3Crv/Cert.lean\","
+   ],
+   [
+    452,
+    "    \"Blanc/Lift/Curve3Crv/Check.lean\","
+   ],
+   [
+    453,
+    "    \"Blanc/Lift/Curve3Crv/CommittedExec.lean\","
+   ],
+   [
+    454,
+    "    \"Blanc/Lift/Curve3Crv/CommittedHistory.lean\","
+   ],
+   [
+    455,
+    "    \"Blanc/Lift/Curve3Crv/CommittedReplay.lean\","
+   ],
+   [
+    456,
+    "    \"Blanc/Lift/Curve3Crv/CostBounds.lean\","
+   ],
+   [
+    457,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Block/Header.lean\","
+   ],
+   [
+    458,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Block/ReceiptCert0.lean\","
+   ],
+   [
+    459,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Block/ReceiptCert1.lean\","
+   ],
+   [
+    460,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Block/ReceiptCert2.lean\","
+   ],
+   [
+    461,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Block/ReceiptCert3.lean\","
+   ],
+   [
+    462,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Block/ReceiptCert4.lean\","
+   ],
+   [
+    463,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Block/ReceiptData.lean\","
+   ],
+   [
+    464,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Block/ReceiptRoot.lean\","
+   ],
+   [
+    465,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Block/Slot.lean\","
+   ],
+   [
+    466,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Block/TxCert0.lean\","
+   ],
+   [
+    467,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Block/TxCert1.lean\","
+   ],
+   [
+    468,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Block/TxData.lean\","
+   ],
+   [
+    469,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Block/TxRoot.lean\","
+   ],
+   [
+    470,
+    "    \"Blanc/Lift/Curve3Crv/Creation/BlockMinter/Header.lean\","
+   ],
+   [
+    471,
+    "    \"Blanc/Lift/Curve3Crv/Creation/BlockMinter/ReceiptCert0.lean\","
+   ],
+   [
+    472,
+    "    \"Blanc/Lift/Curve3Crv/Creation/BlockMinter/ReceiptCert1.lean\","
+   ],
+   [
+    473,
+    "    \"Blanc/Lift/Curve3Crv/Creation/BlockMinter/ReceiptCert2.lean\","
+   ],
+   [
+    474,
+    "    \"Blanc/Lift/Curve3Crv/Creation/BlockMinter/ReceiptCert3.lean\","
+   ],
+   [
+    475,
+    "    \"Blanc/Lift/Curve3Crv/Creation/BlockMinter/ReceiptCert4.lean\","
+   ],
+   [
+    476,
+    "    \"Blanc/Lift/Curve3Crv/Creation/BlockMinter/ReceiptData.lean\","
+   ],
+   [
+    477,
+    "    \"Blanc/Lift/Curve3Crv/Creation/BlockMinter/ReceiptRoot.lean\","
+   ],
+   [
+    478,
+    "    \"Blanc/Lift/Curve3Crv/Creation/BlockMinter/Slot.lean\","
+   ],
+   [
+    479,
+    "    \"Blanc/Lift/Curve3Crv/Creation/BlockMinter/TxCert0.lean\","
+   ],
+   [
+    480,
+    "    \"Blanc/Lift/Curve3Crv/Creation/BlockMinter/TxCert1.lean\","
+   ],
+   [
+    481,
+    "    \"Blanc/Lift/Curve3Crv/Creation/BlockMinter/TxData.lean\","
+   ],
+   [
+    482,
+    "    \"Blanc/Lift/Curve3Crv/Creation/BlockMinter/TxRoot.lean\","
+   ],
+   [
+    483,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Cert.lean\","
+   ],
+   [
+    484,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Check.lean\","
+   ],
+   [
+    485,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Deploy.lean\","
+   ],
+   [
+    486,
+    "    \"Blanc/Lift/Curve3Crv/Creation/HistoricalDeploy.lean\","
+   ],
+   [
+    487,
+    "    \"Blanc/Lift/Curve3Crv/Creation/HistoricalTx.lean\","
+   ],
+   [
+    488,
+    "    \"Blanc/Lift/Curve3Crv/Creation/HistoricalTxInput.lean\","
+   ],
+   [
+    489,
+    "    \"Blanc/Lift/Curve3Crv/Creation/HistoricalTxRaw.lean\","
+   ],
+   [
+    490,
+    "    \"Blanc/Lift/Curve3Crv/Creation/HistoricalTxRecover.lean\","
+   ],
+   [
+    491,
+    "    \"Blanc/Lift/Curve3Crv/Creation/HistoricalTxSettle.lean\","
+   ],
+   [
+    492,
+    "    \"Blanc/Lift/Curve3Crv/Creation/HistoricalTxTrace.lean\","
+   ],
+   [
+    493,
+    "    \"Blanc/Lift/Curve3Crv/Creation/HistoricalWalk.lean\","
+   ],
+   [
+    494,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Walk.lean\","
+   ],
+   [
+    495,
+    "    \"Blanc/Lift/Curve3Crv/Decode.lean\","
+   ],
+   [
+    496,
+    "    \"Blanc/Lift/Curve3Crv/Dispatch.lean\","
+   ],
+   [
+    497,
+    "    \"Blanc/Lift/Curve3Crv/Exec.lean\","
+   ],
+   [
+    498,
+    "    \"Blanc/Lift/Curve3Crv/FrameReplay.lean\","
+   ],
+   [
+    499,
+    "    \"Blanc/Lift/Curve3Crv/Headline.lean\","
+   ],
+   [
+    500,
+    "    \"Blanc/Lift/Curve3Crv/HistCommittedHistory.lean\","
+   ],
+   [
+    501,
+    "    \"Blanc/Lift/Curve3Crv/HistDeployment.lean\","
+   ],
+   [
+    502,
+    "    \"Blanc/Lift/Curve3Crv/HistFrameReady.lean\","
+   ],
+   [
+    503,
+    "    \"Blanc/Lift/Curve3Crv/HistWindow.lean\","
+   ],
+   [
+    504,
+    "    \"Blanc/Lift/Curve3Crv/HistoryKeys.lean\","
+   ],
+   [
+    505,
+    "    \"Blanc/Lift/Curve3Crv/Init.lean\","
+   ],
+   [
+    506,
+    "    \"Blanc/Lift/Curve3Crv/Jumps.lean\","
+   ],
+   [
+    507,
+    "    \"Blanc/Lift/Curve3Crv/Ladder.lean\","
+   ],
+   [
+    508,
+    "    \"Blanc/Lift/Curve3Crv/Layout.lean\","
+   ],
+   [
+    509,
+    "    \"Blanc/Lift/Curve3Crv/Lift.lean\","
+   ],
+   [
+    510,
+    "    \"Blanc/Lift/Curve3Crv/LiveBodies.lean\","
+   ],
+   [
+    511,
+    "    \"Blanc/Lift/Curve3Crv/Liveness.lean\","
+   ],
+   [
+    512,
+    "    \"Blanc/Lift/Curve3Crv/Prog.lean\","
+   ],
+   [
+    513,
+    "    \"Blanc/Lift/Curve3Crv/Refine.lean\","
+   ],
+   [
+    514,
+    "    \"Blanc/Lift/Curve3Crv/Safe.lean\","
+   ],
+   [
+    515,
+    "    \"Blanc/Lift/Curve3Crv/SafeBodies.lean\","
+   ],
+   [
+    516,
+    "    \"Blanc/Lift/Curve3Crv/SafeViewBodies.lean\","
+   ],
+   [
+    517,
+    "    \"Blanc/Lift/Curve3Crv/SafeViews.lean\","
+   ],
+   [
+    518,
+    "    \"Blanc/Lift/Curve3Crv/SetMinterTx.lean\","
+   ],
+   [
+    519,
+    "    \"Blanc/Lift/Curve3Crv/Slots.lean\","
+   ],
+   [
+    520,
+    "    \"Blanc/Lift/Curve3Crv/Spec.lean\","
+   ],
+   [
+    521,
+    "    \"Blanc/Lift/Curve3Crv/ViewBodies.lean\","
+   ],
+   [
+    1919,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Block/ReceiptData.lean\": 3998,"
+   ],
+   [
+    1920,
+    "    \"Blanc/Lift/Curve3Crv/Creation/Block/TxData.lean\": 2489,"
+   ],
+   [
+    1921,
+    "    \"Blanc/Lift/Curve3Crv/Creation/BlockMinter/ReceiptData.lean\": 4450,"
+   ],
+   [
+    1922,
+    "    \"Blanc/Lift/Curve3Crv/Creation/BlockMinter/TxData.lean\": 2804,"
+   ],
+   [
+    1923,
+    "    \"Blanc/Lift/Curve3Crv/LiveBodies.lean\": 2127,"
+   ],
+   [
+    1924,
+    "    \"Blanc/Lift/Curve3Crv/Refine.lean\": 1458,"
+   ]
+  ]
+ },
+ "schema": "blanc-release-manifest-v1",
+ "shared_used": {
+  "Blanc.BenvStat.bal_none_of_stateGas_none": "00000000d2c8528e",
+  "Blanc.BlockHashBinding.BlockRecord": "00000000ea5019a6",
+  "Blanc.BlockHashBinding.BlockRecord.Checked": "000000009d8f09e9",
+  "Blanc.BlockHashBinding.BlockRecord.Slot": "0000000014bf157e",
+  "Blanc.BlockHashBinding.HashBound": "00000000f1ab8236",
+  "Blanc.BlockHashBinding.HashBound.recorded": "000000005a0125c2",
+  "Blanc.BlockHashBinding.Recorded": "000000008a876b2a",
+  "Blanc.BlockHashBinding.indexKey": "000000006be49d33",
+  "Blanc.ByteArray.sliceD_eq": "00000000b7575c2c",
+  "Blanc.ByteArray.toList_eq_toList_data": "00000000ba5f2bdc",
+  "Blanc.Bytes.sliceD_sliceD_of_le": "000000008553d254",
+  "Blanc.Bytes.sliceD_writeAt": "000000001da3983c",
+  "Blanc.Bytes.sliceD_writeAt_after": "000000009b0418d7",
+  "Blanc.Bytes.sliceD_writeAt_before": "00000000a4719293",
+  "Blanc.Bytes.sliceD_writeAt_inside": "000000009c643752",
+  "Blanc.Bytes.sliceD_zero_length": "0000000089481965",
+  "Blanc.Bytes.toBytes_toB256_of_length": "00000000094fcc07",
+  "Blanc.Bytes.writeAt": "00000000f47b1584",
+  "Blanc.CallCodeH": "000000006228908d",
+  "Blanc.CodeSem": "00000000ea5019a6",
+  "Blanc.CodeSem.At": "000000000ea05771",
+  "Blanc.ContractSpecSem": "00000000ea5019a6",
+  "Blanc.ContractSpecSem.MessageRunReady": "00000000a72dc5ec",
+  "Blanc.ContractSpecSem.Post": "000000002c0327c1",
+  "Blanc.ContractSpecSem.PostInv": "000000001887dde7",
+  "Blanc.ContractSpecSem.Pre": "000000002c0327c1",
+  "Blanc.ContractSpecSem.PreInv": "0000000001fc63fc",
+  "Blanc.ContractSpecSem.PreWf": "000000002c0327c1",
+  "Blanc.ContractSpecSem.PreservesAdmitted": "0000000043994c33",
+  "Blanc.ContractSpecSem.PreservesAdmittedIn": "00000000b27b4751",
+  "Blanc.ContractSpecSem.SoundAdmitted": "0000000043994c33",
+  "Blanc.ContractSpecSem.SoundAdmittedIn": "00000000b27b4751",
+  "Blanc.ContractSpecSem.StateInv": "00000000c8db4b92",
+  "Blanc.ContractSpecSem.ofStorageOnly": "000000006df3474d",
+  "Blanc.ContractSpecSem.ofStorageOnly_preInv_iff": "0000000022857225",
+  "Blanc.ContractSpecSem.preserves_inv_admitted": "0000000068aabc3a",
+  "Blanc.ContractSpecSem.preserves_inv_admittedIn": "000000005d311e3d",
+  "Blanc.CoveredFork": "00000000c40c3bc2",
+  "Blanc.CoveredFork.cases": "000000005ff065b0",
+  "Blanc.CoveredFork.histFork": "0000000055bc9413",
+  "Blanc.CoveredFork.rules_access": "000000001c47121f",
+  "Blanc.CoveredFork.rules_stateGas_none": "00000000960cfd76",
+  "Blanc.CoveredFork.shanghaiOnwards": "0000000042ddea5c",
+  "Blanc.CoveredFork.stateGas_none": "000000009b56ecc7",
+  "Blanc.Devm.PopBurn": "00000000f5f549a2",
+  "Blanc.Devm.addLog_getStor": "00000000cb1280c5",
+  "Blanc.Devm.extCost_zero_of_le": "000000008f8fbcae",
+  "Blanc.Evm.step_spawn_child": "0000000084fb8396",
+  "Blanc.Evm.step_spawn_child_world_noStateGas": "00000000df00d349",
+  "Blanc.Exec.CoreAccounting": "00000000bd44ce12",
+  "Blanc.Exec.CoreAccounting.WholeFrameReplayIn": "00000000baa3ba2a",
+  "Blanc.Exec.CoreAccounting.messageRoot_facts": "00000000843ddb26",
+  "Blanc.Exec.CoreAccountingIn": "00000000909165d3",
+  "Blanc.Exec.Deriv.ParentStep.balSum_le": "00000000c1f02d92",
+  "Blanc.Exec.Deriv.ParentStep.codePreserve": "000000005f8e954a",
+  "Blanc.Exec.Frame.committedFrames_self": "00000000d3530de6",
+  "Blanc.Exec.Frame.rootDeriv": "000000001f454bec",
+  "Blanc.Exec.FrameAdmitted": "00000000d4a4b0b3",
+  "Blanc.Exec.FrameAdmitted.mono": "000000008576b341",
+  "Blanc.Exec.FrameAdmitted.root": "00000000bc5dc4c5",
+  "Blanc.Exec.FreshEntry": "0000000038351c16",
+  "Blanc.Exec.WknSem": "0000000079f615fc",
+  "Blanc.Exec.committedFrames_isStatic": "0000000088d170f8",
+  "Blanc.Exec.coreAccounting": "00000000fa811ca9",
+  "Blanc.Exec.coreAccountingIn": "00000000bc97a4d7",
+  "Blanc.Exec.mem_rawFrameRoots_of_mem_committedFrames": "00000000514531ce",
+  "Blanc.Exec.rawFrameDescendants": "00000000954a0660",
+  "Blanc.Exec.rawFrameRoots": "00000000954a0660",
+  "Blanc.Exec.rawFrameRoots_trans": "0000000077bfedfa",
+  "Blanc.Exec.staticOnly_descendantFrames_flatMap_eq_nilIn": "0000000042082c2f",
+  "Blanc.ExecutionAccountingReplay.AccountingLadderAdmitted": "00000000ba9acbe3",
+  "Blanc.ExecutionAccountingReplay.AccountingLadderAdmitted.configuredHistory": "000000001d953d44",
+  "Blanc.ExecutionAccountingReplay.AccountingLadderAdmittedIn": "000000009005272f",
+  "Blanc.ExecutionAccountingReplay.AccountingLadderAdmittedIn.midHistoryIn": "00000000b946c1c1",
+  "Blanc.ExecutionAccountingReplay.AccountingLadderAdmittedIn.midWindowIn": "000000003ab03b05",
+  "Blanc.ExecutionAccountingReplay.PositionalLadder": "00000000ba9acbe3",
+  "Blanc.ExecutionAccountingReplay.PositionalLadder.configuredHistory_at": "00000000f6260552",
+  "Blanc.ExecutionAccountingReplay.ReplayCarrier": "000000009c230bcf",
+  "Blanc.ExecutionAccountingReplay.ReplayObservation": "000000007f6ef392",
+  "Blanc.ExecutionAccountingReplay.benvAfterTransfer_getStor_eq_of_safe": "0000000064e5bacb",
+  "Blanc.ExecutionAccountingReplay.wholeFramePositionalLadder": "0000000031159481",
+  "Blanc.ExecutionTrace.ApplyTransactionsTrace.TxSplit": "00000000dd928d68",
+  "Blanc.ExecutionTrace.ApplyTransactionsTrace.TxSplit.afterBenv": "00000000ae0bd03a",
+  "Blanc.ExecutionTrace.BodyStageCapabilities": "0000000084eeb3ff",
+  "Blanc.ExecutionTrace.BodyStageCapabilities.historical": "00000000ee56c1a1",
+  "Blanc.ExecutionTrace.ConfiguredBlockTraceIn": "000000009d63804f",
+  "Blanc.ExecutionTrace.ConfiguredBlockTraceIn.FrameAdmitted": "00000000d6f02a3d",
+  "Blanc.ExecutionTrace.ConfiguredBlockTraceIn.settledThroughCut": "00000000a351f445",
+  "Blanc.ExecutionTrace.ConfiguredBlockTraceIn.txSplit_error_eq_none_of_receipt": "000000006279ef9a",
+  "Blanc.ExecutionTrace.ConfiguredBlockTraceIn.txSplit_stat": "0000000028ce02ab",
+  "Blanc.ExecutionTrace.ConfiguredHistoryTrace": "0000000026983e72",
+  "Blanc.ExecutionTrace.ConfiguredHistoryTrace.FrameAdmitted": "00000000169273c6",
+  "Blanc.ExecutionTrace.ConfiguredHistoryTrace.FrameAdmitted.and": "00000000401bf371",
+  "Blanc.ExecutionTrace.ConfiguredHistoryTrace.frameAdmitted_calldata": "00000000d69a9d59",
+  "Blanc.ExecutionTrace.ConfiguredHistoryTrace.frameAdmitted_iff_rawFrames": "0000000006a9ea3e",
+  "Blanc.ExecutionTrace.ConfiguredHistoryTrace.freshFrameAdmitted": "00000000408e9c8d",
+  "Blanc.ExecutionTrace.ConfiguredHistoryTrace.rawFrames": "000000009b695bd3",
+  "Blanc.ExecutionTrace.ConfiguredHistoryTrace.settledFrames": "00000000f9de1554",
+  "Blanc.ExecutionTrace.ConfiguredHistoryTrace.stateInv_admitted_sem": "00000000afe95f23",
+  "Blanc.ExecutionTrace.ConfiguredHistoryTraceIn": "000000009d63804f",
+  "Blanc.ExecutionTrace.Evm.step_spawn_child_data_noStateGas": "00000000ba51f3ee",
+  "Blanc.ExecutionTrace.Exec.descendantFrames_ownCodeIn": "000000005eac139e",
+  "Blanc.ExecutionTrace.MessageCallTrace.exists_root_of_clean_call": "00000000fdd30998",
+  "Blanc.ExecutionTrace.MessageCallTrace.result": "00000000172fb10a",
+  "Blanc.ExecutionTrace.MessageCallTrace.settledFrames": "000000005a6d20bc",
+  "Blanc.ExecutionTrace.MessageCallTrace.settledFrames_eq": "00000000a01cc671",
+  "Blanc.ExecutionTrace.MessageCallTrace.settledRoots": "000000005a6d20bc",
+  "Blanc.ExecutionTrace.MidHistoryTraceIn": "000000009c563a76",
+  "Blanc.ExecutionTrace.MidHistoryTraceIn.FrameAdmitted": "00000000a32deadb",
+  "Blanc.ExecutionTrace.MidHistoryTraceIn.RewardCreditsFunded": "0000000011e82cc7",
+  "Blanc.ExecutionTrace.MidHistoryTraceIn.append": "0000000020604f58",
+  "Blanc.ExecutionTrace.MidHistoryTraceIn.calldata_bound": "00000000cb4a6bc1",
+  "Blanc.ExecutionTrace.MidHistoryTraceIn.frameAdmitted_iff_rawFrames": "0000000082420f6e",
+  "Blanc.ExecutionTrace.MidHistoryTraceIn.rawFrames": "00000000afab5f48",
+  "Blanc.ExecutionTrace.MidHistoryTraceIn.rawFrames_entered": "000000006a019dfb",
+  "Blanc.ExecutionTrace.MidHistoryTraceIn.rewardCreditsFunded": "00000000814a48e3",
+  "Blanc.ExecutionTrace.MidHistoryTraceIn.settledFrames": "00000000aa159d17",
+  "Blanc.ExecutionTrace.MidHistoryTraceIn.stateInv_admitted_semIn": "0000000038c7af40",
+  "Blanc.ExecutionTrace.OwnCodeAtIn": "00000000c0779859",
+  "Blanc.ExecutionTrace.OwnSpawnsIn": "00000000f2670f0d",
+  "Blanc.ExecutionTrace.StagedBodyTrace": "00000000f54d14d2",
+  "Blanc.ExecutionTrace.StagedBodyTrace.txSplitOfSlot": "000000007eaa87d8",
+  "Blanc.ExecutionTrace.StagedBodyTrace.txSplitOfSlot_spec": "000000007c25aa59",
+  "Blanc.ExecutionTrace.TransactionTrace": "0000000074cad99f",
+  "Blanc.ExecutionTrace.TransactionTrace.settledFrames": "0000000096ead333",
+  "Blanc.ExecutionTrace.addBal_getStor_of_codenonempty": "0000000061be2a5f",
+  "Blanc.ExecutionTrace.checkTransaction_sender_nonce": "000000000351a346",
+  "Blanc.ExecutionTrace.messageCallDelegation": "00000000953da33d",
+  "Blanc.ExecutionTrace.messageCallExecutionMessage": "00000000cb18c14f",
+  "Blanc.ExecutionTrace.receiptTrieValue": "00000000edcad405",
+  "Blanc.ExecutionTrace.rootFrames": "00000000f656e2c3",
+  "Blanc.ExecutionTrace.transactionBlobGasFee": "000000007d128eb4",
+  "Blanc.ExecutionTrace.transactionPreludeBout": "0000000002b61104",
+  "Blanc.ExecutionTrace.transactionTenv": "00000000f3e61c70",
+  "Blanc.ExecutionTrace.txTrieValue": "00000000d3c28b21",
+  "Blanc.ExecutionTrace.txTrieValue_of_legacy": "00000000f2a4e78b",
+  "Blanc.ForallDeeperAtSem": "00000000c62287a1",
+  "Blanc.Frame.enter_run_of_nonprecompile": "00000000498de698",
+  "Blanc.HistFork": "00000000c40c3bc2",
+  "Blanc.HistFork.dataNonZero_ge": "00000000f3204241",
+  "Blanc.HistFork.stateGas_none": "00000000490bf84f",
+  "Blanc.InstalledCert": "00000000b5f2c6c5",
+  "Blanc.InstalledCert.runtimeSafety": "00000000d1da2a78",
+  "Blanc.Lift.AVal": "00000000ea5019a6",
+  "Blanc.Lift.B256.toAdr_toB256_of_lt": "00000000f40a1850",
+  "Blanc.Lift.B256.xor_eq_zero_iff": "0000000008cfb1e9",
+  "Blanc.Lift.B256.xor_zero": "000000009b939932",
+  "Blanc.Lift.Cert": "00000000ea5019a6",
+  "Blanc.Lift.Cert.callOnly": "00000000c078787a",
+  "Blanc.Lift.Cert.check": "00000000302c18dc",
+  "Blanc.Lift.Cert.entries": "00000000ceee0713",
+  "Blanc.Lift.Cert.jumpsOk": "00000000302c18dc",
+  "Blanc.Lift.Cert.noSelfdestruct": "00000000c078787a",
+  "Blanc.Lift.Cert.prog": "00000000e24fa292",
+  "Blanc.Lift.CodeTries": "000000000e57b33f",
+  "Blanc.Lift.CodeTries.ofCode": "00000000527fabe2",
+  "Blanc.Lift.Entry": "00000000ea5019a6",
+  "Blanc.Lift.Exec.logs_eq_of_static_okH": "00000000718c557c",
+  "Blanc.Lift.LegacyRecover.legacy_decode_pre155": "000000003b6ef7e6",
+  "Blanc.Lift.LegacyRecover.recoverSender_pre155": "0000000005409ed4",
+  "Blanc.Lift.LegacyRecover.signingHash_pre155": "00000000ac5dc2d7",
+  "Blanc.Lift.Mem.read_write_disjoint": "00000000e051e08a",
+  "Blanc.Lift.Mem.read_write_word_of_wf": "0000000053e835de",
+  "Blanc.Lift.Mem.reads_data": "00000000e1e8d235",
+  "Blanc.Lift.Mem.size_write_word_aligned": "0000000067dadc48",
+  "Blanc.Lift.Outcome": "00000000ea5019a6",
+  "Blanc.Lift.Outcome.devm": "000000005eb93c6e",
+  "Blanc.Lift.QuietSet": "00000000ae729382",
+  "Blanc.Lift.SFunc": "00000000ea5019a6",
+  "Blanc.Lift.SFunc.Run": "000000004ec99252",
+  "Blanc.Lift.SFunc.Run.cut": "00000000b9da501d",
+  "Blanc.Lift.SFunc.Run.world_of_quietH": "0000000055a72d65",
+  "Blanc.Lift.SFunc.RunCut": "00000000e05e8dba",
+  "Blanc.Lift.SFunc.RunCut.uncut": "00000000df1f1b87",
+  "Blanc.Lift.SFunc.RunCutP": "0000000033b7e323",
+  "Blanc.Lift.SFunc.RunCutP.false_of_noOk": "00000000b2870f1f",
+  "Blanc.Lift.SFunc.RunExact": "000000004ec99252",
+  "Blanc.Lift.SFunc.RunP": "00000000739c9527",
+  "Blanc.Lift.SFunc.execsSatisfy": "00000000d8a4ece0",
+  "Blanc.Lift.SFunc.noOk": "00000000b966aa0b",
+  "Blanc.Lift.SFunc.quiet": "00000000b966aa0b",
+  "Blanc.Lift.SFunc.refs": "00000000f9743e45",
+  "Blanc.Lift.SFunc.vyFwd": "000000000258dd1c",
+  "Blanc.Lift.SProg.Run": "00000000981e17d4",
+  "Blanc.Lift.SProg.RunExact": "00000000981e17d4",
+  "Blanc.Lift.Seg": "00000000ea5019a6",
+  "Blanc.Lift.St": "000000001b7f5104",
+  "Blanc.Lift.St.extCost_eq": "00000000e2c44d36",
+  "Blanc.Lift.St.memory": "0000000031a107ed",
+  "Blanc.Lift.St.self": "00000000f69a016d",
+  "Blanc.Lift.St_error": "000000003a2e7569",
+  "Blanc.Lift.St_getStor": "00000000e66131a0",
+  "Blanc.Lift.StaticAnswered": "00000000922a49b5",
+  "Blanc.Lift.StaticAnsweredH": "00000000922a49b5",
+  "Blanc.Lift.StaticAnsweredH.of_covered": "00000000a947dd05",
+  "Blanc.Lift.StaticCallPost": "0000000078c370a7",
+  "Blanc.Lift.StaticCallPost.eq_St": "0000000014c5265a",
+  "Blanc.Lift.Token.Book": "0000000069a2a34f",
+  "Blanc.Lift.Token.Book.run": "000000005861a973",
+  "Blanc.Lift.Token.Op": "00000000ea5019a6",
+  "Blanc.Lift.Token.SupplyFacet": "0000000019d58377",
+  "Blanc.Lift.Token.SupplyFacet.KeepsMinter": "00000000e4226768",
+  "Blanc.Lift.Token.SupplyFacet.burned": "0000000007bfe9d2",
+  "Blanc.Lift.Token.SupplyFacet.minted": "0000000007bfe9d2",
+  "Blanc.Lift.Token.SupplyFacet.run_supply": "00000000addc9474",
+  "Blanc.Lift.Xinst.isStaticcall": "000000001d655582",
+  "Blanc.Lift.afterSloadH": "000000002759f877",
+  "Blanc.Lift.afterSloadH_getCode": "00000000316ee3e0",
+  "Blanc.Lift.afterSloadH_getStor": "000000003dd47b28",
+  "Blanc.Lift.afterSloadH_logs": "000000009f0fe78a",
+  "Blanc.Lift.afterSloadH_output": "00000000c74489f5",
+  "Blanc.Lift.afterSstoreH": "000000004e37fb05",
+  "Blanc.Lift.afterSstoreH_accountsToDelete": "000000008b68ba2d",
+  "Blanc.Lift.afterSstoreH_createdAccounts": "00000000a6cd1abc",
+  "Blanc.Lift.afterSstoreH_error": "0000000052d354b8",
+  "Blanc.Lift.afterSstoreH_getStor_ne": "00000000bf6126fa",
+  "Blanc.Lift.afterSstoreH_getStor_self": "00000000b7510274",
+  "Blanc.Lift.afterSstoreH_logs": "00000000671d8c46",
+  "Blanc.Lift.afterSstoreH_output": "00000000b145e8ef",
+  "Blanc.Lift.afterSstoreH_refundCounter": "00000000543202a9",
+  "Blanc.Lift.ceil32_eq": "000000001b59c1b8",
+  "Blanc.Lift.charge_covered": "000000007c397219",
+  "Blanc.Lift.checkNode": "0000000088663ae7",
+  "Blanc.Lift.checkNodeT": "00000000899761a6",
+  "Blanc.Lift.checkNodeT_eq": "0000000021030cbb",
+  "Blanc.Lift.createSeed": "00000000a7f6b2c9",
+  "Blanc.Lift.eq_zero_of_iszero_ne_zero": "00000000d187ca79",
+  "Blanc.Lift.getStorVal_afterSload": "00000000d1866345",
+  "Blanc.Lift.getStorVal_afterSloadH": "0000000078232eaa",
+  "Blanc.Lift.getStorVal_afterStore": "0000000086192e17",
+  "Blanc.Lift.getStorVal_afterStoreH": "000000003adc6bbd",
+  "Blanc.Lift.getStor_St_return": "000000009f6392f5",
+  "Blanc.Lift.getStor_addLog": "00000000c324179e",
+  "Blanc.Lift.getStor_afterStore": "000000004c84e5d4",
+  "Blanc.Lift.getStor_afterStoreH": "00000000d4bd1393",
+  "Blanc.Lift.getStor_afterStore_ne": "000000004d7a0cc5",
+  "Blanc.Lift.getStor_afterStore_neH": "000000005121d1f4",
+  "Blanc.Lift.initDevm_logs": "000000002d28648b",
+  "Blanc.Lift.instDecidableEqAVal": "000000002e47e7ef",
+  "Blanc.Lift.jumpsOkNode": "00000000c74878ef",
+  "Blanc.Lift.jumpsOkNodeT": "00000000cfcaa2ae",
+  "Blanc.Lift.jumpsOkNodeT_eq": "00000000512f81f5",
+  "Blanc.Lift.liftCreatePost": "00000000c73fdbc5",
+  "Blanc.Lift.liftCreatePost_facts": "000000009b3aaa08",
+  "Blanc.Lift.liftCreate_ok": "00000000877d720f",
+  "Blanc.Lift.liftCreate_okH": "000000003aa86c47",
+  "Blanc.Lift.liftCreate_postH": "000000000a0a0c43",
+  "Blanc.Lift.lift_exact": "00000000d9860d7c",
+  "Blanc.Lift.lift_sound_noStateGas": "00000000b736f380",
+  "Blanc.Lift.logs_St_return": "00000000a2cd0cbf",
+  "Blanc.Lift.logs_afterStore": "000000008a19d0d5",
+  "Blanc.Lift.logs_afterStoreH": "000000009ab0be95",
+  "Blanc.Lift.mapSlot": "00000000dbe56c6c",
+  "Blanc.Lift.output_St_return": "00000000f703f975",
+  "Blanc.Lift.parentPrefix_exec_staticcall_of_cert": "000000002d4c69ac",
+  "Blanc.Lift.parentPrefix_exec_staticcall_of_cert_noStateGas": "00000000795a5303",
+  "Blanc.Lift.pre_eq_St": "00000000130a0a36",
+  "Blanc.Lift.read_covered": "00000000ef55bceb",
+  "Blanc.Lift.recordTouch_meta": "0000000009866d16",
+  "Blanc.Lift.returnPost": "00000000c18bb5a4",
+  "Blanc.Lift.returnPost_facts": "0000000020bf4676",
+  "Blanc.Lift.ri_add": "00000000f382df5e",
+  "Blanc.Lift.ri_calldatacopy": "000000002ead55bc",
+  "Blanc.Lift.ri_calldataload": "00000000a4f51268",
+  "Blanc.Lift.ri_calldatasize": "0000000019cc1930",
+  "Blanc.Lift.ri_caller": "000000006fa3da22",
+  "Blanc.Lift.ri_dup": "00000000f4df49e2",
+  "Blanc.Lift.ri_eq": "000000002e3ea5b3",
+  "Blanc.Lift.ri_gas": "000000000d9ba499",
+  "Blanc.Lift.ri_gt": "00000000d8e1ece4",
+  "Blanc.Lift.ri_iszero": "0000000053f3ebdc",
+  "Blanc.Lift.ri_keccak": "00000000f9daff91",
+  "Blanc.Lift.ri_log3": "00000000ac1d85f6",
+  "Blanc.Lift.ri_lt": "0000000086e1cf58",
+  "Blanc.Lift.ri_mload": "000000001f23de33",
+  "Blanc.Lift.ri_mod": "00000000fa1bfe68",
+  "Blanc.Lift.ri_mstore": "00000000fb4c2b56",
+  "Blanc.Lift.ri_pop": "00000000fd5ce9d1",
+  "Blanc.Lift.ri_push": "000000002b680a52",
+  "Blanc.Lift.ri_return": "0000000040bf741b",
+  "Blanc.Lift.ri_returndatasize": "000000002b876f75",
+  "Blanc.Lift.ri_sloadH": "000000002b9949ac",
+  "Blanc.Lift.ri_sstoreH": "0000000027bca197",
+  "Blanc.Lift.ri_sstore_nonstaticH": "00000000997be69f",
+  "Blanc.Lift.ri_staticcallH": "00000000ba592b7f",
+  "Blanc.Lift.ri_sub": "00000000eab5896b",
+  "Blanc.Lift.ri_swap": "000000004c8d32d0",
+  "Blanc.Lift.ri_xor": "00000000e4fba977",
+  "Blanc.Lift.ric_branch": "00000000be1822d2",
+  "Blanc.Lift.ric_branchTo": "000000005ee1ce0b",
+  "Blanc.Lift.ric_dest": "0000000019604047",
+  "Blanc.Lift.ric_jump": "0000000046a82084",
+  "Blanc.Lift.ric_next": "00000000d90bab01",
+  "Blanc.Lift.ric_vyAddStoreH": "000000000a99a4f7",
+  "Blanc.Lift.ric_vyAddrArg": "00000000623d9aae",
+  "Blanc.Lift.ric_vyLoadIterH": "00000000c0543550",
+  "Blanc.Lift.ric_vyNonpayable": "00000000eefee5be",
+  "Blanc.Lift.ric_vyPrologue": "00000000780bf6fb",
+  "Blanc.Lift.ric_vySlot": "00000000f3f470f6",
+  "Blanc.Lift.ric_vyStoreHead": "0000000018c47f8c",
+  "Blanc.Lift.ric_vyStoreIterH": "000000006661e874",
+  "Blanc.Lift.ric_vySubStoreH": "0000000031d3399b",
+  "Blanc.Lift.rx_add": "00000000b375e7d5",
+  "Blanc.Lift.rx_add'": "00000000c2add1f7",
+  "Blanc.Lift.rx_branchTo_succ": "00000000797c17a9",
+  "Blanc.Lift.rx_branchTo_zero": "0000000000be4956",
+  "Blanc.Lift.rx_branch_succ": "00000000e7f330ad",
+  "Blanc.Lift.rx_branch_zero": "000000001eae1660",
+  "Blanc.Lift.rx_calldatacopy": "00000000b8612a3b",
+  "Blanc.Lift.rx_calldataload": "0000000093229aff",
+  "Blanc.Lift.rx_calldatasize": "0000000078e6837d",
+  "Blanc.Lift.rx_caller": "000000009e5bf88f",
+  "Blanc.Lift.rx_callvalue": "00000000adc48f6a",
+  "Blanc.Lift.rx_codecopy": "000000005175f304",
+  "Blanc.Lift.rx_dest": "000000003760383c",
+  "Blanc.Lift.rx_div": "00000000a1c966fb",
+  "Blanc.Lift.rx_dup": "00000000bdf142db",
+  "Blanc.Lift.rx_eq": "00000000313212e3",
+  "Blanc.Lift.rx_exp'": "00000000d1fc6666",
+  "Blanc.Lift.rx_gas": "0000000008ee37fa",
+  "Blanc.Lift.rx_gt": "00000000199c345a",
+  "Blanc.Lift.rx_iszero": "00000000f3b698b9",
+  "Blanc.Lift.rx_jump": "000000007ae14413",
+  "Blanc.Lift.rx_keccak": "000000000289ec09",
+  "Blanc.Lift.rx_log3": "0000000051bde243",
+  "Blanc.Lift.rx_lt": "00000000c3ac04be",
+  "Blanc.Lift.rx_mload": "0000000000f07ef6",
+  "Blanc.Lift.rx_mod": "0000000016ba998b",
+  "Blanc.Lift.rx_mstore": "0000000097c1377e",
+  "Blanc.Lift.rx_mul": "00000000c139e98b",
+  "Blanc.Lift.rx_or": "000000000993d420",
+  "Blanc.Lift.rx_pop": "00000000c787bf8f",
+  "Blanc.Lift.rx_push": "00000000f13fccc2",
+  "Blanc.Lift.rx_return": "000000004475d3b8",
+  "Blanc.Lift.rx_return_any": "00000000c6f93c9b",
+  "Blanc.Lift.rx_returndatasize": "00000000e4dd30c6",
+  "Blanc.Lift.rx_sload_sel": "00000000e5142f7b",
+  "Blanc.Lift.rx_sstore": "000000006fcb8fad",
+  "Blanc.Lift.rx_sstoreH": "00000000fc5d3d09",
+  "Blanc.Lift.rx_staticcall": "000000004eb2034d",
+  "Blanc.Lift.rx_sub": "00000000d2db728d",
+  "Blanc.Lift.rx_sub'": "000000004ca00646",
+  "Blanc.Lift.rx_swap": "0000000001190a30",
+  "Blanc.Lift.rx_vyAddStore": "000000004b9108fd",
+  "Blanc.Lift.rx_vyAddrArg": "00000000867149ad",
+  "Blanc.Lift.rx_vyFwd": "0000000042efb00c",
+  "Blanc.Lift.rx_vyLoadExit": "000000002eef2cfc",
+  "Blanc.Lift.rx_vyLoadLast": "000000007d22e6cb",
+  "Blanc.Lift.rx_vyLoadStep": "00000000a99e21a6",
+  "Blanc.Lift.rx_vyNonpayable": "0000000069f88df5",
+  "Blanc.Lift.rx_vyPrologue": "0000000017b8bc8d",
+  "Blanc.Lift.rx_vySlot": "00000000a717b0bb",
+  "Blanc.Lift.rx_vyStoreExit": "000000009609f011",
+  "Blanc.Lift.rx_vyStoreHead": "000000009b45b845",
+  "Blanc.Lift.rx_vyStoreLast": "000000000caa1b69",
+  "Blanc.Lift.rx_vyStoreLastH": "00000000a5d9f347",
+  "Blanc.Lift.rx_vyStoreStep": "000000006beac0b3",
+  "Blanc.Lift.rx_vyStoreStepH": "00000000e132273e",
+  "Blanc.Lift.rx_vySubStore": "00000000da7aee73",
+  "Blanc.Lift.rx_xor": "000000003d3c0ced",
+  "Blanc.Lift.sliceD_data_end": "00000000c903d992",
+  "Blanc.Lift.sliceD_word_same": "00000000aa7d53c9",
+  "Blanc.Lift.sstoreCostH": "000000008753c794",
+  "Blanc.Lift.sstoreCostH_le": "00000000a013bf6c",
+  "Blanc.Lift.sstoreCostH_muir_created_zero": "0000000062149286",
+  "Blanc.Lift.sstoreCostH_muir_fresh_set": "000000005ed5fc56",
+  "Blanc.Lift.sstoreCost_le": "0000000093a8c5e0",
+  "Blanc.Lift.sstoreRefundH": "00000000eeee22dd",
+  "Blanc.Lift.sstoreRefundH_zero_zero": "00000000a5b944be",
+  "Blanc.Lift.toNat_le_of_gtCheck_eq_zero": "000000003e445e1c",
+  "Blanc.Lift.toNat_toB256'": "000000004f7693b3",
+  "Blanc.Lift.vyAddrArg": "0000000080c9ac43",
+  "Blanc.Lift.vyImg": "000000001f9d2244",
+  "Blanc.Lift.vyImg_clamps": "00000000a70276ed",
+  "Blanc.Lift.vyLoadLoopTree": "00000000a7a01264",
+  "Blanc.Lift.vyLoadStack": "000000005c2f3de6",
+  "Blanc.Lift.vyMem": "00000000fe2a71f4",
+  "Blanc.Lift.vyMem_empty_size": "000000002371485f",
+  "Blanc.Lift.vyMem_mload_selector": "00000000f6a35a5e",
+  "Blanc.Lift.vyMem_reads": "00000000ed04f37c",
+  "Blanc.Lift.vyMem_wf": "0000000098c46a3a",
+  "Blanc.Lift.vyNonpayable": "000000009fd925bd",
+  "Blanc.Lift.vyPrologue": "000000002cab4bb0",
+  "Blanc.Lift.vySlot": "000000002cab4bb0",
+  "Blanc.Lift.vySlotMem": "0000000019be6084",
+  "Blanc.Lift.vySlotMem_wf": "000000008a50765c",
+  "Blanc.Lift.vyStoreHead": "00000000ca193033",
+  "Blanc.Lift.vyStoreLoopTree": "00000000a7a01264",
+  "Blanc.Lift.vyStoreStack": "000000005c2f3de6",
+  "Blanc.Lift.vyStrView": "0000000053cb5779",
+  "Blanc.List.sliceD_split": "00000000d05038e1",
+  "Blanc.Mem.Reads": "00000000272b7775",
+  "Blanc.Mem.Reads.extends": "000000004473e64c",
+  "Blanc.Mem.Reads.read": "00000000e96b31f4",
+  "Blanc.Mem.Reads.write": "0000000093e08dc7",
+  "Blanc.Mem.Wf": "00000000e1bceb41",
+  "Blanc.Mem.Wf.extend": "00000000ee310db8",
+  "Blanc.Mem.Wf.extends": "000000005caec102",
+  "Blanc.Mem.Wf.write": "0000000079ed3867",
+  "Blanc.Mem.reads_empty": "00000000bf01045c",
+  "Blanc.Mem.size_write_of_le": "00000000619c50e1",
+  "Blanc.Mem.size_write_of_length": "00000000b42e3e7d",
+  "Blanc.Mem.size_write_of_size": "00000000c737ab1c",
+  "Blanc.Mem.size_write_word_at": "00000000e41e0db4",
+  "Blanc.Mem.wf_empty": "00000000ad052ea4",
+  "Blanc.Ninst.RunCompiled": "00000000498edfc6",
+  "Blanc.RlpConcrete.encode_list_at": "00000000837a1556",
+  "Blanc.RlpConcrete.encode_list_at_last": "00000000915072ee",
+  "Blanc.RlpConcrete.longHeaderS": "000000002bba97fb",
+  "Blanc.RlpConcrete.toBLT?_of_encoded": "00000000f33c740a",
+  "Blanc.Sevm.argWord": "00000000762721c4",
+  "Blanc.Sevm.dataWord": "00000000762721c4",
+  "Blanc.Sevm.selector": "0000000098bee365",
+  "Blanc.ShanghaiOnwards": "00000000c40c3bc2",
+  "Blanc.SlotFootprint.Fresh": "000000004772b7c8",
+  "Blanc.SlotFootprint.FreshKeys": "000000009237c033",
+  "Blanc.SlotFootprint.FreshKeys.of_universe": "00000000fcddb725",
+  "Blanc.SlotFootprint.extendBy": "00000000659f4549",
+  "Blanc.SpawnKinds": "000000007a543658",
+  "Blanc.State.Protected": "000000009f0cca4e",
+  "Blanc.Stor.get_set_ite": "000000004326956a",
+  "Blanc.SumNof": "00000000516b1f40",
+  "Blanc.TrieKernel.cached": "0000000076a48941",
+  "Blanc.TrieKernel.trieH": "00000000822cefb2",
+  "Blanc.TrieKernel.trie_eq_cached": "0000000082a11e49",
+  "Blanc.afterSload": "000000002759f877",
+  "Blanc.afterSload_getStor": "0000000061fbfdc9",
+  "Blanc.afterSload_logs": "00000000d4186373",
+  "Blanc.afterSload_output": "00000000ac10f3f5",
+  "Blanc.afterSstore": "000000004e37fb05",
+  "Blanc.afterSstore_getStor_ne": "00000000f9de1a14",
+  "Blanc.afterSstore_getStor_self": "00000000fa8edb8b",
+  "Blanc.afterSstore_logs": "00000000c9236502",
+  "Blanc.afterSstore_output": "000000001422cb5d",
+  "Blanc.benvAfterTransfer_exists_zero": "000000003c9fec60",
+  "Blanc.calculateIntrinsicCost_legacy_create": "00000000d2be0535",
+  "Blanc.checkTransactionGasLimits_ok_of_room": "00000000f7bea8d2",
+  "Blanc.checkTransactionGasLimits_room": "00000000df7b9ab6",
+  "Blanc.checkTransactionSenderAccountFor_code_empty": "0000000081ac9315",
+  "Blanc.checkTransactionSenderAccountFor_funds": "0000000080c96353",
+  "Blanc.checkTransactionSenderAccount_ok_of_noCode": "00000000177d89e0",
+  "Blanc.checkTransaction_admission_parts": "000000000bb4cefd",
+  "Blanc.checkTransaction_ok_of_parts": "00000000acbf47ad",
+  "Blanc.checkTransaction_sender": "00000000be792e6e",
+  "Blanc.debit_get_ne": "00000000c60e6fc8",
+  "Blanc.debit_get_self": "00000000008c322e",
+  "Blanc.directCreateMessageOutputOf": "00000000ff93a853",
+  "Blanc.enteredCondition_fresh": "0000000072b999da",
+  "Blanc.le_sum": "00000000881dfaad",
+  "Blanc.ledgerCredit": "00000000084ca03a",
+  "Blanc.ledgerCredit_ne": "00000000ee1e2364",
+  "Blanc.ledgerCredit_self": "00000000adeea0ce",
+  "Blanc.ledgerDebit": "00000000084ca03a",
+  "Blanc.ledgerDebit_credit_ge_of_ne": "00000000eea022dd",
+  "Blanc.ledgerDebit_credit_nof": "00000000ceeb1bd3",
+  "Blanc.ledgerDebit_ne": "000000009365dfb9",
+  "Blanc.ledgerDebit_self": "00000000424340f2",
+  "Blanc.ledgerSumOn": "00000000580b3399",
+  "Blanc.ledgerSumOn_congr": "0000000076fa4ecb",
+  "Blanc.prepareMessage_benv": "00000000bfd07d1f",
+  "Blanc.processCreateMessage_msg_getStor_currentTarget": "00000000360a7b1d",
+  "Blanc.processMessageCall_create_of_message": "000000007057c160",
+  "Blanc.processTransaction_of_stages_selected_receipts": "00000000bc2a95eb",
+  "Blanc.selectedTxFinalState": "0000000001179628",
+  "Blanc.selectedTxGasUsed": "0000000089731c7a",
+  "Blanc.sloadCost": "000000004893eeed",
+  "Blanc.sloadCost_le": "000000007d942d22",
+  "Blanc.sstoreCost": "000000008753c794",
+  "Blanc.subBal_incrNonce_of_le": "00000000b69e0f82",
+  "Blanc.sum": "000000001e0b849b",
+  "Blanc.sumBelow": "00000000299e35f3",
+  "Blanc.sumBelow_zero": "00000000ce3d17cc",
+  "Blanc.sum_eq_add_of_row_add": "000000006729c5a0",
+  "Blanc.sum_eq_ledgerSumOn": "000000008abbf25c",
+  "Blanc.sum_ledgerCredit": "000000006c5e7a22",
+  "Blanc.sum_ledgerDebit": "0000000046678349",
+  "Blanc.sum_ledgerDebit_credit": "0000000081964834",
+  "Blanc.sweepTouchedAccounts_getCode_of_nonempty": "00000000b821c05e",
+  "Blanc.sweepTouchedAccounts_getStor_of_nonempty": "00000000e145e1fe",
+  "Blanc.validateTransaction_ok_of_noInitcodeLimit": "00000000205fee6a",
+  "Jaune.Exec.Frame.Encloses": "00000000c60e5b29",
+  "Jaune.Msg.withFork": "000000005a1c3765",
+  "List.length_sliceD": "000000004e464c8b"
+ },
+ "tag": "release/curve-3crv-20261108"
+}

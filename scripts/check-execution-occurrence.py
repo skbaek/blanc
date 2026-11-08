@@ -37,13 +37,6 @@ CANONICAL_OWNER_MODULE = "Blanc/CommonProofs/Messages.lean"
 # plus six Jaune export commands below are new exact authority exceptions.
 # They are double-pinned here so a manifest-only edit cannot grow them.
 EXPECTED_REQUIRED_CONSUMERS = [
-    {"module": "Blanc/Composition/UsdcTokenF.lean", "references": 1},
-    {"module": "Blanc/Lift/Usdc/HistFSlots.lean", "references": 1},
-    {"module": "Blanc/Lift/Usdc/ProxyRetainedContextCodes.lean", "references": 1},
-    {"module": "Blanc/Lift/Usdc/HistorySlotsCore.lean", "references": 1},
-    {"module": "Blanc/Lift/Usdc/HistoryReplayFrames.lean", "references": 1},
-    {"module": "Blanc/Lift/Usdc/HistoryReplay.lean", "references": 1},
-    {"module": "Blanc/Lift/Usdc/HistFFacts.lean", "references": 1},
 ]
 EXPECTED_LEGITIMATE_COLLISIONS = [
     {

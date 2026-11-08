@@ -108,10 +108,8 @@ elab "expect_no_recipe_offered" id:str : tactic =>
     if ← proofRecipeMatches target (← proofRecipeById id.getString) then
       throwError "expected blanc_suggest not to offer proof recipe {id.getString} on this goal"
 
--- EXPECT: changed-frame-projection
 example (s : Sevm) (O : State) : (s.withOrig O).code = s.code := by
   expect_recipe_trigger "goal-shape:changed-frame-projection"
-  expect_recipe_offered "changed-frame-projection"
   blanc_suggest
   exact Jaune.Sevm.withOrig_code s O
 
@@ -138,7 +136,6 @@ example (cp : Lift.Witness.CallPrep) (g : Fork) (O : State)
 -- Close lookalikes exercise the registered production route, not theorem truth.
 example (s : Sevm) : s.code = s.code := by
   expect_no_recipe_trigger "goal-shape:changed-frame-projection"
-  expect_no_recipe_offered "changed-frame-projection"
   rfl
 
 example (cp : Lift.Witness.CallPrep) : cp.adrs = cp.adrs := by
@@ -221,7 +218,6 @@ example (x : B256) : 1 = B256.bexp x 0 := by
   expect_no_recipe_trigger "goal-shape:word-exponentiation"
   exact (B256.bexp_zero x).symm
 
--- EXPECT: extcodesize-compiled-step
 -- The named alias is a real compiled account-access step.
 example {sevm : Sevm} {base : Devm} {x v : B256}
     {stack : List B256} {M : Mem} {G : Nat}
@@ -235,11 +231,9 @@ example {sevm : Sevm} {base : Devm} {x v : B256}
       ((Lift.temporalAccountAccessBase base x.toAdr).setMach
         ⟨v :: stack, M, G, (Lift.temporalAccountAccessBase base x.toAdr).stateGas⟩) := by
   expect_recipe_trigger "goal-shape:extcodesize-compiled-step"
-  expect_recipe_offered "extcodesize-compiled-step"
   blanc_suggest
   exact Lift.temporal_extcodesize_runCompiled hfork hval hroom
 
--- EXPECT: extcodesize-compiled-step
 -- The literal constructor spelling must have the same bounded discovery path.
 example {sevm : Sevm} {base : Devm} {x v : B256}
     {stack : List B256} {M : Mem} {G : Nat}
@@ -253,7 +247,6 @@ example {sevm : Sevm} {base : Devm} {x v : B256}
       ((Lift.temporalAccountAccessBase base x.toAdr).setMach
         ⟨v :: stack, M, G, (Lift.temporalAccountAccessBase base x.toAdr).stateGas⟩) := by
   expect_recipe_trigger "goal-shape:extcodesize-compiled-step"
-  expect_recipe_offered "extcodesize-compiled-step"
   blanc_suggest
   exact Lift.temporal_extcodesize_runCompiled hfork hval hroom
 
@@ -262,7 +255,6 @@ example {sevm : Sevm} {pre post : Devm}
     (run : Ninst.RunCompiled sevm pre (.reg .sload) post) :
     Ninst.RunCompiled sevm pre (.reg .sload) post := by
   expect_no_recipe_trigger "goal-shape:extcodesize-compiled-step"
-  expect_no_recipe_offered "extcodesize-compiled-step"
   exact run
 
 -- EXPECT-NO-MATCH: inversion is a sibling relation, even with this opcode.
@@ -270,7 +262,6 @@ example {sevm : Sevm} {pre post : Devm}
     (run : Ninst.Run sevm pre (.reg .extcodesize) post) :
     Ninst.Run sevm pre (.reg .extcodesize) post := by
   expect_no_recipe_trigger "goal-shape:extcodesize-compiled-step"
-  expect_no_recipe_offered "extcodesize-compiled-step"
   exact run
 
 -- EXPECT-NO-MATCH: an exact walk is not a direct compiled instruction step.
@@ -279,7 +270,6 @@ example {fs : List Lift.SFunc} {sevm : Sevm} {pre : Devm}
     (run : Lift.SFunc.RunExact fs sevm pre (.next (.reg .extcodesize) f) o) :
     Lift.SFunc.RunExact fs sevm pre (.next (.reg .extcodesize) f) o := by
   expect_no_recipe_trigger "goal-shape:extcodesize-compiled-step"
-  expect_no_recipe_offered "extcodesize-compiled-step"
   exact run
 
 -- EXPECT: finite-coalition-ledger
@@ -1075,12 +1065,10 @@ example : True := by
   trivial
 
 
--- EXPECT: ecrecover-return-layout
 example : Lift.EcrecoverCall.ReturnChecks
     ⟨[0x51, 0x00], by decide, [0x51, 0xad], by decide,
       .last .revert, .last .revert⟩ := by
   expect_recipe_trigger "goal-head:Lift.EcrecoverCall.ReturnChecks"
-  expect_recipe_offered "ecrecover-return-layout"
   blanc_suggest
   exact ⟨rfl, rfl, rfl, rfl⟩
 
@@ -1102,7 +1090,6 @@ example (layout : Lift.EcrecoverCall.ReturnLayout) : Lift.EcrecoverCall.ReturnLa
   exact layout
 
 example : True := by
-  expect_no_recipe_offered "ecrecover-return-layout"
   trivial
 
 -- EXPECT: historical-fork-domain
@@ -1225,7 +1212,6 @@ example : True := by
   expect_no_recipe_offered "mainnet-pre-cancun-stages"
   trivial
 
--- EXPECT: solc-runtime-return
 -- These are discovery controls, not tests of the theorem-proved copy effect.
 example {fs : List Lift.SFunc} {sevm : Sevm} {pre post : Devm}
     {sizeBytes offsetBytes : Bytes} {sizeBound : sizeBytes.length ≤ 32}
@@ -1235,7 +1221,6 @@ example {fs : List Lift.SFunc} {sevm : Sevm} {pre post : Devm}
     Lift.SFunc.RunExact fs sevm pre
       (Lift.solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound) (.halted post) := by
   expect_recipe_trigger "goal-shape:solc-runtime-return"
-  expect_recipe_offered "solc-runtime-return"
   blanc_suggest
   exact run
 
@@ -1243,7 +1228,6 @@ example {fs : List Lift.SFunc} {sevm : Sevm} {pre post : Devm} {body : Lift.SFun
     (run : Lift.SFunc.RunExact fs sevm pre body (.halted post)) :
     Lift.SFunc.RunExact fs sevm pre body (.halted post) := by
   expect_no_recipe_trigger "goal-shape:solc-runtime-return"
-  expect_no_recipe_offered "solc-runtime-return"
   exact run
 
 example {fs : List Lift.SFunc} {sevm : Sevm} {pre post : Devm}
@@ -1254,12 +1238,10 @@ example {fs : List Lift.SFunc} {sevm : Sevm} {pre post : Devm}
     Lift.SFunc.RunExact fs sevm pre
       (Lift.solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound) (.returned post) := by
   expect_no_recipe_trigger "goal-shape:solc-runtime-return"
-  expect_no_recipe_offered "solc-runtime-return"
   exact run
 
 example : True := by
   expect_no_recipe_trigger "goal-shape:solc-runtime-return"
-  expect_no_recipe_offered "solc-runtime-return"
   trivial
 
 -- EXPECT: historical-creation-metadata

@@ -106,36 +106,7 @@
       "header": "theorem staticcall_direct_codeAddress_control : Xinst.step dynamicSevm directStatcallPre .staticcall = .spawn staticcallFrame staticcallResume ∧ dynamicSevm.currentTarget ≠ staticcallFrame.inner.currentTarget ∧ directStatcallPre.getCode staticcallFrame.inner.currentTarget ≠ .empty ∧ staticcallFrame.inner.codeAddress = some staticcallFrame.inner.currentTarget :="
     }
   ],
-  "requiredConsumers": [
-    {
-      "module": "Blanc/Composition/UsdcTokenF.lean",
-      "references": 1
-    },
-    {
-      "module": "Blanc/Lift/Usdc/HistFSlots.lean",
-      "references": 1
-    },
-    {
-      "module": "Blanc/Lift/Usdc/ProxyRetainedContextCodes.lean",
-      "references": 1
-    },
-    {
-      "module": "Blanc/Lift/Usdc/HistorySlotsCore.lean",
-      "references": 1
-    },
-    {
-      "module": "Blanc/Lift/Usdc/HistoryReplayFrames.lean",
-      "references": 1
-    },
-    {
-      "module": "Blanc/Lift/Usdc/HistoryReplay.lean",
-      "references": 1
-    },
-    {
-      "module": "Blanc/Lift/Usdc/HistFFacts.lean",
-      "references": 1
-    }
-  ],
+  "requiredConsumers": [],
   "legitimateCollisions": [
     {
       "module": "Blanc/CommonProofs/Messages.lean",

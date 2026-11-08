@@ -117,7 +117,7 @@ jobs:
       # consumes them; scripts/AxiomCheck.lean imports them, and the build
       # certificate covers every Blanc/** module, so build them explicitly too.
       - name: Build the write-site checker tops
-        run: lake build Blanc.Lift.Usdc.ImplWs Blanc.Lift.WriteSiteLocality Blanc.Lift.Usdc.AllowLocality
+        run: lake build Blanc.Lift.WriteSiteLocality
       # lean-action saves .lake only when the whole job succeeds, so a cold
       # build lost to a later failure or timeout was rebuilt from scratch by
       # the next run. Save it here, after the heavy build steps (the authoring

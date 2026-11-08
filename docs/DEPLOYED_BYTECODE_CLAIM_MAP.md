@@ -107,12 +107,6 @@ The shared finite separation checks retain their characterizations:
 ## 5. Per contract
 
 - [EIP-7002 withdrawal requests](claim-map/withdrawal-request.md)
-- [Curve 3Crv](claim-map/curve-3crv.md)
-- [Curve 3pool StableSwap](claim-map/curve-3pool.md)
-- [Vyper V+ and V−](claim-map/vyper-nonreentrant-deployed.md)
-- [USDC](claim-map/usdc.md)
-- [DAI](claim-map/dai.md)
-- [USDT](claim-map/usdt.md)
 - [EIP-8282 builder requests](claim-map/builder-request.md)
 
 ## 6. Summary matrix

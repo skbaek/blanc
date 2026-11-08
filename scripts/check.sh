@@ -116,7 +116,7 @@ if [ "$BUILD" -eq 1 ]; then
   fi
   # Keep the write-site checker tops as explicit audit entry targets.
   # scripts/AxiomCheck.lean also imports them for the union walk.
-  if ! (cd "$ROOT" && lake build Blanc.Lift.Usdc.ImplWs Blanc.Lift.WriteSiteLocality Blanc.Lift.Usdc.AllowLocality); then
+  if ! (cd "$ROOT" && lake build Blanc.Lift.WriteSiteLocality); then
     echo "REGRESSION — axiom audit: write-site checker tops build failed"
     exit 1
   fi

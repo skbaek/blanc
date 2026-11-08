@@ -17,12 +17,6 @@
 [live]
 # Each key with the reason it is live, in the order of CONTRACTS.
 withdrawal-request = "EIP-7002; its kit is reused by EIP-8282 and EIP-7251"
-curve-3crv = "Curve 3pool flagship (member of the 3pool compositions)"
-curve-3pool = "Curve 3pool flagship"
-vyper-nonreentrant-deployed = "Vyper non-reentrant pair"
-usdc = "USDC (member of the 3pool compositions)"
-dai = "DAI (member of the 3pool compositions)"
-usdt = "USDT (member of the 3pool compositions)"
 builder-request = "EIP-8282 builder request contracts"
 
 # One table per release, written by the release operation:
@@ -37,3 +31,39 @@ builder-request = "EIP-8282 builder request contracts"
 [[archive]]
 tag = "corpus-v1-20261105"
 note = "pre-whitelist mothball: WETH9, Beacon deposit, Lido, Uniswap and Blanc-native programmes"
+
+[[released]]
+key = "curve-3pool"
+tag = "release/curve-3pool-20261108"
+commit = "bdb298483ac6cf82e70732df378aa8b443f7ec1c"
+manifest = "scripts/releases/curve-3pool-20261108.json"
+
+[[released]]
+key = "curve-3crv"
+tag = "release/curve-3crv-20261108"
+commit = "bdb298483ac6cf82e70732df378aa8b443f7ec1c"
+manifest = "scripts/releases/curve-3crv-20261108.json"
+
+[[released]]
+key = "usdc"
+tag = "release/usdc-20261108"
+commit = "bdb298483ac6cf82e70732df378aa8b443f7ec1c"
+manifest = "scripts/releases/usdc-20261108.json"
+
+[[released]]
+key = "dai"
+tag = "release/dai-20261108"
+commit = "bdb298483ac6cf82e70732df378aa8b443f7ec1c"
+manifest = "scripts/releases/dai-20261108.json"
+
+[[released]]
+key = "usdt"
+tag = "release/usdt-20261108"
+commit = "bdb298483ac6cf82e70732df378aa8b443f7ec1c"
+manifest = "scripts/releases/usdt-20261108.json"
+
+[[released]]
+key = "vyper-nonreentrant-deployed"
+tag = "release/vyper-nonreentrant-deployed-20261108"
+commit = "bdb298483ac6cf82e70732df378aa8b443f7ec1c"
+manifest = "scripts/releases/vyper-nonreentrant-deployed-20261108.json"

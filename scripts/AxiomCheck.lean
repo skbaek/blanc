@@ -1,9 +1,7 @@
 import Blanc
 import Blanc.ProofRecipeTactic
 import Blanc.ProofRecipesGenerated
-import Blanc.Lift.Usdc.ImplWs
 import Blanc.Lift.WriteSiteLocality
-import Blanc.Lift.Usdc.AllowLocality
 import AxiomAudit
 
 #union_axioms_of_modules Blanc

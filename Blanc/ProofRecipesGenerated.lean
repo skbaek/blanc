@@ -90,14 +90,6 @@ def recipes : List Recipe := [
     boundary := "Do not duplicate the settlement/determinism tail, and do not infer deadness from qualified-name grep alone. CALL (7 operands, value, stipend) and STATICCALL (6 operands, forced static) have separate inversion statements: select by operand count, never by analogy. The inversion pair inverts an existing run and never manufactures liveness from a prefix; the spawn-source trichotomy's same-target disjunct is open for arbitrary instructions; the dedicated STATICCALL theorem requires nondelegation. Cursor family restrictions do not assert child commitment or effects. The three STATICCALL triggers match only their exact raw Blanc heads, without unfolding aliases or nested goals. Native slot.none is an entered invocation; flag0 or empty bytes do not prove absence. No selector enumeration, R3 relevance, cryptographic exclusion, historical lift or root commitment follows. Probe: Blanc/StaticcallObservation.lean:Exec.NinstOccurrence.staticcall_observation. Measured cost: unmeasured guidance; this adaptation reanchors existing advice and reports no new timing. Simplest alternative tried: no new comparison run; the cited existing declaration is the direct manual route. Date: 2026-11-08."
   },
   {
-    id := "changed-frame-projection"
-    status := "active"
-    triggers := ["goal-shape:changed-frame-projection"]
-    preferredPath := "Import `Blanc.Lift.NodeWalkOrig` and rewrite the exposed projection with `Jaune.Sevm.withOrig_code`, `Blanc.Lift.Witness.CallPrep.re_adrs`, or `Blanc.Lift.NodeWalk.resumeCallB_re`. For nested fork/original-state code transport, compose `Jaune.Sevm.withOrig_code` with `Blanc.ForkUniform.Sevm.withFork_code`, then the known code equality, as in Fund/Add's `frameBalD` and `frameDB`. Keep the source machine symbolic while applying these named equalities; compose a resume equality with the known resumed configuration rather than asking kernel conversion to compare concrete machines."
-    symbols := ["module:Blanc/Lift/NodeWalkOrig.lean", "declaration:_root_.Jaune.Sevm.withOrig_code", "declaration:Blanc.ForkUniform.Sevm.withFork_code", "declaration:Blanc.Lift.Witness.CallPrep.re_adrs", "declaration:Blanc.Lift.NodeWalk.resumeCallB_re"]
-    boundary := "Advice matches only a direct equality whose left side is Sevm.code applied to an explicit Sevm.withOrig, CallPrep.adrs applied to an explicit CallPrep.re, or resumeCallB whose parent and both output-window projections come from the same explicit CallPrep.re. It does not match reversed equalities, plain projections, unrelated updates, or updates hidden by aliases. Unfold only the local binding hiding the relevant update or projection and run blanc_suggest again; do not normalize a concrete machine. These projection laws establish no fork coverage, original-storage agreement, frame entry, settlement, or execution."
-  },
-  {
     id := "compile-shape-prepend-congruence"
     status := "active"
     triggers := ["goal-shape:compile-shape-prepend-congruence"]
@@ -226,14 +218,6 @@ def recipes : List Recipe := [
     boundary := "These are local finite-coalition equations. An `Increase` alone permits receiver-side word wrap, a `Decrease` needs cover, and a `Transfer` needs pre-state `SumNof`; prove those facts at the operation boundary. Neither the equations nor `LedgerConserved` establish configured-history admission, an actual endpoint run, or path-level preservation."
   },
   {
-    id := "extcodesize-compiled-step"
-    status := "active"
-    triggers := ["goal-shape:extcodesize-compiled-step"]
-    preferredPath := "For flat pricing use Blanc.Ninst.runCompiled_extcodesize_flat from Blanc/ForwardFlatAccess.lean with rules.access = .flat prices, rules.bal = none, the actual stack, exact entry gas G + prices.extCode + rules.gas.codeReadSurcharge, and stack room. It returns the actual pre-state code-size word over d.setMach and preserves d.stateGas. Compose a continuation through existing Ninst.exec_of_stepRun. Blanc.Lift.Usdc.ProxyCreation.isContract_runExact is a concrete flat-pricing source-fragment consumer; it does not by itself prove an actual bytecode entry/return or whole constructor run. For warm/cold pricing use Blanc.Lift.temporal_extcodesize_runCompiled from Blanc/Lift/CodeSizeWalk.lean for the actual code-size word and warm/cold account-access image. Supply the covered-fork fact, selected code-size equality and stack room, and align the entry gas with residual gas plus temporalAccountAccessCost. temporalAccountAccessBase names the possibly warmed successor; temporalAccountAccessBase_state, temporalAccountAccessBase_output and temporalAccountAccessBase_logs project its unchanged state, output and logs. For a lifted exact continuation use rx_extcodesize; for an existing successful instruction use ri_extcodesize directly."
-    symbols := ["module:Blanc/Lift/CodeSizeWalk.lean", "module:Blanc/ForwardFlatAccess.lean", "declaration:Blanc.Ninst.runCompiled_extcodesize_flat", "module:Blanc/Lift/Usdc/ProxyCreation/CodeSize.lean", "declaration:Blanc.Lift.Usdc.ProxyCreation.isContract_runExact", "declaration:Blanc.Lift.temporalAccountAccessBase", "declaration:Blanc.Lift.temporalAccountAccessBase_state", "declaration:Blanc.Lift.temporalAccountAccessBase_output", "declaration:Blanc.Lift.temporalAccountAccessBase_logs", "declaration:Blanc.Lift.temporalAccountAccessCost", "declaration:Blanc.Lift.temporal_extcodesize_runCompiled", "declaration:Blanc.Lift.ri_extcodesize", "declaration:Blanc.Lift.rx_extcodesize"]
-    boundary := "This advice matches only a literal EXTCODESIZE Ninst.RunCompiled goal. It does not solve fork, word, stack, gas or successor-state obligations, match another opcode, invert Ninst.Run, or identify a generic SFunc.RunExact goal as an EXTCODESIZE walk. It does not establish nonzero code size or callee liveness. Probe: Blanc/Lift/Usdc/ProxyCreation/CodeSize.lean:isContract_runExact. Measured cost: unmeasured guidance; this adaptation reanchors existing advice and reports no new timing. Simplest alternative tried: no new comparison run; the cited existing declaration is the direct manual route. Date: 2026-11-06."
-  },
-  {
     id := "machine-state-debit"
     status := "active"
     triggers := ["goal-shape:machine-state-debit"]
@@ -282,14 +266,6 @@ def recipes : List Recipe := [
     boundary := "This matches only the three direct qualified NoSenderAt heads, without unfolding aliases or an expanded fold. It consumes an actual trace and exact-query exclusion; it neither proves the cryptographic exclusion nor constructs a history from reachability. It covers admitted normal-transaction senders, not eligible authorization authorities, old recovery calls or system callers. Caller/code preservation, historical fork coverage, creation, committing-child recursion and the initial allowance-zero seed remain separate obligations. No fork domain or authentication assumption is strengthened."
   },
   {
-    id := "ecrecover-return-layout"
-    status := "active"
-    triggers := ["goal-head:Lift.EcrecoverCall.ReturnChecks"]
-    preferredPath := "Use EcrecoverCall.ReturnChecks.mk to supply the two rejected subtrees' haltsOnly facts and the exact answer tail's execFreeIn [] and noHalt checks. Bind the actual source with EcrecoverCall.entry and its concrete ReturnLayout first; then use EcrecoverCall.consumes with the original checked cursor, memory, nondelegation and actual caller premises."
-    symbols := ["module:Blanc/Lift/EcrecoverCall.lean", "declaration:Blanc.Lift.EcrecoverCall.ReturnLayout", "declaration:Blanc.Lift.EcrecoverCall.entry", "declaration:Blanc.Lift.EcrecoverCall.ReturnChecks", "declaration:Blanc.Lift.EcrecoverCall.consumes"]
-    boundary := "Advice recognizes only the direct EcrecoverCall.ReturnChecks head, without unfolding aliases or searching nested propositions. It does not prove arbitrary layouts valid, infer any recovered address, successful query, affordable gas, caller continuation or historical coverage, or establish complete selector/write relevance. Its four facts are structural checks; the common consumer separately derives the actual invocation and answer from the real run."
-  },
-  {
     id := "historical-fork-domain"
     status := "active"
     triggers := ["goal-head:HistFork", "goal-head:NeutralFork"]
@@ -328,14 +304,6 @@ def recipes : List Recipe := [
     preferredPath := "For an actual mainnet block before mainnetCancunTimestamp, use ConfiguredBlockTraceIn.systemStagesDisabled_of_mainnet_timestamp_lt. For an actual configured mainnet history ending at a tip before that timestamp, use ConfiguredHistoryTraceIn.systemStagesDisabled_of_mainnet_tip_before_cancun; accepted-header chronology derives every earlier block bound. mainnetChainConfig_preCancun_of_timestamp_lt connects the actual forkAt result to the era."
     symbols := ["module:Blanc/ExecutionHistoryInEraBounds.lean", "declaration:Blanc.mainnetChainConfig_preCancun_of_timestamp_lt", "declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.systemStagesDisabled_of_mainnet_timestamp_lt", "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.systemStagesDisabled_of_mainnet_tip_before_cancun"]
     boundary := "The schedule must be mainnetChainConfig and the timestamp must be the actual block or final chain tip. A block-number bound alone is insufficient for the mixed activation schedule. The predicate goal does not establish either premise, authenticate a historical block, or disable stages on Cancun and later forks."
-  },
-  {
-    id := "solc-runtime-return"
-    status := "active"
-    triggers := ["goal-shape:solc-runtime-return"]
-    preferredPath := "Apply Blanc.Lift.solcRuntimeReturn_runExact to the named solcRuntimeReturn terminal body, supplying the two PUSH-word equalities, nonzero length, aligned symbolic memory and four-word stack room. Its charge is actual memory expansion plus gasCopy * ceilDiv length 32 + 19, and its output is the executing code window at the supplied offset. To invert an existing successful source run, use solcRuntimeReturn_effects for the exact returned bytes and storage preservation, without fork or memory-alignment assumptions."
-    symbols := ["module:Blanc/Lift/Deploy.lean", "declaration:Blanc.Lift.solcRuntimeReturn", "declaration:Blanc.Lift.solcRuntimeReturn_runExact", "declaration:Blanc.Lift.solcRuntimeReturn_effects"]
-    boundary := "Advice matches only a direct SFunc.RunExact goal whose body is the named solcRuntimeReturn and whose outcome is halted. It does not unfold arbitrary certificate entries, match an arbitrary exact walk or returned outcome, prove literal bytecode identity, or establish CREATE settlement or historical installation. Concrete consumers identify their registered source tree with this body and discharge word encodings separately."
   },
   {
     id := "historical-creation-metadata"

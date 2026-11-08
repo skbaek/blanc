@@ -1,9 +1,4 @@
 {
   "_comment": "Retained evidence consumers of scripts/keccak.py whose digest representation scripts/test-keccak-rate-boundary.py holds. Each row's function takes bytes and returns a dict with the byte length under \"bytes\" and the lowercase 0x-prefixed Keccak-256 digest under \"keccak256\". A release removes the row of a consumer that leaves with its family; a listed consumer that is missing fails.",
-  "consumers": [
-    {
-      "function": "describe",
-      "script": "scripts/usdc-history-reference.py"
-    }
-  ]
+  "consumers": []
 }

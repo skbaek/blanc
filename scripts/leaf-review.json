@@ -529,58 +529,6 @@
    "fp": "00000000330b859b",
    "kind": "theorem"
   },
-  "Blanc.Curve3Crv.allowance_change_authorized": {
-   "fp": "000000009e6eba77",
-   "kind": "theorem"
-  },
-  "Blanc.Curve3Crv.approve_ok_iff": {
-   "fp": "000000004bdbddce",
-   "kind": "theorem"
-  },
-  "Blanc.Curve3Crv.approve_zero_first": {
-   "fp": "00000000515f8969",
-   "kind": "theorem"
-  },
-  "Blanc.Curve3Crv.balance_debit_authorized": {
-   "fp": "00000000ac2f80b7",
-   "kind": "theorem"
-  },
-  "Blanc.Curve3Crv.burnFrom_ok_iff": {
-   "fp": "000000003379055f",
-   "kind": "theorem"
-  },
-  "Blanc.Curve3Crv.init_conserved": {
-   "fp": "00000000ad1c547e",
-   "kind": "theorem"
-  },
-  "Blanc.Curve3Crv.mint_ok_iff": {
-   "fp": "00000000a0cfc094",
-   "kind": "theorem"
-  },
-  "Blanc.Curve3Crv.minter_change_by_minter": {
-   "fp": "000000004622d5a6",
-   "kind": "theorem"
-  },
-  "Blanc.Curve3Crv.supply_change_by_minter": {
-   "fp": "000000001af75b26",
-   "kind": "theorem"
-  },
-  "Blanc.Curve3Crv.transferFrom_minter_keeps_allowances": {
-   "fp": "0000000081fe1703",
-   "kind": "theorem"
-  },
-  "Blanc.Curve3Crv.transferFrom_ok_iff": {
-   "fp": "0000000066091cec",
-   "kind": "theorem"
-  },
-  "Blanc.Curve3Crv.transferFrom_spends_max_allowance": {
-   "fp": "0000000021c4d99d",
-   "kind": "theorem"
-  },
-  "Blanc.Curve3Crv.transfer_ok_iff": {
-   "fp": "000000002e290434",
-   "kind": "theorem"
-  },
   "Blanc.DelegatecallSpawnDescriptor.child_caller": {
    "fp": "0000000021cad00f",
    "kind": "theorem"
@@ -1109,10 +1057,6 @@
    "fp": "000000000b971feb",
    "kind": "theorem"
   },
-  "Blanc.ExecutionTrace.ConfiguredHistoryTrace.vplus": {
-   "fp": "00000000a5e40966",
-   "kind": "theorem"
-  },
   "Blanc.ExecutionTrace.MessageCallTrace.attributionStream": {
    "fp": "000000002e36a044",
    "kind": "definition"
@@ -1204,10 +1148,6 @@
   "Blanc.ExecutionTrace.TransactionTrace.flowObservations": {
    "fp": "00000000ece209f8",
    "kind": "definition"
-  },
-  "Blanc.ExecutionTrace.TransactionTrace.vplus": {
-   "fp": "0000000078f507a9",
-   "kind": "theorem"
   },
   "Blanc.ExecutionTrace.consecutive_withdrawal_segments": {
    "fp": "000000002e906f1c",
@@ -2013,22 +1953,6 @@
    "fp": "00000000b37fb140",
    "kind": "theorem"
   },
-  "Blanc.Lift.Curve3Crv.c3crv_history_live": {
-   "fp": "000000000a02859d",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.Curve3Crv.c3crv_history_setName_live": {
-   "fp": "00000000c0d4da8a",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.Curve3Crv.curve_init_vyInv": {
-   "fp": "0000000013ccabf3",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.Curve3Crv.mem_committedInvocations": {
-   "fp": "00000000bb359c0f",
-   "kind": "theorem"
-  },
   "Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_create_stateInv": {
    "fp": "00000000bd556b45",
    "kind": "theorem"
@@ -2303,46 +2227,6 @@
   },
   "Blanc.Lift.UniswapV2Pair.update_uint112_overflow_control": {
    "fp": "00000000fc086856",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.cert_check": {
-   "fp": "000000008ee9e46e",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness.Reader.cert_check": {
-   "fp": "00000000a3a9ab1e",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.Receiver.cert_check": {
-   "fp": "00000000d903e3d7",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.hashControl_bites": {
-   "fp": "0000000023bc7706",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.VyperNonreentrantDeployed.Fixed.lock_no_forbidden": {
-   "fp": "000000002a626726",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top.vminus_witness": {
-   "fp": "000000002a27d4af",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.vminus_tx_message": {
-   "fp": "00000000f011602d",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.VyperNonreentrantDeployed.implementationCode_size": {
-   "fp": "00000000fdeb7350",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.VyperNonreentrantDeployed.proxyCode_implementation_bytes": {
-   "fp": "0000000031ab2e69",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.VyperNonreentrantDeployed.proxyCode_size": {
-   "fp": "00000000fe796094",
    "kind": "theorem"
   },
   "Blanc.Lift.Weth9.ClosedInstance.config_covered": {
