@@ -12,7 +12,7 @@ Every statement below is about the canonical runtime `Blanc.consolidationRequest
 `Blanc/Composition/ConsolidationRequestPublicHeadlines.lean` and
 `Blanc/Composition/ConsolidationRequestPublicHistory.lean`. They read the chain through short
 observers: storage words, the queue as stored, the frames a history commits and the requests its
-blocks publish. [COUNT: number of featured headlines, 9 proposed] statements are featured: C1, C2,
+blocks publish. 9 statements are featured: C1, C2,
 C3a to C3c, C4 in two forms, and C5 in two parts.
 
 **System call, what succeeds and fee**
@@ -147,10 +147,8 @@ history form is stated.
 
 ## Checking this document
 
-The [COUNT: number of featured headlines, 9 proposed] featured statements and C1b are pinned by
-exact statement in `scripts/ClaimCheck.lean`, with [COUNT: number of definitions pinned by
-unfolding] definitions they are stated through pinned by unfolding and [COUNT: number of record
-types pinned field by field] record types pinned field by field.
+The 9 featured statements and C1b are pinned by
+exact statement in `scripts/ClaimCheck.lean`, with 24 definitions they are stated through pinned by unfolding and 5 record types pinned field by field.
 
 ## See also
 
