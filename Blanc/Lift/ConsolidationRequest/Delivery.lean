@@ -14,6 +14,7 @@ shared `RequestQueue.Chain` says each frame ran on the storage the one before it
 * `delivered`: on a chain from storage representing a queue, storage at the end represents the model's queue, the
   queue is exactly the submissions not yet delivered, and the concatenated system-call output is exactly the
   delivered records' bytes, in order.
+* `delivery_from_empty`: the same from empty storage (`empty_represents`), with fewer than `2 ^ 253` submissions.
 * `system_delivers`: each system call's output is the oldest `min(2, length)` records submitted before it and not
   yet delivered; a record submitted later cannot appear.
 
@@ -196,5 +197,39 @@ theorem system_delivers {s t : Stor} {xs ys : List Frame} {benv : Benv} {post : 
   rw [List.map_append, List.map_cons] at chain
   rw [← submissions_eq] at slots count ⊢
   exact chain.drain_delivers (next := sysExcess) rep slots count rfl
+
+/-- The empty queue: every counter 0, no record. -/
+def emptyQueue : QueueState Record := ⟨0, 0, 0, 0, []⟩
+
+/-- Empty storage represents the empty queue, so the represented-start premise is met. -/
+theorem empty_represents : Holds queue Stor.empty emptyQueue where
+  coherent := rfl
+  excess_lt := by decide
+  count_lt := by decide
+  head_lt := by decide
+  tail_lt := by decide
+  live_lt := fun i hi => absurd hi (Nat.not_lt_zero _)
+  excess := rfl
+  count := rfl
+  head := rfl
+  tail := rfl
+  live := fun i hi => absurd hi (Nat.not_lt_zero _)
+
+/-- **Exact delivery from empty storage.** Over any chain of frames from empty storage, with fewer than
+`2 ^ 253` submissions: storage at the end represents the model's queue, which holds exactly the submissions not yet
+delivered, in order, and the system calls' concatenated output is exactly the delivered submissions'
+`caller ++ calldata`, in order. -/
+theorem delivery_from_empty {frames : List Frame} {t : Stor}
+    (chain : RequestQueue.Chain Stor.empty (frames.map Frame.toStep) t)
+    (range : (submissions frames).length < 2 ^ 253) :
+    Holds queue t (RequestQueue.queueAfter emptyQueue (frames.map Frame.toStep)) ∧
+      (RequestQueue.queueAfter emptyQueue (frames.map Frame.toStep)).queue =
+        (submissions frames).drop (RequestQueue.deliveredRecords emptyQueue (frames.map Frame.toStep)) ∧
+      RequestQueue.output (frames.map Frame.toStep) =
+        ((submissions frames).take
+          (RequestQueue.deliveredRecords emptyQueue (frames.map Frame.toStep))).flatMap Record.out := by
+  have h := delivered_of_lt chain empty_represents (by show 0 + _ < _; omega) (by show 0 + _ < _; omega)
+  rw [← submissions_eq] at range ⊢
+  exact ⟨h.represents, h.queue, h.output⟩
 
 end Blanc.Lift.ConsolidationRequest
