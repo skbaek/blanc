@@ -1284,3 +1284,5 @@ import Blanc.Composition.BuilderRequestPublicObservers
 import Blanc.Composition.BuilderRequestPublicGuarantees
 import Blanc.Composition.BuilderRequestPublicFindings
 import Blanc.Composition.BuilderRequestPublicBounds
+import Blanc.Composition.ConsolidationRequestPublicObservers
+import Blanc.Composition.ConsolidationRequestPublicHeadlines

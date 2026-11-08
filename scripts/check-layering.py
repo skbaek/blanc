@@ -1557,6 +1557,8 @@ COMPOSITION = {
     "Composition.WithdrawalRequestFeeRefutation": ('withdrawal-request',),
     "Composition.WithdrawalRequestFeeHeadline": ('withdrawal-request',),
     "Composition.WithdrawalRequestDrainControl": ('withdrawal-request',),
+    "Composition.ConsolidationRequestPublicObservers": ('consolidation-request',),
+    "Composition.ConsolidationRequestPublicHeadlines": ('consolidation-request',),
     "Composition.Curve3Pool3CrvCheckpoint": ('curve-3pool', 'curve-3crv'),
     "Composition.Curve3CrvTokenCore": ('curve-3crv',),
     "Composition.Curve3CrvPositional": ('curve-3crv',),
