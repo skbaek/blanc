@@ -102,6 +102,7 @@ def loopBounded (code : ByteArray) (target : B256) : Prop :=
     WordFakeExponential.Run (Blanc.Lift.BuilderRequest.storedExcess target s b) 17 1 17 0 n out →
     n ≤ 462
 
+/-- The fee window loop bounds hold for both the deposit and exit contracts. -/
 def loops_need_no_premise : Prop :=
   loopBounded Deposit.code 8 ∧ loopBounded Exit.code 2
 

@@ -44,20 +44,28 @@ def coverCut : SFunc :=
           (.branch .undefined rev0))))))))
           .undefined))))))))) .undefined)))))
 
+/-- The deposit bytecode contains a `REVERT` instruction at offset `0x273`. -/
 theorem revert_at : Linst.At code 0x273 .revert := by unfold Linst.At; kernel_rfl
 
+/-- The cut fee path with low-value guards checks against deposit bytecode with `REVERT` at `0x273`. -/
 theorem low_cut : userPath.Cut .undefined lowCut cutEntries 0x273 := ⟨by decide +kernel, by decide +kernel⟩
+/-- The cut fee path with floor-credit guards checks against deposit bytecode with `REVERT` at `0x273`. -/
 theorem floor_cut : userPath.Cut .undefined floorCut cutEntries 0x273 := ⟨by decide +kernel, by decide +kernel⟩
+/-- The cut fee path with credit-and-fee cover guards checks against deposit bytecode with `REVERT` at `0x273`. -/
 theorem cover_cut : userPath.Cut .undefined coverCut cutEntries 0x273 := ⟨by decide +kernel, by decide +kernel⟩
+/-- The cut fee path for invalid calldata length checks against deposit bytecode with `REVERT` at `0x273`. -/
 theorem badLength_cut : userPath.Cut (UserPath.badLengthCut userPath) .undefined cutEntries 0x273 :=
   ⟨by decide +kernel, by decide +kernel⟩
+/-- The cut fee path for a fee read with nonzero value checks against deposit bytecode with `REVERT` at `0x273`. -/
 theorem paidRead_cut : userPath.Cut (UserPath.paidReadCut userPath) .undefined cutEntries 0x273 :=
   ⟨by decide +kernel, by decide +kernel⟩
+/-- The cut inhibitor path checks against deposit bytecode with `REVERT` at `0x273`. -/
 theorem inhibit_cut : cutOk code [] 0x273 0 none (inhibitCut userPath.systemDest userPath.shape.revert) = true := by
   decide +kernel
 
 variable {s : Sevm} {b : Devm} {n : Nat} {out : B256}
 
+/-- While slot 0 holds the inhibitor, a non-system deposit frame executes `REVERT` under Amsterdam. -/
 theorem frameReverts_inhibited (hcode : s.code = code) (hfork : s.benvStat.fork = .amsterdam)
     (caller : s.caller ≠ systemAddress) (inhibited : b.getStorVal s.currentTarget 0 = B256.max) :
     FrameReverts s b (revertBound 0) :=

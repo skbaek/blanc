@@ -65,6 +65,7 @@ def cutAll (code : ByteArray) (es : List Nat) (e : Nat) : List SFunc → List Na
   | f :: fs, pc :: pcs => cutOk code es e pc none f && cutAll code es e fs pcs
   | _ :: _, [] => false
 
+/-- A successful `cutAll` implies each function in `fs` matches a program counter in `pcs` satisfying `cutOk`. -/
 theorem cutAll_spec {code : ByteArray} {es : List Nat} {e : Nat} :
     ∀ {fs : List SFunc} {pcs : List Nat}, cutAll code es e fs pcs = true →
       ∀ (k : Nat) (f : SFunc), fs[k]? = some f → ∃ pc, pcs[k]? = some pc ∧ cutOk code es e pc none f = true

@@ -92,7 +92,7 @@ theorem cost_mono {target a b : Nat} (h : a ≤ b) :
 theorem fakeExpAux_mono {a b den : Nat} (h : a ≤ b) (i x : Nat) :
     ∀ {y : Nat}, x ≤ y → fakeExpAux a den i x ≤ fakeExpAux b den i y := by
   induction i, x using fakeExpAux.induct a den with
-  | case1 i => intro y _; simp
+  | case1 i => intro y _; rw [fakeExpAux_zero]; exact Nat.zero_le _
   | case2 i x hx ih =>
     intro y hxy
     have hy : y ≠ 0 := by omega

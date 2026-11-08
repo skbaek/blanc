@@ -23,18 +23,24 @@ def lowCut : SFunc :=
   .dest (.next (.reg .callvalue) (.next (.reg .lt) (.next (.push [0x01, 0xc6] (by decide))
     (.branch .undefined rev0))))
 
+/-- The exit bytecode contains a `REVERT` instruction at offset `0x1c9`. -/
 theorem revert_at : Linst.At code 0x1c9 .revert := by unfold Linst.At; kernel_rfl
 
+/-- The cut fee path with low-value guards checks against exit bytecode with `REVERT` at `0x1c9`. -/
 theorem low_cut : userPath.Cut .undefined lowCut cutEntries 0x1c9 := ⟨by decide +kernel, by decide +kernel⟩
+/-- The cut fee path for invalid calldata length checks against exit bytecode with `REVERT` at `0x1c9`. -/
 theorem badLength_cut : userPath.Cut (UserPath.badLengthCut userPath) .undefined cutEntries 0x1c9 :=
   ⟨by decide +kernel, by decide +kernel⟩
+/-- The cut fee path for a fee read with nonzero value checks against exit bytecode with `REVERT` at `0x1c9`. -/
 theorem paidRead_cut : userPath.Cut (UserPath.paidReadCut userPath) .undefined cutEntries 0x1c9 :=
   ⟨by decide +kernel, by decide +kernel⟩
+/-- The cut inhibitor path checks against exit bytecode with `REVERT` at `0x1c9`. -/
 theorem inhibit_cut : cutOk code [] 0x1c9 0 none (inhibitCut userPath.systemDest userPath.shape.revert) = true := by
   decide +kernel
 
 variable {s : Sevm} {b : Devm} {n : Nat} {out : B256}
 
+/-- While slot 0 holds the inhibitor, a non-system exit frame executes `REVERT` under Amsterdam. -/
 theorem frameReverts_inhibited (hcode : s.code = code) (hfork : s.benvStat.fork = .amsterdam)
     (caller : s.caller ≠ systemAddress) (inhibited : b.getStorVal s.currentTarget 0 = B256.max) :
     FrameReverts s b (revertBound 0) :=
