@@ -250,6 +250,16 @@ private structure Prepared (msg m : Msg) : Prop where
     msg.code = msg.benv.state.getCode msg.currentTarget →
     ¬ isValidDelegation (m.benv.state.getCode msg.currentTarget) →
     m.code = m.benv.state.getCode msg.currentTarget
+  /-- A routed call to a target that is no delegation runs at the target's address. -/
+  codeAt : msg.target.isNone = false → msg.codeAddress = some msg.currentTarget →
+    msg.code = msg.benv.state.getCode msg.currentTarget →
+    ¬ isValidDelegation (m.benv.state.getCode msg.currentTarget) → m.codeAddress = some msg.currentTarget
+  /-- The preparation keeps whether value moves, and how much. -/
+  transfer : m.shouldTransferValue = msg.shouldTransferValue
+  value : m.value = msg.value
+  /-- A code-bearing account keeps its balance through the preparation. -/
+  bal : ∀ x, (msg.benv.state.getCode x).toList ≠ [] → ¬ isValidDelegation (msg.benv.state.getCode x) →
+    m.benv.state.bal x = msg.benv.state.bal x
 
 private theorem delegationCost_of_not_delegated {rules : ForkRules} {devm : Devm} {adr cA : Adr} {del : Bool} {c : Nat}
     (hcost : rules.delegationCost devm adr = (del, cA, c)) (hnot : ¬ isValidDelegation (devm.state.getCode adr)) :
@@ -272,7 +282,8 @@ private theorem dispatch_spec {state : StateGasRules} {msg m : Msg} {devm d : De
           m = {preparedTopLevelMsg msg d with codeAddress := some cA, code := code, disablePrecompiles := dp} ∧
           msg.target.isNone = false ∧
           (¬ isValidDelegation (devm.state.getCode msg.currentTarget) →
-            code = devm.state.getCode msg.currentTarget))) := by
+            code = devm.state.getCode msg.currentTarget) ∧
+          (¬ isValidDelegation (devm.state.getCode msg.currentTarget) → cA = msg.currentTarget))) := by
   have read := read_keep msg.benv.stat.rules msg.currentTarget devm []
   unfold dispatchTopLevelAmsterdam at h
   dsimp only at h
@@ -315,13 +326,15 @@ private theorem dispatch_spec {state : StateGasRules} {msg m : Msg} {devm d : De
     have hwarm : (if del = true then addAccessedAddress d₂ cA else d₂).state = d₂.state := by
       split <;> rfl
     refine ⟨((read.trans (charged.keep _)).trans (charged₂.keep _)).trans
-        (warm.trans (read_keep _ _ _ _)), ?_, .inr ⟨cA, _, del, rfl, ?_, ?_⟩⟩
+        (warm.trans (read_keep _ _ _ _)), ?_, .inr ⟨cA, _, del, rfl, ?_, ?_, ?_⟩⟩
     · exact hwarm.trans (hd₂s.trans hd₁s)
     · simpa only [Bool.not_eq_true] using htarget
     · intro hnot
       obtain ⟨rfl, rfl⟩ := delegationCost_of_not_delegated hcost (by rw [hd₁s]; exact hnot)
       show (if false = true then addAccessedAddress d₂ msg.currentTarget else d₂).state.getCode msg.currentTarget = _
       rw [hwarm, hd₂s, hd₁s]
+    · intro hnot
+      exact (delegationCost_of_not_delegated hcost (by rw [hd₁s]; exact hnot)).2
 
 private theorem prepare_spec {state : StateGasRules} {msg m : Msg} {d : Devm}
     (h : prepareTopLevelAmsterdam state msg = .ok (m, d)) :
@@ -351,20 +364,28 @@ private theorem prepare_spec {state : StateGasRules} {msg m : Msg} {d : Devm}
   have kept : ∀ x, (msg.benv.state.getCode x).toList ≠ [] → ¬ isValidDelegation (msg.benv.state.getCode x) →
       d.state.getCode x = msg.benv.state.getCode x ∧ d.state.getStor x = msg.benv.state.getStor x :=
     fun x hc hn => ⟨congrArg Acct.code (k.kept x hc hn), congrArg Acct.stor (k.kept x hc hn)⟩
-  rcases shape with ⟨rfl, htarget, hcoll⟩ | ⟨cA, code, dp, rfl, htarget, hcode⟩
-  · refine ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl, k.created, kept, k.away, fun _ => rfl, fun hn => ?_⟩,
-      k, fun _ => ?_⟩
+  have keptBal : ∀ x, (msg.benv.state.getCode x).toList ≠ [] → ¬ isValidDelegation (msg.benv.state.getCode x) →
+      d.state.bal x = msg.benv.state.bal x :=
+    fun x hc hn => congrArg Acct.bal (k.kept x hc hn)
+  rcases shape with ⟨rfl, htarget, hcoll⟩ | ⟨cA, code, dp, rfl, htarget, hcode, hcA⟩
+  · refine ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl, k.created, kept, k.away, fun _ => rfl, fun hn => ?_, fun hn => ?_,
+      rfl, rfl, keptBal⟩, k, fun _ => ?_⟩
+    · rw [htarget] at hn; cases hn
     · rw [htarget] at hn; cases hn
     · show accountHasCodeOrNonce d.state msg.currentTarget = false
       rw [hs]
       exact hcoll
-  · refine ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl, k.created, kept, k.away, fun hn => ?_, fun _ _ _ hnot => ?_⟩,
-      k, fun hn => ?_⟩
+  · refine ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl, k.created, kept, k.away, fun hn => ?_, fun _ _ _ hnot => ?_,
+      fun _ _ _ hnot => ?_, rfl, rfl, keptBal⟩, k, fun hn => ?_⟩
     · rw [htarget] at hn; cases hn
     · have hnot' : ¬ isValidDelegation (d.state.getCode msg.currentTarget) := hnot
       show code = d.state.getCode msg.currentTarget
       rw [hs] at hnot' ⊢
       exact hcode hnot'
+    · have hnot' : ¬ isValidDelegation (d.state.getCode msg.currentTarget) := hnot
+      rw [hs] at hnot'
+      show some cA = some msg.currentTarget
+      rw [hcA hnot']
     · rw [htarget] at hn; cases hn
 
 /-! ## The legacy authorization prefix -/
@@ -454,7 +475,7 @@ private theorem legacyAuthorization_frame {msg d : Msg} {refund : Nat}
       rfl
 
 private theorem Prepared.refl (msg : Msg) : Prepared msg msg :=
-  ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, fun _ _ _ => ⟨rfl, rfl⟩, fun _ _ => rfl, fun _ => rfl, fun _ _ hc _ => hc⟩
+  ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, fun _ _ _ => ⟨rfl, rfl⟩, fun _ _ => rfl, fun _ => rfl, fun _ _ hc _ => hc, fun _ hca _ _ => hca, rfl, rfl, fun _ _ _ => rfl⟩
 
 private theorem resolve_fields (d : Msg) :
     (messageCallExecutionMessage d).data = d.data ∧
@@ -462,6 +483,15 @@ private theorem resolve_fields (d : Msg) :
       (messageCallExecutionMessage d).benv = d.benv := by
   unfold messageCallExecutionMessage Msg.resolveCodeDelegation
   split <;> exact ⟨rfl, rfl, rfl⟩
+
+private theorem resolve_transfer (d : Msg) :
+    (messageCallExecutionMessage d).shouldTransferValue = d.shouldTransferValue := by
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
+  split <;> rfl
+
+private theorem resolve_value (d : Msg) : (messageCallExecutionMessage d).value = d.value := by
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
+  split <;> rfl
 
 private theorem resolve_of_not_delegated {d : Msg} (hnot : ¬ isValidDelegation d.code) :
     messageCallExecutionMessage d = d := by
@@ -479,7 +509,8 @@ private theorem prepared_legacy_call {msg d : Msg} {refund : Nat} (h : messageCa
     (messageCallExecutionMessage_target_eq d).trans fields.2.1,
     (messageCallExecutionMessage_currentTarget_eq d).trans fields.2.2.1, hdata.trans frame.data,
     (congrArg Benv.stat hbenv).trans (messageCallDelegation_benv_stat h), hdel.trans frame.deletions,
-    (congrArg Benv.createdAccounts hbenv).trans frame.created, ?_, ?_, ?_, ?_⟩
+    (congrArg Benv.createdAccounts hbenv).trans frame.created, ?_, ?_, ?_, ?_, ?_,
+    (resolve_transfer d).trans fields.2.2.2.1, (resolve_value d).trans fields.2.2.2.2.1, ?_⟩
   · intro x hc hd
     rw [hbenv]
     exact ⟨delegation_keeps_code_entry h rfl hc hd, messageCallDelegation_getStor_eq h x hc hd⟩
@@ -498,6 +529,17 @@ private theorem prepared_legacy_call {msg d : Msg} {refund : Nat} (h : messageCa
     have : messageCallExecutionMessage d = d := resolve_of_not_delegated (by rw [hd]; exact hnot)
     rw [this]
     exact hd
+  · intro _ hca hcode hnot
+    rw [hbenv] at hnot
+    have hd : d.code = d.benv.state.getCode msg.currentTarget := by
+      rcases shape with rfl | later
+      · exact hcode
+      · exact later _ (fields.2.2.2.2.2.trans hca)
+    rw [resolve_of_not_delegated (by rw [hd]; exact hnot)]
+    exact fields.2.2.2.2.2.trans hca
+  · intro x _ _
+    rw [hbenv]
+    exact congrFun (messageCallDelegation_bal_eq h) x
 
 /-! ## The root and its message -/
 
@@ -590,6 +632,10 @@ private structure TopRun (msg m : Msg) (state : State) (out : MsgCallOutput) (f 
   settled : f.settle raw = .ok s
   state_eq : state = s.state
   deletions : ∀ x ∈ out.accountsToDelete, s.error.isNone = true ∧ x ∈ s.accountsToDelete
+  /-- The message entered this frame's machine, or it entered none and ran a precompile at the frame's code address. -/
+  top : messageEntry msg = some (f, e) ∨ (messageEntry msg = none ∧ ∃ adr, raw = executePrecomp e adr ∧
+    (f.inner.withBenv benv).codeAddress = some adr ∧
+    (!(f.inner.withBenv benv).disablePrecompiles && (f.inner.withBenv benv).benv.stat.rules.isPrecomp adr) = true)
 
 private theorem settleMsg_error {f : Frame} {e : EvmError × State × AdrSet × Tra} {s : Devm} :
     f.settleMsg (.error e) ≠ .ok s := by
@@ -606,23 +652,27 @@ private theorem enter_cases (X : Msg) :
         | none => exec e
         | some adr => if (!X.disablePrecompiles && X.benv.stat.rules.isPrecomp adr) = true then
             executePrecomp e adr else exec e) = exec e) ∨
-    (∃ adr, executeCode.enter X = .inr (executePrecomp (initEvm X) adr) ∧ ∀ e : Evm,
+    (∃ adr, executeCode.enter X = .inr (executePrecomp (initEvm X) adr) ∧ (∀ e : Evm,
       (match X.codeAddress with
         | none => exec e
         | some adr => if (!X.disablePrecompiles && X.benv.stat.rules.isPrecomp adr) = true then
-            executePrecomp e adr else exec e) = executePrecomp e adr) := by
+            executePrecomp e adr else exec e) = executePrecomp e adr) ∧
+      X.codeAddress = some adr ∧ (!X.disablePrecompiles && X.benv.stat.rules.isPrecomp adr) = true) := by
   unfold executeCode.enter
   dsimp only
   cases hc : X.codeAddress with
   | none => exact .inl ⟨rfl, fun _ => rfl⟩
   | some adr =>
       by_cases hp : (!X.disablePrecompiles && X.benv.stat.rules.isPrecomp adr) = true
-      · refine .inr ⟨adr, ?_, fun _ => ?_⟩ <;> dsimp only <;> rw [ite_eq_left hp]
+      · refine .inr ⟨adr, ?_, fun _ => ?_, rfl, hp⟩ <;> dsimp only <;> rw [ite_eq_left hp]
       · refine .inl ⟨?_, fun _ => ?_⟩ <;> dsimp only <;> rw [ite_eq_right hp]
 
 private theorem runFrame_cases {f : Frame} {s : Devm} (h : runFrame f = .ok s) :
     ∃ benv, f.inner.benvAfterTransfer = .ok benv ∧
-      ((enteredFrame f = none ∧ ∃ adr, f.settle (executePrecomp (initEvm (f.inner.withBenv benv)) adr) = .ok s) ∨
+      ((enteredFrame f = none ∧ ∃ adr, f.settle (executePrecomp (initEvm (f.inner.withBenv benv)) adr) = .ok s ∧
+          (f.inner.withBenv benv).codeAddress = some adr ∧
+          (!(f.inner.withBenv benv).disablePrecompiles &&
+            (f.inner.withBenv benv).benv.stat.rules.isPrecomp adr) = true) ∨
         (enteredFrame f = some (f, initEvm (f.inner.withBenv benv)) ∧
           f.settle (exec (initEvm (f.inner.withBenv benv))) = .ok s)) := by
   unfold runFrame at h
@@ -636,29 +686,32 @@ private theorem runFrame_cases {f : Frame} {s : Devm} (h : runFrame f = .ok s) :
       rw [ht] at h
       dsimp only at h ⊢
       refine ⟨benv, rfl, ?_⟩
-      rcases enter_cases (f.inner.withBenv benv) with ⟨he, -⟩ | ⟨adr, he, -⟩
+      rcases enter_cases (f.inner.withBenv benv) with ⟨he, -⟩ | ⟨adr, he, -, hca, hp⟩
       · rw [he] at h ⊢
         exact .inr ⟨rfl, h⟩
       · rw [he] at h ⊢
-        exact .inl ⟨rfl, adr, h⟩
+        exact .inl ⟨rfl, adr, h, hca, hp⟩
 
 private theorem runPrepared_cases {f : Frame} {prepared : Devm} {s : Devm} {benv : Benv}
     (ht : f.inner.benvAfterTransfer = .ok benv) (h : runPreparedTopFrame f prepared = .ok s) :
     let e : Evm := {pc := 0, sta := initSevm (f.inner.withBenv benv), dyna := ((prepared.withState
       benv.state).withStorageWrites benv.storageWrites).withCreatedAccounts benv.createdAccounts}
-    (preparedEntry f prepared = none ∧ ∃ adr, f.settle (executePrecomp e adr) = .ok s) ∨
+    (preparedEntry f prepared = none ∧ ∃ adr, f.settle (executePrecomp e adr) = .ok s ∧
+          (f.inner.withBenv benv).codeAddress = some adr ∧
+          (!(f.inner.withBenv benv).disablePrecompiles &&
+            (f.inner.withBenv benv).benv.stat.rules.isPrecomp adr) = true) ∨
       (preparedEntry f prepared = some (f, e) ∧ f.settle (exec e) = .ok s) := by
   unfold runPreparedTopFrame at h
   unfold preparedEntry
   rw [ht] at h ⊢
   dsimp only at h ⊢
-  rcases enter_cases (f.inner.withBenv benv) with ⟨he, hraw⟩ | ⟨adr, he, hraw⟩
+  rcases enter_cases (f.inner.withBenv benv) with ⟨he, hraw⟩ | ⟨adr, he, hraw, hca, hp⟩
   · rw [he]
     refine .inr ⟨rfl, ?_⟩
     rw [← hraw]
     exact h
   · rw [he]
-    refine .inl ⟨rfl, adr, ?_⟩
+    refine .inl ⟨rfl, adr, ?_, hca, hp⟩
     rw [← hraw]
     exact h
 
@@ -686,7 +739,7 @@ private def Outcome (entry : Option (Frame × Evm)) (msg : Msg) (state : State) 
 private theorem amsterdam_top {st : StateGasRules} {msg : Msg} {frameOf : Msg → Frame} {state : State}
     {out : MsgCallOutput}
     (hf : (msg.target.isNone = false ∧ frameOf = Frame.ofCall) ∨ (msg.target.isNone = true ∧ frameOf = Frame.ofCreate))
-    (h : processTopLevelAmsterdam st msg frameOf = .ok (state, out)) :
+    (h : processTopLevelAmsterdam st msg frameOf = .ok (state, out)) (lane : messageEntry msg = amsterdamEntry st msg) :
     Outcome (amsterdamEntry st msg) msg state out := by
   unfold processTopLevelAmsterdam at h
   cases hp : prepareTopLevelAmsterdam st msg with
@@ -735,9 +788,11 @@ private theorem amsterdam_top {st : StateGasRules} {msg : Msg} {frameOf : Msg �
                 benv.createdAccounts⟩ :=
             ⟨ht, rfl, rfl, rfl, keep.stack, keep.memory, keep.deletions.trans hinner.symm, rfl⟩
           rw [hentry]
-          rcases runPrepared_cases ht hrun with ⟨hnone, adr, hs⟩ | ⟨hsome, hs⟩
-          · exact .inr (.inl ⟨hnone, m, _, benv, _, adr, evm, ⟨prep, frame, entered, hs, hst, hdel⟩⟩)
-          · exact .inr (.inr ⟨m, _, benv, _, evm, hsome, ⟨prep, frame, entered, hs, hst, hdel⟩⟩)
+          rcases runPrepared_cases ht hrun with ⟨hnone, adr, hs, hca, hp⟩ | ⟨hsome, hs⟩
+          · exact .inr (.inl ⟨hnone, m, _, benv, _, adr, evm,
+              ⟨prep, frame, entered, hs, hst, hdel, .inr ⟨lane.trans (hentry.trans hnone), adr, rfl, hca, hp⟩⟩⟩)
+          · exact .inr (.inr ⟨m, _, benv, _, evm, hsome,
+              ⟨prep, frame, entered, hs, hst, hdel, .inl (lane.trans (hentry.trans hsome))⟩⟩)
 
 private theorem legacy_create_output {msg : Msg} {evm : Devm} {state : State} {out : MsgCallOutput}
     (hsg : msg.benv.stat.rules.stateGas = none) (target : msg.target.isNone = true)
@@ -794,12 +849,14 @@ private theorem legacy_call_output {msg delegated : Msg} {refund : Nat} {evm : D
 
 private theorem legacy_frame_outcome {msg m : Msg} {f : Frame} {state : State} {out : MsgCallOutput} {evm : Devm}
     (prep : Prepared msg m) (frame : FrameOf msg m f) (core : runFrame f = .ok evm)
-    (hst : state = evm.state) (hdel : ∀ x ∈ out.accountsToDelete, evm.error.isNone = true ∧ x ∈ evm.accountsToDelete) :
+    (hst : state = evm.state) (hdel : ∀ x ∈ out.accountsToDelete, evm.error.isNone = true ∧ x ∈ evm.accountsToDelete)
+    (lane : messageEntry msg = enteredFrame f) :
     Outcome (enteredFrame f) msg state out := by
   obtain ⟨benv, ht, hcases⟩ := runFrame_cases core
-  rcases hcases with ⟨hnone, adr, hs⟩ | ⟨hsome, hs⟩
-  · exact .inr (.inl ⟨hnone, m, f, benv, _, adr, evm, ⟨prep, frame, .ofInit ht, hs, hst, hdel⟩⟩)
-  · exact .inr (.inr ⟨m, f, benv, _, evm, hsome, ⟨prep, frame, .ofInit ht, hs, hst, hdel⟩⟩)
+  rcases hcases with ⟨hnone, adr, hs, hca, hp⟩ | ⟨hsome, hs⟩
+  · exact .inr (.inl ⟨hnone, m, f, benv, _, adr, evm,
+      ⟨prep, frame, .ofInit ht, hs, hst, hdel, .inr ⟨lane.trans hnone, adr, rfl, hca, hp⟩⟩⟩)
+  · exact .inr (.inr ⟨m, f, benv, _, evm, hsome, ⟨prep, frame, .ofInit ht, hs, hst, hdel, .inl (lane.trans hsome)⟩⟩)
 
 private theorem legacy_top {msg : Msg} {state : State} {out : MsgCallOutput}
     (hsg : msg.benv.stat.rules.stateGas = none) (h : processMessageCall msg = .ok (state, out)) :
@@ -825,6 +882,7 @@ private theorem legacy_top {msg : Msg} {state : State} {out : MsgCallOutput}
           have core : processCreateMessage msg = .ok evm := Except.bimap_id_eq_ok hevm
           obtain ⟨hst, hdel⟩ := legacy_create_output hsg target collision core h
           exact legacy_frame_outcome (.refl msg) (.inr ⟨target, rfl, collision⟩) core hst hdel
+            (by unfold messageEntry legacyEntry; rw [hsg]; simp only [target, messageCreateCollision, collision, Bool.false_eq_true, ↓reduceIte])
   | false =>
       simp only [Bool.false_eq_true, ↓reduceIte]
       have body := h
@@ -841,6 +899,7 @@ private theorem legacy_top {msg : Msg} {state : State} {out : MsgCallOutput}
       dsimp only
       obtain ⟨hst, hdel⟩ := legacy_call_output hsg target delegation core h
       exact legacy_frame_outcome (prepared_legacy_call delegation target) (.inl ⟨target, rfl⟩) core hst hdel
+        (by unfold messageEntry legacyEntry; rw [hsg, delegation]; simp only [target, Bool.false_eq_true, ↓reduceIte])
 
 private theorem message_top {msg : Msg} {state : State} {out : MsgCallOutput}
     (h : processMessageCall msg = .ok (state, out)) : Outcome (messageEntry msg) msg state out := by
@@ -855,12 +914,12 @@ private theorem message_top {msg : Msg} {state : State} {out : MsgCallOutput}
           simp only [target, ↓reduceIte] at h
           unfold processMessageCall.create at h
           rw [hsg] at h
-          exact amsterdam_top (.inr ⟨target, rfl⟩) h
+          exact amsterdam_top (.inr ⟨target, rfl⟩) h (by unfold messageEntry; rw [hsg])
       | false =>
           simp only [target, Bool.false_eq_true, ↓reduceIte] at h
           unfold processMessageCall.call at h
           rw [hsg] at h
-          exact amsterdam_top (.inl ⟨target, rfl⟩) h
+          exact amsterdam_top (.inl ⟨target, rfl⟩) h (by unfold messageEntry; rw [hsg])
 
 /-! ## Settlement of a frame -/
 

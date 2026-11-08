@@ -3,6 +3,11 @@ import Blanc.ExecutionKeptChain
 import Blanc.LadderBase
 
 open private resume_callAmsterdam_state from Blanc.LadderBase
+open private TopRun TopRun.shape TopRun.prepared TopRun.frame TopRun.entered TopRun.settled TopRun.state_eq
+  TopRun.top TopRun.commits_eq TopRun.create_ne TopRun.entry_getCode message_top settle_ofCall_committed
+  settle_error_rollback settle_inner_clean precomp_post Prepared.caller Prepared.currentTarget Prepared.stat
+  Prepared.kept Prepared.code Prepared.codeAt Prepared.codeAddress Prepared.transfer Prepared.value Prepared.bal
+  Entered.transfer Entered.pc Entered.sta Entered.state from Blanc.ExecutionKeptTop
 
 /-!
 # Kept-frame value: never falls, and covers the kept values
@@ -758,5 +763,336 @@ theorem Exec.kept_bal_neverFalls {C : ByteArray} {a : Adr} {pc : Nat} {sevm : Se
     (pre.getBal a).toNat ≤ ((Execution.committedPost out committed).getBal a).toNat :=
   Nat.le_trans (Nat.le_add_right _ _)
     (Exec.kept_bal_ge_keptPaid run committed target code nonempty nondelegating sums at_code)
+
+/-! ## The message level -/
+
+/-- **A message's value transfer, at one account.** With no debit from the account and a world sum
+below `2 ^ 256` when it is the target, the account's balance is up by exactly the value when it is
+the target, and unchanged otherwise. -/
+theorem Msg.transfer_bal_eq {msg : Msg} {benv : Benv} {a : Adr}
+    (transfer : msg.benvAfterTransfer = .ok benv)
+    (caller : msg.shouldTransferValue = true → msg.caller ≠ a)
+    (zero : msg.shouldTransferValue = false → msg.currentTarget = a → msg.value = 0)
+    (sum_nof : msg.currentTarget = a → sum msg.benv.state.bal < 2 ^ 256) :
+    (benv.state.bal a).toNat = (msg.benv.state.bal a).toNat +
+      if msg.currentTarget = a then msg.value.toNat else 0 := by
+  by_cases tr : msg.shouldTransferValue = true ∧ msg.value ≠ 0
+  · obtain ⟨debit, sub, rfl⟩ := of_benvAfterTransfer tr.1 tr.2 transfer
+    have callerNe := caller tr.1
+    by_cases here : msg.currentTarget = a
+    · have bound := sum_nof here
+      subst a
+      rw [ite_eq_left rfl]
+      exact of_transfer_bal_target sub callerNe bound
+    · rw [ite_eq_right here, Nat.add_zero]
+      exact congrArg B256.toNat (of_transfer_bal_other sub callerNe here)
+  · have entry_eq := benvAfterTransfer_eq_of_not_transfer tr transfer
+    subst entry_eq
+    by_cases here : msg.currentTarget = a
+    · rw [ite_eq_left here]
+      have value_eq : msg.value = 0 := by
+        cases transfers : msg.shouldTransferValue with
+        | true =>
+            by_contra nonzero
+            exact tr ⟨transfers, nonzero⟩
+        | false => exact zero transfers here
+      rw [value_eq]
+      rfl
+    · rw [ite_eq_right here, Nat.add_zero]
+
+/-- The values the frames some roots keep at `a` carried in. -/
+def Root.paidAt (a : Adr) (rs : List Root) : Nat :=
+  ((rs.flatMap (Root.keptAt a)).map fun f => f.sevm.value.toNat).sum
+
+theorem Root.paidAt_append (a : Adr) (xs ys : List Root) :
+    Root.paidAt a (xs ++ ys) = Root.paidAt a xs + Root.paidAt a ys := by
+  unfold Root.paidAt
+  rw [List.flatMap_append, List.map_append, List.sum_append]
+
+theorem Root.paidAt_nil (a : Adr) : Root.paidAt a [] = 0 := by
+  unfold Root.paidAt
+  rw [List.flatMap_nil, List.map_nil, List.sum_nil]
+
+/-- **The world-sum bound at a root.** Every root's message opened on a world whose balances sum
+below `2 ^ 256`. -/
+def RootsFit (rs : List Root) : Prop := ∀ r ∈ rs, SumNof r.frame.outer.benv.state.bal
+
+theorem RootsFit.left {xs ys : List Root} (h : RootsFit (xs ++ ys)) : RootsFit xs :=
+  fun r hr => h r (List.mem_append_left _ hr)
+
+theorem RootsFit.right {xs ys : List Root} (h : RootsFit (xs ++ ys)) : RootsFit ys :=
+  fun r hr => h r (List.mem_append_right _ hr)
+
+/-- What the value folds ask of the account: nonempty code that is no delegation, and the at-code
+law that a committed frame at the account running that code keeps its balance. -/
+structure KeptValueAt (a : Adr) (C : ByteArray) : Prop where
+  nonempty : C.toList ≠ []
+  nondelegating : ¬ isValidDelegation C
+  law : ∀ {s : Sevm} {d e : Devm}, s.currentTarget = a → s.code = C → Exec 0 s d (.ok e) →
+    (e.getBal a).toNat = (d.getBal a).toNat
+
+/-- `a`'s balance covers its start plus the values the roots kept there carried in. -/
+def BalCovers (a : Adr) (st : State) (rs : List Root) (st' : State) : Prop :=
+  (st.bal a).toNat + Root.paidAt a rs ≤ (st'.bal a).toNat
+
+theorem BalCovers.append {a : Adr} {s m t : State} {xs ys : List Root} (first : BalCovers a s xs m)
+    (second : BalCovers a m ys t) : BalCovers a s (xs ++ ys) t := by
+  unfold BalCovers at first second ⊢
+  rw [Root.paidAt_append]
+  omega
+
+theorem BalCovers.nil {a : Adr} {s t : State} (h : (s.bal a).toNat ≤ (t.bal a).toNat) :
+    BalCovers a s [] t := by
+  unfold BalCovers
+  rw [Root.paidAt_nil, Nat.add_zero]
+  exact h
+
+/-- Clean code-deposit settlement of a top-level create hands the constructor's balances on. -/
+private theorem settle_ofCreate_committed_bal {m : Msg} {raw : Execution} {s : Devm}
+    (settled : (Frame.ofCreate m).settle raw = .ok s) (c : Execution.commits raw = true)
+    (clean : s.error.isNone = true) :
+    s.state.bal = (Execution.committedPost raw c).state.bal := by
+  obtain ⟨inner, hi, hs, -, hn⟩ := settle_inner_clean (m := processCreateMessage.msg m) c
+  have run : processCreateMessage.settle m (.ok inner) = .ok s := by
+    rw [← hi]
+    exact settled
+  unfold processCreateMessage.settle at run
+  simp only [bind, Except.bind, hn, ↓reduceIte] at run
+  cases charge : processCreateMessage.chargeCodeGas m.benv.stat.rules inner with
+  | error error =>
+      rw [charge] at run
+      rcases error with ⟨error, charged⟩
+      cases error with
+      | halt reason =>
+          have eq := Except.ok.inj run
+          rw [← eq] at clean
+          cases hsg : m.benv.stat.rules.stateGas <;>
+            simp only [hsg, Devm.error, processCreateMessage.exceptionalHalt,
+              processCreateMessage.exceptionalHaltAmsterdam, Devm.setMeta, Devm.withStorageWrites, Devm.setWorld,
+              Option.isNone_some, Bool.false_eq_true] at clean
+      | revert => cases run
+      | crypto reason => cases run
+      | internal reason => cases run
+  | ok charged =>
+      rw [charge] at run
+      have eq := Except.ok.inj run
+      subst eq
+      have hstate := (chargeCodeGas_state_ok charge).trans hs
+      change (charged.state.setCode m.currentTarget ⟨⟨charged.output⟩⟩).bal = _
+      rw [State.setCode_bal, hstate]
+
+section TopRunValue
+
+variable {msg m : Msg} {state : State} {out : MsgCallOutput} {f : Frame} {benv : Benv} {e : Evm}
+  {raw : Execution} {s : Devm} {a : Adr}
+
+/-- What a top frame's entry does at a code-bearing account: the message's routing and value reach
+the machine, and the account is credited the value exactly when it is the target. -/
+private theorem topRun_entry (t : TopRun msg m state out f benv e raw s)
+    (hc : (msg.benv.state.getCode a).toList ≠ []) (hd : ¬ isValidDelegation (msg.benv.state.getCode a))
+    (caller : msg.shouldTransferValue = true → msg.caller ≠ a)
+    (zero : msg.shouldTransferValue = false → msg.value = 0)
+    (fits : msg.currentTarget = a → SumNof f.outer.benv.state.bal) :
+    (e.dyna.state.bal a).toNat = (msg.benv.state.bal a).toNat +
+        (if msg.currentTarget = a then msg.value.toNat else 0) ∧
+      sum e.dyna.state.bal ≤ sum f.outer.benv.state.bal ∧
+      e.sta.currentTarget = msg.currentTarget ∧ e.sta.value = msg.value ∧ e.pc = 0 := by
+  have prep := TopRun.prepared t
+  have fields : f.inner.caller = msg.caller ∧ f.inner.shouldTransferValue = msg.shouldTransferValue ∧
+      f.inner.value = msg.value ∧ f.inner.currentTarget = msg.currentTarget ∧
+      f.inner.benv.state.bal a = msg.benv.state.bal a ∧ f.inner.benv.state.bal = f.outer.benv.state.bal := by
+    have h1 := Prepared.caller prep
+    have h2 := Prepared.transfer prep
+    have h3 := Prepared.value prep
+    have h4 := Prepared.currentTarget prep
+    have h5 := Prepared.bal prep a hc hd
+    rcases TopRun.shape t with hf | hf
+    · rw [hf]
+      exact ⟨h1, h2, h3, h4, h5, rfl⟩
+    · rw [hf]
+      refine ⟨h1, h2, h3, h4, ?_, processCreateMessage_msg_bal_eq m⟩
+      change (processCreateMessage.msg m).benv.state.bal a = _
+      rw [processCreateMessage_msg_bal_eq]
+      exact h5
+  obtain ⟨hcaller, htransfer, hvalue, htarget, hbal, hsum⟩ := fields
+  have entered := TopRun.entered t
+  have hstate : e.dyna.state = benv.state := Entered.state entered
+  have hsta : e.sta = initSevm (f.inner.withBenv benv) := Entered.sta entered
+  have transfer := Entered.transfer entered
+  have key := Msg.transfer_bal_eq (a := a) transfer
+    (by intro tr; rw [hcaller]; exact caller (by rw [← htransfer]; exact tr))
+    (by intro tr _; rw [hvalue]; exact zero (by rw [← htransfer]; exact tr))
+    (by intro here; rw [hsum]; exact fits (htarget.symm.trans here))
+  rw [htarget, hvalue, hbal] at key
+  refine ⟨by rw [hstate]; exact key, ?_, by rw [hsta]; exact htarget, by rw [hsta]; exact hvalue,
+    Entered.pc entered⟩
+  have hb := Msg.benvAfterTransfer_balance_effect (out := .ok benv) transfer
+  change State.balSum benv.state ≤ State.balSum f.inner.benv.state at hb
+  change sum e.dyna.state.bal ≤ _
+  rw [hstate, ← hsum]
+  exact hb
+
+/-- A committing top frame leaves the world its run committed, at every balance. -/
+private theorem topRun_committed_bal (t : TopRun msg m state out f benv e raw s)
+    (c : Execution.commits raw = true) (clean : s.error.isNone = true) :
+    state.bal = (Execution.committedPost raw c).state.bal := by
+  rw [TopRun.state_eq t]
+  rcases TopRun.shape t with hf | hf
+  · subst hf
+    exact congrArg Jaune.State.bal (settle_ofCall_committed (TopRun.settled t) c).1
+  · subst hf
+    exact settle_ofCreate_committed_bal (TopRun.settled t) c clean
+
+/-- A top frame that does not commit leaves a code-bearing account's balance as the message found it. -/
+private theorem topRun_rolled_bal (t : TopRun msg m state out f benv e raw s)
+    (hc : (msg.benv.state.getCode a).toList ≠ []) (hd : ¬ isValidDelegation (msg.benv.state.getCode a))
+    (dirty : ¬ s.error.isNone = true) : state.bal a = msg.benv.state.bal a := by
+  have some : s.error.isSome = true := by
+    cases he : s.error
+    · simp only [he, Option.isNone_none, not_true_eq_false] at dirty
+    · rfl
+  rw [TopRun.state_eq t, settle_error_rollback (TopRun.shape t) (TopRun.settled t) some]
+  exact Prepared.bal (TopRun.prepared t) a hc hd
+
+end TopRunValue
+
+/-- **The message level.** A message that neither debits `a` nor carries value it does not move,
+routed to its own target, with `a` holding code `C` that is no precompile under its rules: `a`'s
+balance covers its start plus the values its roots kept there carried in, provided each root
+opened on a world whose balances sum below `2 ^ 256`. -/
+theorem MessageRoots.bal_covers {msg : Msg} {state : State} {out : MsgCallOutput} {rs : List Root}
+    (h : MessageRoots msg state out rs) {a : Adr} {C : ByteArray} (V : KeptValueAt a C)
+    (code : msg.benv.state.getCode a = C) (routed : RoutedMessage msg)
+    (precomp : ¬ msg.benv.stat.rules.isPrecomp a)
+    (caller : msg.shouldTransferValue = true → msg.caller ≠ a)
+    (zero : msg.shouldTransferValue = false → msg.value = 0) (fits : RootsFit rs) :
+    BalCovers a msg.benv.state rs state := by
+  have hc : (msg.benv.state.getCode a).toList ≠ [] := by rw [code]; exact V.nonempty
+  have hd : ¬ isValidDelegation (msg.benv.state.getCode a) := by rw [code]; exact V.nondelegating
+  obtain ⟨result, hmap⟩ := h
+  rcases message_top result with ⟨hnone, hst, -⟩ | ⟨hnone, m, f, benv, e, adr, s, t⟩ |
+      ⟨m, f, benv, e, s, hsome, t⟩
+  · rw [hnone] at hmap
+    rw [List.map_eq_nil_iff.mp hmap, hst]
+    exact BalCovers.nil (Nat.le_refl _)
+  · rw [hnone] at hmap
+    rw [List.map_eq_nil_iff.mp hmap]
+    have prep := TopRun.prepared t
+    have away : msg.currentTarget ≠ a := by
+      intro here
+      rcases TopRun.top t with hsome | ⟨-, adr', -, hca, hp⟩
+      · rw [hnone] at hsome
+        cases hsome
+      · have hstat : benv.stat = msg.benv.stat := by
+          have := Jaune.benvAfterTransfer_stat (Entered.transfer (TopRun.entered t))
+          have hs := Prepared.stat prep
+          rcases TopRun.shape t with hf | hf <;> rw [hf] at this <;> exact this.trans hs
+        rcases TopRun.frame t with ⟨hcall, hf⟩ | ⟨hcreate, hf, -⟩
+        · subst hf
+          have kept := (Prepared.kept prep a hc hd).1
+          have hat := Prepared.codeAt prep hcall (routed.1 hcall).1 (routed.1 hcall).2
+            (by rw [here, kept]; exact hd)
+          have same : adr' = a := by
+            have h1 : m.codeAddress = some adr' := hca
+            rw [hat, here] at h1
+            exact (Option.some.inj h1).symm
+          subst same
+          have flag := of_decide_eq_true ((Bool.and_eq_true _ _).mp hp).2
+          change benv.stat.rules.isPrecomp adr' at flag
+          rw [hstat] at flag
+          exact precomp flag
+        · subst hf
+          have h1 : m.codeAddress = some adr' := hca
+          rw [Prepared.codeAddress prep hcreate, routed.2 hcreate] at h1
+          cases h1
+    by_cases clean : s.error.isNone = true
+    · have c : Execution.commits (executePrecomp e adr) = true :=
+        Frame.raw_commits_of_settlementCommits ((TopRun.commits_eq t).trans clean)
+      obtain ⟨entry, -⟩ := topRun_entry (a := a) t hc hd caller zero (fun here => absurd here away)
+      rw [ite_eq_right away, Nat.add_zero] at entry
+      apply BalCovers.nil
+      rw [topRun_committed_bal t c clean, (precomp_post e adr c).1, entry]
+    · exact BalCovers.nil (Nat.le_of_eq (congrArg B256.toNat (topRun_rolled_bal t hc hd clean).symm))
+  · rw [hsome] at hmap
+    cases rs with
+    | nil => cases hmap
+    | cons r tail =>
+        simp only [Option.toList_some, List.map_cons, List.cons.injEq, Prod.mk.injEq,
+          List.map_eq_nil_iff] at hmap
+        obtain ⟨⟨hf, he⟩, rfl⟩ := hmap
+        have fitsR := fits r List.mem_cons_self
+        obtain ⟨frame, evm, raw, run⟩ := r
+        dsimp only at hf he fitsR
+        subst hf he
+        have hraw : exec evm = raw := (exec_iff_exec_eq _ _ _ _).mp ⟨run⟩
+        subst hraw
+        have prep := TopRun.prepared t
+        obtain ⟨entry, hsum, htarget, hvalue, hpc⟩ :=
+          topRun_entry (a := a) t hc hd caller zero (fun _ => fitsR)
+        unfold BalCovers Root.paidAt
+        rw [List.flatMap_cons, List.flatMap_nil, List.append_nil]
+        by_cases clean : s.error.isNone = true
+        · have settles : Frame.settlementCommits frame (exec evm) = true := (TopRun.commits_eq t).trans clean
+          have c := Frame.raw_commits_of_settlementCommits settles
+          have handed := congrFun (topRun_committed_bal t c clean) a
+          rw [Root.keptAt, dite_eq_left settles]
+          dsimp only
+          by_cases here : evm.sta.currentTarget = a
+          · rw [ite_eq_left here, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
+            have target : msg.currentTarget = a := htarget.symm.trans here
+            rw [ite_eq_left target] at entry
+            have runsC : evm.sta.code = C := by
+              rcases TopRun.frame t with ⟨hcall, hf⟩ | ⟨hcreate, hf, -⟩
+              · have hsta : evm.sta = initSevm (frame.inner.withBenv benv) := Entered.sta (TopRun.entered t)
+                have kept := (Prepared.kept prep a hc hd).1
+                have hm := Prepared.code prep hcall (routed.1 hcall).1 (routed.1 hcall).2
+                  (by rw [target, kept]; exact hd)
+                rw [hsta, hf]
+                change m.code = C
+                rw [hm, target, kept, code]
+              · exact absurd target (TopRun.create_ne t hc hd (by rw [hf]; rfl))
+            obtain ⟨post, hpost⟩ : ∃ post, exec evm = .ok post := by
+              cases hx : exec evm with
+              | error err =>
+                  rw [hx] at c
+                  simp only [Execution.commits, Bool.false_eq_true] at c
+              | ok post => exact ⟨post, rfl⟩
+            have run0 : Exec 0 evm.sta evm.dyna (.ok post) := by
+              rw [← hpc, ← hpost]
+              exact run
+            have law := V.law here runsC run0
+            have postEq : (Execution.committedPost (exec evm) c).state.bal a = post.state.bal a := by
+              have key : ∀ (x : Execution) (hx : x = .ok post) (cx : Execution.commits x = true),
+                  Execution.committedPost x cx = post := by
+                intro x hx cx
+                subst hx
+                rfl
+              rw [key _ hpost c]
+            change (msg.benv.state.bal a).toNat + (Exec.Frame.ofRun run c).sevm.value.toNat ≤ _
+            change (msg.benv.state.bal a).toNat + evm.sta.value.toNat ≤ _
+            rw [handed, postEq, hvalue]
+            change _ ≤ (post.getBal a).toNat
+            rw [law]
+            change _ ≤ (evm.dyna.state.bal a).toNat
+            rw [entry]
+          · rw [ite_eq_right here]
+            have target : msg.currentTarget ≠ a := fun same => here (htarget.trans same)
+            rw [ite_eq_right target, Nat.add_zero] at entry
+            have entryCode : evm.dyna.getCode a = C :=
+              (TopRun.entry_getCode t a).trans ((Prepared.kept prep a hc hd).1.trans code)
+            have sumsE : SumNof evm.dyna.state.bal := by
+              unfold SumNof at fitsR ⊢
+              exact Nat.lt_of_le_of_lt hsum fitsR
+            have fold := Exec.kept_bal_ge_keptPaid run c here entryCode V.nonempty V.nondelegating sumsE V.law
+            unfold Exec.keptPaid at fold
+            rw [handed]
+            change (evm.dyna.state.bal a).toNat + _ ≤ _ at fold
+            rw [entry] at fold
+            exact fold
+        · have rolled : ¬ Frame.settlementCommits frame (exec evm) = true := by
+            rw [TopRun.commits_eq t]
+            exact clean
+          rw [Root.keptAt, dite_eq_right rolled, List.map_nil, List.sum_nil, Nat.add_zero]
+          exact Nat.le_of_eq (congrArg B256.toNat (topRun_rolled_bal t hc hd clean).symm)
 
 end Blanc
