@@ -141,6 +141,11 @@ PUSH20 sites (bytes 18,390 and 20,105), each reaching a DELEGATECALL. No Solidit
 | `checkUsdc` | `Blanc.Lift.Usdc.checkUsdc` (`Blanc/Lift/Usdc/FiniteFootprint.lean:37`) | USDC's checkpoint checker on fetched rows: codes, implementation slot, layout and fixed words |
 | `usdcBookS` | `Blanc.Lift.Usdc.usdcBookS` (`Blanc/Lift/Usdc/Book.lean:48`) | the pure book of USDC at a given proxy address |
 
+## Checking this document
+
+The USDC pins retain `UsdcGovernance`, `UsdcShadowed`, `NeverSigner`
+and the USDC-owned definition `PairUsdcAllowQuiet`.
+
 ## Uses of the shared API
 
 ### From `docs/COMMON_API.md`: E1. I need to construct a source or compiled execution term
@@ -825,6 +830,9 @@ history. The first store requires no later hash or final call success.
 and freshness of exactly this list. It reuses the modern minter and minter
 allowance keys without changing the modern collectors.
 
+worked use:
+`Blanc/Composition/UsdcTokenLive.lean`
+
 ### From `docs/COMMON_API.md`: M1. The goal is a `sliceD` normalization
 
 The concrete `Usdc.recoveryV2_1_consumes` specialization in
@@ -957,6 +965,9 @@ USDC (`Blanc/Lift/Usdc/HistoryFamily.lean`, `HistoryReplay.lean`).
 
 Worked
 use: `Blanc/Lift/Usdc/HistoryReplayFrames.lean`.
+
+Worked uses: `Blanc/Lift/Usdc/RefineSigned.lean`,
+`HistorySlotsCore.lean`.
 
 ### From `docs/COMMON_API.md`: C9.1. I need the lifted language and a checked certificate
 
@@ -1100,6 +1111,15 @@ The solc ABI string decoder
 
 Worked uses: USDC (`Blanc/Lift/Usdc/RefineSignedAuth.lean`,
   `RefineSignedPermitNodes.lean`, `RefineAdminRescue.lean`, `HistoryFamilyProxy.lean`).
+
+worked use: USDC
+  `initFrame_sstore` in `Blanc/Lift/Usdc/InitRowsHistory.lean`
+
+worked use:
+  USDC `InitReachV2.initV2_reach` in `Blanc/Lift/Usdc/InitReachV2.lean`.
+
+worked use: USDC
+  `Init06.wrap06_reach` in `Blanc/Lift/Usdc/InitReach06.lean`.
 
 ### From `docs/COMMON_API.md`: C9.8. I need facts at a checked cursor of an actual successful execution
 

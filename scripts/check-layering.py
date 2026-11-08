@@ -2416,24 +2416,14 @@ SHARED_DOCS = ("README.md", "PORTING.md", "docs/COMMON_API.md", "scripts/GATES.m
 DOC_TOKEN = re.compile(r"Blanc(?:[./][A-Za-z0-9_'!?]+)+")
 
 DOC_LAYERING_ALLOWED = [
-    # A shared ledger paragraph's worked composed consumer.
-    ("docs/COMMON_API.md", "`Blanc/Composition/UsdcTokenLive.lean`)."),
-    # Worked uses inside shared-facility entries whose sentences also cite shared modules.
-    ("docs/COMMON_API.md", "`Blanc/Composition/Curve3PoolCalleeLive.lean` (`c3crv_msg_run`)."),
-    ("docs/COMMON_API.md", "Worked uses: `Blanc/Lift/Usdc/RefineSigned.lean`,"),
-    ("docs/COMMON_API.md", "`initFrame_sstore` in `Blanc/Lift/Usdc/InitRowsHistory.lean`)"),
-    ("docs/COMMON_API.md", "USDC `InitReachV2.initV2_reach` in `Blanc/Lift/Usdc/InitReachV2.lean`."),
-    ("docs/COMMON_API.md", "`Init06.wrap06_reach` in `Blanc/Lift/Usdc/InitReach06.lean`."),
     # The Amsterdam request-system paragraph names each family's instance next to the shared path.
     ("docs/COMMON_API.md", "`Blanc/Lift/BuilderRequest/SystemPath.lean`, family-local"),
     ("docs/COMMON_API.md", "is `Blanc/Lift/BuilderRequest/Latch.lean`."),
     ("docs/COMMON_API.md", "`Blanc/Lift/BuilderRequest/Delivery.lean`, family-local;"),
     ("docs/COMMON_API.md", "`Blanc/Lift/WithdrawalRequest/AmsterdamSystem.lean`,"),
     ("docs/COMMON_API.md", "`Blanc/Composition/RequestPhaseAmsterdam.lean`."),
-    # The catalogue row of the USDC history-anchor body generator names its outputs.
-    ("scripts/GATES.md", "sole writer of exactly `Blanc/Lift/Usdc/HistoryAnchorBodyGenerated.lean`"),
 ]
-DOC_LAYERING_ALLOWED_COUNT = 12
+DOC_LAYERING_ALLOWED_COUNT = 5
 
 
 def family_modules(root, owner, found):

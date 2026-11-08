@@ -20,7 +20,7 @@ Lean, in the file the map cites, before it is relied on.
 
 - **Names and lines.** Every declaration is written fully qualified, followed
   by the file and line where it is declared, for example
-  `Blanc.Lift.Curve3Crv.c3crv_frame_refines` (`Blanc/Lift/Curve3Crv/Safe.lean:291`). Names and lines are checked against the
+  `Blanc.Separated.pair_self` (`Blanc/Separated.lean:31`). Names and lines are checked against the
   repository (Section 10). A name in a premise column that is *not* fully
   qualified is defined in Section 9.
 - **Statement kinds.** *Safety* is a refinement or an invariant. *Live* is
@@ -76,6 +76,7 @@ contains call-type bytes at all (offsets 67, 123, 128, 141, all PUSH data).
 | Runtime identity | That the lifted bytes are the mainnet bytes | Recorded in each certificate's `provenance`: `eth_getCode` agreement across separately operated public providers (five for 3Crv, five for the Curve 3pool, six for USDC, each at one finalized block); the creation inputs of 3Crv and the Curve 3pool fetched from two providers and equal byte for byte; the two pool implementations taken from Sourcify v2 records. The codehashes in Section 2 are recomputed from the lifted files by the checker |
 | Fork scope | — | `CoveredFork` is Prague, Osaka, BPO1, BPO2. Amsterdam is not covered. The 3Crv deployment-rooted rows use `HistFork` (Byzantium through BPO2), which includes the Muir Glacier rules the deployment block ran under; the Jaune conformance figures above begin at Prague and do not cover them |
 | Chain arithmetic | Model bound | Configured traces carry total ETH plus withdrawals below 2^256 (`SumNof` at the checkpoint) |
+| Signature recovery | Premise of the signature-generic transaction theorems | `recoverSender … = .ok E` is a premise of every theorem that quantifies over all signed transactions, since there is then no single signature to evaluate. For a concrete transaction the kernel evaluates recovery. |
 
 ## 4. Premise classes
 
@@ -86,7 +87,7 @@ whether a class is acceptable and whether deployment establishes INIT.
 | Class | Meaning | Acceptable in a headline? | INIT established by a deployment theorem? |
 |---|---|---|---|
 | CODE | Installed code and fork identity | Yes | — |
-| INIT | Stated once, at the checkpoint | Yes, if shown inhabited, ideally by deployment | **Curve 3pool** `Checkpoint`, the pool's storage predicate at the constructor's model state: yes, no hash premise [`Blanc.Lift.Curve3Pool.Creation.pool_deploy_covered` (`Blanc/Lift/Curve3Pool/Creation/Deploy.lean:292`)]; the joint 3pool-and-3Crv `JointCheckpoint` is not established by deployment, and is checked by a kernel-evaluated checker on synthetic worlds only (Section 5.11) |
+| INIT | Stated once, at the checkpoint | Yes, if shown inhabited, ideally by deployment | Per contract: column M5 of the summary matrix (Section 6) |
 | ENTRY | Required at every entered frame | Only if environmental, never invariant-shaped | — |
 | HASH-T | Exact separation of the hashes and keys actually computed or touched in the trace, including avoidance of fixed slots where stated | Yes when stated; narrower and amenable to finite checking with a concrete initial footprint. Computational collision resistance does not entail this exact fact; fixed-slot avoidance also concerns target/preimage behavior. No cryptographic reduction is proved. | — |
 | HASH-B | Binding instances: `Separated f [traceValue, recordedValue]` (`Blanc.Separated` (`Blanc/Separated.lean:23`)) for a hash or trie function `f`, a value the trace itself computes and a recorded value checked in the kernel against a public commitment | Yes when stated. Finite (two values), trace-local, satisfiable (`Blanc.Separated.pair_self` (`Blanc/Separated.lean:31`)) and not refutable; in context it is equivalent to the equation it delivers, `f traceValue = f recordedValue → traceValue = recordedValue` (`Blanc.Separated.pair_iff` (`Blanc/Separated.lean:42`)). Its gain is epistemic: it fails only under a collision of `f` on those two values, not under bad supplied data. The `trie` instances are structural: no Merkle–Patricia reduction of `trie` to Keccak is proved. HASH-T's key separation is the same shape (`Blanc.SlotFootprint.freshKeys_iff` (`Blanc/Separated.lean:61`)). No universal injectivity premise is used | — |
@@ -230,7 +231,7 @@ Names that the tables above write unqualified.
 | `SelfCaller` | `Blanc.Lift.Token.SelfCaller` (`Blanc/Lift/Token/SelfCaller.lean:18`) | every entry-frame child of a settled non-static frame at the token has the token as caller |
 | `TransferLive` | `Blanc.Lift.Token.TransferLive` (`Blanc/Lift/Token/Core.lean:145`) | frame-level `transfer` liveness at an exact cost, at the worlds an instance accepts |
 | `NeverSigner` | `Blanc.Lift.Token.NeverSigner` (`Blanc/Lift/Token/Signed.lean:41`) | no settled non-static entry of the token along a history has the given account as signer |
-| `BookS` | `Blanc.Lift.Token.BookS` (`Blanc/Lift/Token/Signed.lean:20`) | a pure book with an authorizer function (`signer`) |
+| `BookS` | `Blanc.Lift.Token.BookS` (`Blanc/Lift/Token/Signed.lean:20`) | a pure book with an authorizer function (`BookS.signer`) |
 | `BookLawsS` | `Blanc.Lift.Token.BookLawsS` (`Blanc/Lift/Token/Signed.lean:25`) | the signature-variant laws of a book, admitting the holder's signature as a third authorizer |
 | `StaticWordCallProfile` | `Blanc.Lift.StaticWordCallProfile` (`Blanc/Lift/ExactCallProfile.lean:93`) | a `STATICCALL` site answering the named word, with a debit and a successor fixed before the call's gas: the call's charge is exactly the debit |
 | `MutableCallProfile` | `Blanc.Lift.MutableCallProfile` (`Blanc/Lift/ExactCallProfile.lean:104`) | a zero-value `CALL` site that succeeds and keeps the caller's storage, with a debit and a successor fixed before the call's gas |
@@ -268,9 +269,7 @@ definitions they are stated through whose bodies are themselves the claim (pinne
 by unfolding) and the record types they use (pinned field by field), so a weakened
 headline fails there although this checker elaborates no Lean. The retained required names and their physical source owners are listed by this
 checker; the exact statement-pin population is owned by `scripts/ClaimCheck.lean`.
-The Curve 3pool statement pins include its exact-gas rows and premise-bundle
-witnesses; the USDC pins retain `UsdcGovernance`, `UsdcShadowed`, `NeverSigner`
-and the USDC-owned definition `PairUsdcAllowQuiet`. The reachable V± and EIP-7002
+The reachable V± and EIP-7002
 headlines retain their own pins. Pin counts are generated on the exact candidate.
 
 Each of those pins is a definitional-equality check against the current

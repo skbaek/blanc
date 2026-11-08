@@ -3782,8 +3782,7 @@ a plain book as a signature book with no signer. [`Blanc/Lift/Token/SignedContro
 kernel counterexample showing that `NeverSigner` is needed (`control_signer_breaks_holder`). The
 transfer-liveness facet conditioned on a gas budget rather than on the consumed cost plus the
 stipend (a proxy forwards only 63/64 of its gas) is `TransferLiveBudget` in
-[`Blanc/Lift/Token/TransferLiveBudget.lean`](../Blanc/Lift/Token/TransferLiveBudget.lean), with `TransferLive.toBudget` (worked use:
-`Blanc/Composition/UsdcTokenLive.lean`).
+[`Blanc/Lift/Token/TransferLiveBudget.lean`](../Blanc/Lift/Token/TransferLiveBudget.lean), with `TransferLive.toBudget`.
 
 
 ### S9. I need the integer exponential recurrence or a finite loop witness
@@ -5233,15 +5232,13 @@ never a CREATE frame (`Xinst.step_spawn_codeAddress_of_static`), every frame a s
 enters is static with a code address (`Exec.static_rawFrameRoots`), and every frame entered
 below a frame of such static-only certified code has a code address
 (`Exec.staticOnly_rawFrameDescendants`), which is `Exec.codeAt_avoid`'s premise for every
-address. Worked use: the 3Crv callee crossing in
-`Blanc/Composition/Curve3PoolCalleeLive.lean` (`c3crv_msg_run`).
+address.
 Its node-level companions are in [`Blanc/Lift/StaticOnlyPrefix.lean`](../Blanc/Lift/StaticOnlyPrefix.lean):
 `Exec.Deriv.ParentStep.getStor_of_quiet` and `Exec.Deriv.ParentPrefix.getStor_of_quiet` (every
 node of the chain of a frame that never decodes `SSTORE` and spawns only by `STATICCALL` carries the
 root's storage maps), `Exec.descendantFrames_isStatic_of_staticOnly` (every retained descendant of
 such a frame is static), and the byte facts `UInt8.toRinst_sstore`/`ByteArray.sstore_mem_of_getInst`
-(no `0x55` byte, no `SSTORE`). Worked uses: `Blanc/Lift/Usdc/RefineSigned.lean`,
-`HistorySlotsCore.lean`.
+(no `0x55` byte, no `SSTORE`).
 
 A target frame whose children may be non-static and may re-enter the contract
 uses the entry carrier of
@@ -7074,8 +7071,7 @@ every shared module with its own summary and the branches that cite it.
   (a `JUMPDEST`), `rsw` and `rsld` (over `run`, `hT`, `erase`); the loop principles
   `reach_loop_measure` and `reach_loop_index`; `Reach.withPot` (the memory potential at
   every step of a reach); `Reach.sstoreNode_pot` (a raw `SSTORE` node under a fresh certified
-  frame as the end of such a reach from the entry tree; worked use: USDC
-  `initFrame_sstore` in `Blanc/Lift/Usdc/InitRowsHistory.lean`); the solc storage-string copy loop over `MLOAD` or `CALLDATALOAD`
+  frame as the end of such a reach from the entry tree); the solc storage-string copy loop over `MLOAD` or `CALLDATALOAD`
   (`ReachPayload.bodyR`/`headB`/`headJ`, `payloadB_reach`/`payloadJ_reach`: a store of the
   loop writes `base + j` for `j < count fin p`, with `mload_rdStep`/`mload_win` and
   `cdload_rdStep`/`cdload_win` for its read), and both clearing layouts
@@ -7097,13 +7093,11 @@ every shared module with its own summary and the branches that cite it.
   `StrStoreCd.reach` (a store writes the slot, zero, or `keccak(slot) + j` for
   `j < (len + 31) / 32`) and `CdStrWrap.reach` (the reach lies in the body, entered with the
   decoded length and data pointer, both below `2 ^ 32`), are in
-  [`Blanc/Lift/ReachSolcStringStore.lean`](../Blanc/Lift/ReachSolcStringStore.lean); worked use:
-  USDC `InitReachV2.initV2_reach` in `Blanc/Lift/Usdc/InitReachV2.lean`. The same module
+  [`Blanc/Lift/ReachSolcStringStore.lean`](../Blanc/Lift/ReachSolcStringStore.lean). The same module
   has the memory form (`StrStore.reach` over `MLOAD`, memory kept outside scratch), solc 0.6's
   string allocation fragment (`alloc06Frag`, `alloc06Frag_reach` into `Alloc06`: header at the
   old free pointer, free pointer advanced past the rounded payload, lower memory kept) and
-  `memWord_write_far` (a word read clear of a write); worked use: USDC
-  `Init06.wrap06_reach` in `Blanc/Lift/Usdc/InitReach06.lean`.
+  `memWord_write_far` (a word read clear of a write).
 - Further prefix-reach facts for a certified frame: the goto inversions `rr_branchTo`/`rr_jump`
   and the instruction inversions `ri_address`/`ri_dup_any` in
   [`Blanc/Lift/RunPWalk.lean`](../Blanc/Lift/RunPWalk.lean); the first external instruction of a store-free region

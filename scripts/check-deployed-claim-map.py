@@ -84,14 +84,17 @@ FAMILY_PARTS = {'builder-request': ['Uses of the shared API'],
                 'Uses of the shared API',
                 'See also'],
  'curve-3pool': ['Artifacts',
+                 'Premise classes',
                  'Summary matrix',
                  'Disclosures and limits',
                  'Named premises and definitions',
+                 'Checking this document',
                  'Uses of the shared API'],
  'dai': [],
  'usdc': ['Artifacts',
           'Disclosures and limits',
           'Named premises and definitions',
+          'Checking this document',
           'Uses of the shared API'],
  'usdt': [],
  'vyper-nonreentrant-deployed': ['Artifacts',
@@ -101,7 +104,8 @@ FAMILY_PARTS = {'builder-request': ['Uses of the shared API'],
                                  'Named premises and definitions',
                                  'Uses of the shared API',
                                  'See also'],
- 'withdrawal-request': ['Summary matrix',
+ 'withdrawal-request': ['Trust base',
+                        'Summary matrix',
                         'Disclosures and limits',
                         'Uses of the shared API',
                         'See also']}
@@ -382,10 +386,6 @@ ARTIFACT_FAMILY = {
 # Cross-family citations that cannot move without rewording: (file, a substring of the line).
 # Each entry must still match a cross-family citation while its file is live.
 MIXED_CITATIONS = [
-    # Section 1's worked example of a citation names a 3Crv theorem.
-    (DOCUMENT, "`Blanc.Lift.Curve3Crv.c3crv_frame_refines` (`Blanc/Lift/Curve3Crv/Safe.lean:291`). Names"),
-    # The INIT premise class's deployment evidence is the 3pool's.
-    (DOCUMENT, "| INIT | Stated once, at the checkpoint |"),
     # The trust base's signature-recovery row names one concrete recovery per family.
     (FAMILY_DIR + "/vyper-nonreentrant-deployed.md", "| Signature recovery |"),
 ]
