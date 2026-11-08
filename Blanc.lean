@@ -445,6 +445,7 @@ import Blanc.Composition.WithdrawalRequestFeeCounterexample
 import Blanc.Composition.WithdrawalRequestFeeRefutation
 import Blanc.Composition.WithdrawalRequestFeeHeadline
 import Blanc.Composition.WithdrawalRequestDrainControl
+import Blanc.Composition.ConsolidationRequestPublicHistory
 import Blanc.Lift.WithdrawalRequest.FloodTxRecover
 import Blanc.Lift.WithdrawalRequest.WordModelCount
 import Blanc.Lift.WithdrawalRequest.UserOccurrence
@@ -1260,8 +1261,10 @@ import Blanc.Lift.ConsolidationRequest.System
 import Blanc.Lift.RequestQueue.Drain
 import Blanc.Lift.RequestQueue.Model
 import Blanc.Lift.RequestQueue.Chain
+import Blanc.Lift.RequestQueue.Link
 import Blanc.Lift.ConsolidationRequest.Queue
 import Blanc.Lift.ConsolidationRequest.Delivery
+import Blanc.Lift.ConsolidationRequest.Chain
 import Blanc.Composition.RequestPhaseAmsterdamBal
 import Blanc.Lift.BuilderRequest.Deposit.Creation.Deploy
 import Blanc.Lift.BuilderRequest.Exit.Jumps

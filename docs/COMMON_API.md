@@ -8710,6 +8710,14 @@ stored-excess function; `run`, `deliveries`, the FIFO `fifo`; `represents_push` 
 frame with its queue law, `Chain`, `Chain.delivered`, `Chain.drain_delivers`). Worked consumers: EIP-7251
 `Blanc/Lift/ConsolidationRequest/Queue.lean` and `Delivery.lean`, and the EIP-8282 builder family's
 `Delivery.Event.effect` and `Delivery.Frame.toStep`.
+To produce that list from a kept history at covered forks, give a canonical request contract a `Linked` (its
+address, type byte, `record?` and a `Step` for each kept user frame and for its request-phase call) and use
+[`Blanc/Lift/RequestQueue/Link.lean`](../Blanc/Lift/RequestQueue/Link.lean): `history_chain` (the kept frames are a
+`Chain`, pushing what `record?` reads, outputting the blocks' requests of the type, whole records per block, with the
+SYSTEM_ADDRESS exclusion discharged from no code, sender, authority or creation there), `covered_request_root` (a
+covered-fork request step at a system contract is one kept root with the system caller) and `chunks_flatMap`. Worked
+consumer: EIP-7251 `Blanc/Lift/ConsolidationRequest/Chain.lean`; the EIP-8282 builder family keeps its own
+Amsterdam link (`ChainLink.lean`).
 The builder family's user frames are walked once over a fork's `StorageSteps` (`FeePath.lean`), with
 `coveredSteps` and `amsterdamSteps` (`UserFrameAmsterdam.lean`) as its instances: only `SLOAD` and `SSTORE`
 differ between them, and those certificates have no call-family node, so `lift_sound_noExec` lifts on any fork.

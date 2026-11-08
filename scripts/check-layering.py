@@ -1484,6 +1484,10 @@ SHARED += ["Lift.RequestQueue.Drain", "Lift.RequestQueue.Model", "Lift.RequestQu
            "Lift.BuilderRequest.QueueLayout"]
 CONTRACTS.setdefault("consolidation-request", []).extend(["Lift.ConsolidationRequest.Queue",
                                                          "Lift.ConsolidationRequest.Delivery"])
+# The covered-fork chain link over `RequestQueue.Step` (blanc-eip7251-consolidation-requests-v1 U4): a kept
+# history's frames at a canonical request contract as a chain of steps; the EIP-7251 instance and its history.
+SHARED += ["Lift.RequestQueue.Link"]
+CONTRACTS.setdefault("consolidation-request", []).extend(["Lift.ConsolidationRequest.Chain"])
 CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Code", "Lift.BuilderRequest.Deposit.Cert",
     "Lift.BuilderRequest.Deposit.Check", "Lift.BuilderRequest.Deposit.Jumps",
@@ -1559,6 +1563,7 @@ COMPOSITION = {
     "Composition.WithdrawalRequestDrainControl": ('withdrawal-request',),
     "Composition.ConsolidationRequestPublicObservers": ('consolidation-request',),
     "Composition.ConsolidationRequestPublicHeadlines": ('consolidation-request',),
+    "Composition.ConsolidationRequestPublicHistory": ('consolidation-request', 'builder-request', 'withdrawal-request'),
     "Composition.Curve3Pool3CrvCheckpoint": ('curve-3pool', 'curve-3crv'),
     "Composition.Curve3CrvTokenCore": ('curve-3crv',),
     "Composition.Curve3CrvPositional": ('curve-3crv',),
