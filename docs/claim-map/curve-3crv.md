@@ -101,6 +101,11 @@ Worked instance: 3Crv
 (`Blanc/Composition/Curve3CrvTokenCore.lean`, `c3crvSupply`, `c3crv_history_supply`), composed with
 the Curve 3pool over one history in `Blanc/Composition/Curve3PoolSupply.lean` (`pool_3crv_history`).
 
+### From `docs/COMMON_API.md`: T2a. I need a frame invariant under trace-local entry premises
+
+Worked
+  consumer: `Lift.Curve3Crv.c3crv_history_committed_derived`.
+
 ### From `docs/COMMON_API.md`: T2c. I need that ledger replay on every wrapper up to a whole configured history
 
 Curve 3Crv observes the

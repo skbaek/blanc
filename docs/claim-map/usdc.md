@@ -141,6 +141,11 @@ PUSH20 sites (bytes 18,390 and 20,105), each reaching a DELEGATECALL. No Solidit
 | `checkUsdc` | `Blanc.Lift.Usdc.checkUsdc` (`Blanc/Lift/Usdc/FiniteFootprint.lean:37`) | USDC's checkpoint checker on fetched rows: codes, implementation slot, layout and fixed words |
 | `usdcBookS` | `Blanc.Lift.Usdc.usdcBookS` (`Blanc/Lift/Usdc/Book.lean:48`) | the pure book of USDC at a given proxy address |
 
+## Checking this document
+
+The USDC pins retain `UsdcGovernance`, `UsdcShadowed`, `NeverSigner`
+and the USDC-owned definition `PairUsdcAllowQuiet`.
+
 ## Uses of the shared API
 
 ### From `docs/COMMON_API.md`: E1. I need to construct a source or compiled execution term
@@ -150,6 +155,9 @@ A concrete source-fragment consumer is `ProxyCreation.isContract_runExact`
   the registered constructor entry returns the actual B256 code-size predicate
   at the flat charge plus 47 gas. This is an exact compiled source walk;
   actual bytecode entry/return and whole-constructor execution remain separate.
+
+V1's registered runtime helper `OldInitializerV1Callee.helper47_effects`
+  consumes the shared inverse via an exact source-shape equation.
 
 ### From `docs/COMMON_API.md`: E2. The walk crosses a child frame
 
@@ -168,6 +176,135 @@ Worked uses: USDC
 (`Blanc/Lift/Usdc/HistorySlots.lean`, `HistoryFamily.lean`).
 
 Worked use: `Blanc/Lift/Usdc/HistorySlotsCore.lean`.
+
+The USDC compatibility name
+is a direct alias.
+
+### From `docs/COMMON_API.md`: E6. I need the exact successful wrapper trace, not only its final result
+
+The USDC consumer `ConfiguredHistoryTraceIn.transaction_retained_usdcContext_code`
+in `Lift/Usdc/ProxyRetainedNoDel.lean` supplies terminal safety using
+`settledRoot_usdcContext_terminal_safe`: the same selected root must belong to
+both the actual transaction and the configured history. The actual retained
+node supplies nonempty code; retained USDC-family classification supplies the
+checked certificate and each original frame's entry facts. Entry installation,
+initial NoDel and final deletion exclusion are not assumed. The original
+`settledRoot_usdcContext_noDel` API keeps its stronger input invariant and now
+reuses this terminal-safety producer. Actual historical code classification
+and constructor installation remain separate producer obligations.
+`settledRoot_implContext_of_installed` supplies a separate classifier at an
+installed implementation account: retained execution runs that runtime or the
+fixed V2.2 library. It requires library installation only for V2.2, derives
+spawn restrictions from the checked source, and needs no proxy implementation
+slot or upgrade hypothesis. `impl_transaction_preserves_retained` uses this
+classifier to preserve any USDC implementation runtime and its conditional
+library through complete transaction settlement;
+`impl_transactions_preserve_retained` composes it along the original ordered
+transaction list. Both omit created-account exclusions and final deletion
+oracles. They may start after a successful creation cut in the same block;
+first creation and later use inside one outer transaction still need the
+separate constructor-to-runtime chronology argument.
+`settledRoot_implContext_after_constructor` handles the later suffix inside
+one settled root. It starts with runtime code installed at the actual resume
+node, and conditional V2.2 library code there, then derives empty/constructor/
+runtime/library context classification and SELFDESTRUCT exclusion throughout
+the suffix. Its earlier prefix must be nonempty, run only empty or certified
+constructor code at the target, and end at a node that cannot spawn. These
+structural premises remain separate obligations supplied by actual CREATE and
+complete constructor settlement; the theorem assumes neither installation at
+root entry nor later terminal safety. Selected root, split and certificate
+witnesses are not recoverable from the conclusion alone, so this consumer has
+no automatic recipe trigger.
+`created_impl_runtime_survives_segment` discharges those prefix and boundary
+obligations from an actual retained CREATE/constructor/resume split and complete
+child settlement. CREATE freshness excludes earlier nonempty target contexts;
+checked constructor execution supplies its code and no-spawn boundary. The
+suffix classifier then feeds `created_runtime_survives_of_later_terminal_safe`,
+yielding final deletion exclusion and the installed runtime at the outer
+transaction endpoint. It retains the actual segment, constructor certificate,
+resume installation and conditional library witnesses; it does not identify
+an original historical creation from bytes or a receipt by itself.
+`created_impl_runtime_survives_runOk` constructs that segment from the actual
+retained successful CREATE derivation, its completed child settlement and
+resumed parent. It needs no separately supplied retained-list equality;
+installation is stated at that actual resumed state. Original occurrence and
+constructor/runtime identification remain explicit.
+`UsdcRuntimeCreation` retains the actual root, successful CREATE child,
+complete settlement, resumed parent and checked constructor/runtime installation
+witnesses within one transaction. `UsdcRuntimeOrigin` is either that witness or
+actual entry installation with the conditional V2_2 library;
+`UsdcDeployedEntry.TransactionOrigin` also carries the library's own origin when
+needed. `runtimeOrigin_preserves` and `entryOrigin_finalReady` derive final code
+through the existing initial/created survival producers, including deletion and
+sweep. These records contain no final-state code or terminal-safety oracle.
+`transaction_dynamic_runtimeReady_of_origins` folds selected readiness through
+the implementation cell: unchanged pointers retain their witness; actual
+retained last writers select an entry with local installation and transaction
+origin. Only those actual guarded writes need origins, and governance stays on
+the original full history. Proxy deletion exclusion and final proxy code are
+also derived. The concrete constructor/entry origin producer at historical
+upgrade positions remains a separate producer duty.
+The retained upgrade and dynamic context/endpoint producers also expose
+`_of_root_governance` cores. They consume F2′ only on
+`Exec.committedFrames R.run` for the selected settled root; the original full
+history still supplies execution facts. Existing full-history APIs restrict
+their premise through `governance_on_settledRoot` and preserve their signatures.
+Use the scoped cores when the approved governance interval starts later than
+the full raw-key/signature-query history. Transaction and history consumers
+must transport that restricted scope explicitly; no pre-interval governance
+is inferred.
+
+`UsdcRootGovernance` states F2′ on the committed frames of the supplied actual
+roots. The `_of_scoped_governance` transaction, system-stage, block and mid-history
+readiness cores consume exactly that population and restrict it along the actual
+trace constructors. Their full-history compatibility APIs keep old signatures.
+This separates governance timing from the original history used for entry facts;
+it does not supply original upgrade or installation evidence.
+
+
+`UsdcSelectedReady` records only the currently selected implementation and its
+conditional library. `TransactionTrace.usdc_root_ready` derives actual root
+entry readiness from transaction entry, independently of allowance caller
+proofs. `UsdcTransactionOrigins` and `UsdcTransactionsOrigins` index the actual
+guarded writes and ordered transaction constructors; they introduce no replay.
+`transactions_dynamic_runtimeReady_of_origins` propagates selected readiness,
+proxy nondeletion and all root entry facts through that transaction list.
+`SystemMessageTrace.usdc_root_ready` derives entry facts through the actual
+system-message wrapper. `system_dynamic_runtimeReady_from_installations` uses
+the complete CALL root's post-state to transport selected runtime readiness;
+only actual guarded local installations are needed, with no transaction deletion
+or fee-sweep boundary to cross. `UsdcGuardedInstallations` and `UsdcRootsReady`
+name those actual-root predicates. The `requests_`, `beaconStage_`,
+`historyStage_` and `requestStage_dynamic_runtimeReady_from_installations`
+consumers retain both ordered request CALLs and the optional stages' skipped
+arms. `StagedBodyTrace.usdc_withdrawal_ready` and `usdc_reward_ready` carry
+selection through the actual financial stages. `body_tail_dynamic_runtimeReady_from_installations`
+and `block_dynamic_runtimeReady_of_origins` compose all actual block stages;
+`after_txSplit_dynamic_runtimeReady_of_origins` starts strictly after the original
+selected transaction. `UsdcMidHistoryOrigins` follows that actual suffix and
+later block lists. `mid_dynamic_runtimeReady_of_origins` derives final selected
+readiness, every original mid-root entry fact and actual output nondeletion.
+It is independent of the allowance caller proof. Concrete historical guarded
+origins/local installations and initial selection remain producer duties.
+`impl_midHistory_txSplit_retained_origin` joins local runtime readiness and the
+transaction-entry origin using the same genuine earlier installation, original
+intervening history and actual target cut.
+`impl_block_preserves_retained` carries readiness through all original block
+stages; `impl_after_txSplit_preserves_retained` starts at the actual selected
+transaction's after-state, with no source-block-prestate installation premise.
+`impl_midHistory_preserves_retained` follows that source-block remainder and
+later configured blocks. `impl_before_txSplit_preserves_retained` retains the
+target block's opening stages and actual transaction prefix;
+`impl_midHistory_before_txSplit_preserves_retained` composes the two carriers.
+Enabled system stages reuse the common committed cell transport with the
+constant true cell property, retaining its nonempty-code conclusion; no system
+terminal-safety assumption is added. Finally,
+`impl_midHistory_txSplit_retained_ready` supplies `UsdcDeployedEntry.RuntimeReady`
+at an actual retained target-transaction node, as consumed by the upgrade-write
+classifier. Installation at the original starting cut, conditional library
+installation and membership of the actual intervening roots in the configured
+history remain explicit. The constructor and original historical bindings
+supply those inputs; no finite input or observation is adopted by this transport.
 
 ### From `docs/COMMON_API.md`: S7. I need a token-ledger conservation invariant
 
@@ -825,6 +962,36 @@ history. The first store requires no later hash or final call success.
 and freshness of exactly this list. It reuses the modern minter and minter
 allowance keys without changing the modern collectors.
 
+worked use:
+`Blanc/Composition/UsdcTokenLive.lean`
+
+`ConfiguredHistoryTraceIn.v1Initializer_write_ne_implSlot` applies the concrete
+initializer range proof directly to actual raw-history stores. Fresh stack and
+memory, the entry gas bound and the no-state-gas capability come from the
+history's own raw-frame admission; the bound includes old-tail clearing stores.
+`V1WriteFamilies` checks every certified root site and reduces actual V1 stores
+to fixed-slot apartness or an initializer/mapping selector. This selects a
+source family without classifying mapping rows by digest equality.
+Caller exclusion, row separation and the
+actual constructor seed remain producer obligations; the final selected
+transaction and its settlement are outside this result. These contract-specific
+consumers do not add a generic recipe for arbitrary equality goals.
+`V1ConstructorReceiptZero`'s
+`original_v1_seed_before_cut38_of_constructor_receipt` supplies that zero seed
+from the actual successful constructor receipt at index22. It derives proxy
+code and the initial implementation word from `OriginalConstructorSeed`, then
+returns V1 control and tracked zero rows before the original index38 cut.
+These are internal composition interfaces: actual historical authentication,
+initial V1 implementation code, finite separation and genuine pre-D approve
+safety remain producer obligations. Caller exclusion is not a new final
+assumption and does not follow from R3 or Pair target emptiness.
+
+### From `docs/COMMON_API.md`: S9. I need the integer exponential recurrence or a finite loop witness
+
+(USDC `SignedInput.envelope_parse`)
+
+(USDC `SignedInput.canonical` and `signingEncoded`)
+
 ### From `docs/COMMON_API.md`: M1. The goal is a `sliceD` normalization
 
 The concrete `Usdc.recoveryV2_1_consumes` specialization in
@@ -950,6 +1117,55 @@ The concrete fresh-entry producer in
   Its version-specific conclusion retains exact inputs, call sites and owner
   comparisons.
 
+  `settledRoot_allowance_zero_from_installations` composes those write bounds
+  with `Exec.cell_zero_of_retained_nonInc_noStateGas`: a tracked row entering
+  the actual settled root at zero leaves at zero. The seed, outer transaction
+  deletion/sweep, and original history composition remain separate obligations.
+  `transaction_allowance_zero_from_installations` derives each root's readiness
+  from the actual transaction entry using `settledRoots_entry_code_cell`, then
+  derives retained terminal safety and transaction deletion exclusion. It carries
+  every initially zero tracked row through fee settlement and account sweep,
+  preserving proxy code and implementation-address membership in the listed
+  runtimes. It needs only the initially selected runtime and conditional V2_2
+  library, plus installations at actual upgrade positions. No created-account
+  exclusion, final deletion oracle or raw upgrade checker is supplied. Readiness
+  of the selected implementation at the final transaction state and composition
+  across subsequent transactions remain separate producer obligations.
+  The two root endpoints also have `_of_rootCallers` variants.
+  `transaction_allowance_zero_from_installations_of_transactionCallers` requires
+  caller exclusion only over that actual transaction’s settled frames. Existing
+  full-history caller interfaces restrict their input to these scopes.
+  Both installation-based caller and Pair transaction interfaces have
+  `_of_mid_roots` variants: proxy/selected-runtime readiness, actual guarded
+  installations and known implementation-slot separation are needed only on
+  roots of the original post-cut history. They derive full-history membership
+  through `MidHistoryTraceIn.settledRoots_subset_full`, so governance, finite
+  raw populations, native queries and old-owner conditions keep their original
+  scopes. The prior interfaces restrict their full-root evidence as wrappers.
+  This avoids requiring the proxy before creation in a history starting at an
+  earlier implementation deployment; it does not supply the remaining actual
+  runtime/history producers.
+  `MidHistoryTraceIn.usdc_retainedRowWrite_nonInc_or_v2_2_owner` consumes that
+  mid-history caller exclusion through the same retained-write classifier.
+  It retains the original root, committed parent and write witnesses while
+  embedding the mid frames into the full chronology. Raw facts, native-query
+  exclusion and explicit old-owner routing stay on the full history; the V2_2
+  owner exception remains an obligation.
+  `UsdcDeployedWorld.active_library_code` shares the existing active-library
+  selection with `ctxAt_step`; it derives actual code from the world facts.
+
+  `implV1_allowLocality_observed`, `implV2_allowLocality_observed`
+  and `implV2_1_allowLocality_observed` preserve the original `StepIn` and
+  per-version `RowSep` in forward `RunP` protected-write observations. V1 has
+  only caller/initializer exceptions; the signed versions replace the owner-word
+  exception by `OldUsdcNativePairAnswer`, retaining the actual original-root
+  call, native message and Pair answer; `old_owner_pair_native` produces it on a
+  `NeutralFork`. This result predicate is not a universe
+  of relevant queries. Local retention requires root commitment; complete
+  historical scope, ancestor settlement and attribution of arbitrary retained
+  SSTORE occurrences remain separate obligations.
+  Discovery is manual for these concrete source-specific consumers.
+
 ### From `docs/COMMON_API.md`: T2c. I need that ledger replay on every wrapper up to a whole configured history
 
 Worked use:
@@ -957,6 +1173,14 @@ USDC (`Blanc/Lift/Usdc/HistoryFamily.lean`, `HistoryReplay.lean`).
 
 Worked
 use: `Blanc/Lift/Usdc/HistoryReplayFrames.lean`.
+
+Worked uses: `Blanc/Lift/Usdc/RefineSigned.lean`,
+`HistorySlotsCore.lean`.
+
+### From `docs/COMMON_API.md`: C9. I need to verify deployed bytecode Blanc did not compile
+
+The contract-owned USDC adapters are indexed at C9.15;
+other proofs over the same deployed contract reuse those owners.
 
 ### From `docs/COMMON_API.md`: C9.1. I need the lifted language and a checked certificate
 
@@ -1030,6 +1254,25 @@ The allowance-locality laws have the same historical form in
   and `implV1_allowLocality_observed_noStateGas` take `stateGas = none` in
   place of `CoveredFork` with unchanged conclusions.
 
+The USDC clearing consumer
+  specializes this common proof.
+
+  `implV1_initialize_writeClass`,
+  `implV1_initialize_short_nonInc` and `implV1_initialize_short_zero`
+  (fork-free, through `progRunP_zero_noExec`) mirror the V2 consumers; they
+  do not establish the historical string profile, seed or payload-key
+  separation.
+
+  For V2, V2_1 and V2_2 the
+  `_selectorObserved_noStateGas` forms read the exception at the frame's
+  selector. V2 and V2_1 take a `NeutralFork`, a fresh entry and a non-delegated
+  address 1, and their owner arm is the native `OldUsdcNativePairAnswer`, as in
+  `implV2_allowLocality_observed`; V2_2's owner arm stays calldata word 4. The
+  `implV*_allowLocality_rawFrame` forms take `stateGas = none` and the fresh
+  entry from `rawFrame_entryFacts` and keep success, code and `RowSep` as frame
+  facts; V2 and V2_1 add `rules.bal = none` on the history's forks and address
+  1's code without a delegation designator.
+
 ### From `docs/COMMON_API.md`: C9.6. I need the calls, child frames and logs of a lifted frame
 
 - Selected permit consumers `ric_seg_e8digest_noStateGas` in
@@ -1100,6 +1343,48 @@ The solc ABI string decoder
 
 Worked uses: USDC (`Blanc/Lift/Usdc/RefineSignedAuth.lean`,
   `RefineSignedPermitNodes.lean`, `RefineAdminRescue.lean`, `HistoryFamilyProxy.lean`).
+
+worked use: USDC
+  `initFrame_sstore` in `Blanc/Lift/Usdc/InitRowsHistory.lean`
+
+worked use:
+  USDC `InitReachV2.initV2_reach` in `Blanc/Lift/Usdc/InitReachV2.lean`.
+
+worked use: USDC
+  `Init06.wrap06_reach` in `Blanc/Lift/Usdc/InitReach06.lean`.
+
+  For an actual `R ∈ history.settledRoots`, use
+  `ConfiguredHistoryTraceIn.settledRoot_retained_proxyV1_context`. It supplies
+  raw-frame membership, commitment and conditional own-code from that same
+  root. Installed Proxy/V1 code, the implementation word, the same-root
+  absence of Upgraded logs and local known-V1 write separation remain explicit.
+  For implementations created later in the same root, use
+  `UsdcDeployedEntry.RuntimeReady` and
+  `ConfiguredHistoryTraceIn.retained_proxyWorld_context_from_installations`.
+  The selected entry is ready initially; each actual retained proxy upgrade
+  supplies readiness at that write. The induction carries nonempty code with
+  `Exec.retainedNodes_getCode_of_ordered_noStateGas`, deriving both current
+  pointer readiness and execution-family classification. Conditional V2.2
+  library readiness follows the running implementation through nested calls,
+  even when the proxy pointer changes before that frame resumes.
+  `settledRoot_retained_proxyWorld_from_installations` obtains the original
+  F2prime target and nonempty-code guard before requesting runtime evidence;
+  `settledRoot_dynamic_implSlot_origin_code_of_f2prime` supplies the resulting
+  classifier to committed-endpoint provenance.
+  `settledRoot_dynamic_runtimeReady_of_f2prime` additionally proves the proxy
+  runtime and selected implementation/library readiness at that endpoint.
+  An unchanged pointer uses its initial installation; a changed pointer uses
+  the actual retained final writer. Temporary upgrades and restoration are
+  allowed. This endpoint precedes final transaction deletion and touched sweep;
+  constructor deletion safety must be established separately before carrying
+  an implementation first created in this transaction through those stages.
+  Future entries need not be
+  installed at root entry. The older installed-world API projects this same
+  induction with its exact original statement. Actual runtime identities and
+  historical correspondence remain producer obligations; retained governance
+  does not establish the raw upgrade check. These APIs require explicit root,
+  upgrade and installation witnesses; there is no reliable automatic goal-head
+  recipe for selecting them.
 
 ### From `docs/COMMON_API.md`: C9.8. I need facts at a checked cursor of an actual successful execution
 
@@ -1215,6 +1500,24 @@ At a raw frame of a `ConfiguredHistoryTraceIn`,
   it in the consumed history remain caller obligations. No C-to-D continuity
   or pre-D governance restriction follows from this seed adapter.
 
+  `ProxyCreation.constructor_effects_of_createTrace` in Settlement starts
+  from the same clean `ProcessCreateMessageTrace`: it derives the actual
+  interpreted run, source run and successful code deposit, then reuses the
+  existing effects composer to obtain the installed proxy code and two-slot
+  storage. `constructor_zero_of_createTrace` projects any row distinct from
+  those slots to zero. Both reuse `constructor_witness_of_createTrace`, which
+  retains the exact raw source run, touch, charge and installed result.
+  `constructor_deletions_of_createTrace` derives preservation of inherited
+  deletions from the shared balance-silent frame theorem, with no installed-code
+  premise. In Transaction, `transaction_constructor_deletions` derives the empty
+  deletion set from actual preparation and clean CREATE; both transaction-effect
+  theorems consequently need no caller-supplied deletion exclusion. Actual
+  transaction identity, success and the chain-boundary seed remain obligations.
+
+### From `docs/COMMON_API.md`: C9.12. I need free-pointer memory images or solc-0.4 writer walks
+
+Actual implementation/proxy walks remain USDC instances.
+
 ### From `docs/COMMON_API.md`: C9.15. I need the USDC proxy-history adapters
 
 For the exact value of an actual retained USDC proxy implementation write, use
@@ -1327,3 +1630,11 @@ In `ProxyCompleteAvailable.lean`,
 last interval once all allowed implementation addresses have available runtimes;
 it needs no later upgrade census. The concrete chain derives that availability
 at the V2.2 cut using its original constructor observations.
+
+The V2.2 owner-exclusion producer is needed only on consumed retained frames.
+In `RetainedAllowanceWrites`, the `_of_rootFrames` variants of
+`usdc_retainedRowWrite_nonInc_of_retainedCode`,
+`settledRoot_allowanceWrite_nonInc_from_installations` and
+`settledRoot_allowance_zero_from_installations` use owner exclusion only on
+`Exec.committedFrames R.run`; the latter two also use root-local governance
+and caller exclusion. Existing full-history APIs remain compatibility wrappers.

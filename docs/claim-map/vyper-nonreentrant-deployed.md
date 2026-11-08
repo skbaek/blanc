@@ -202,6 +202,21 @@ Worked example
   (`TxCRecover.lean`): the access-list encoding by `toBLT_noKeys`/`join_entries`, the signing hash and
   secp256k1 recovery by `decide +kernel` (the kernel cannot unfold `BLT.toBytes`, so rewrite the encoding first).
 
+worked use:
+  `init_run`/`oracle_run` in `.../Fixed/Init/{Top,OracleTop}.lean`
+
+worked use: `approve_run`/`add_run` in `.../Fixed/Fund/{Approve,Add}.lean`.
+
+worked use: `frameB_at` in `.../Vulnerable/Reach/AddTop.lean`
+
+worked use:
+  `e2StaticFacts` in `.../Vulnerable/Reach/ViolRootRun.lean`
+
+worked use:
+  `e4T_meta` in `.../Vulnerable/Tx/Entry.lean`
+
+worked use: `origAgreeOn_O0` in `.../Vulnerable/Reach/ViolBoundary.lean`
+
 ### From `docs/COMMON_API.md`: T3. The wrapper is a transaction and the fact is about an installed contract
 
 Worked use:
@@ -231,6 +246,10 @@ Worked use:
   `ConfiguredHistoryTrace.vplus`: the well-formed-root premise derived from the
   prepared message, every raw root of a history covered) are
   `Blanc/Lift/VyperNonreentrantDeployed/Fixed/ExclusionTrace.lean`.
+
+### From `docs/COMMON_API.md`: C9.11. I need deployment, CREATE, CREATE2 or a clone
+
+worked use: `Lift/VyperNonreentrantDeployed/Vulnerable/Reach/Deploy.lean`
 
 ## See also
 

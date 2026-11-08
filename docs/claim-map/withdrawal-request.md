@@ -67,6 +67,12 @@ representation ignores them); historical inclusion of the deployment; anything b
 Rolled-back frames are not ignored: the replay, FIFO and balance theorems range over settled frames, and a frame
 rolled back by its own or an ancestor's failure is not among them.
 
+## Trust base
+
+| Component | What is trusted | Evidence |
+|---|---|---|
+| Signature recovery | Premise of the signature-generic transaction theorems | `recoverSender … = .ok E` is a premise of every theorem that quantifies over all signed transactions, since there is then no single signature to evaluate. For a concrete transaction the kernel evaluates recovery: `Blanc.Lift.WithdrawalRequest.FloodTx.txB_recoveredSender` (`Blanc/Lift/WithdrawalRequest/FloodTxRecover.lean:149`) |
+
 ## Summary matrix
 
 | | M1 | M2 | M3 | M4 | M5 | M6 | M7 | M8 |
@@ -106,7 +112,3 @@ For a loop that calls once per iteration (`GAS; CALL` forwarding everything),
 The worked consumers are `Blanc/Lift/WithdrawalRequest/FeeLoop.lean` and
 `Blanc/Lift/BuilderRequest/FeePath.lean`. The builder family's queue layout, generic over record
 width, is family-local at `Blanc/Lift/BuilderRequest/QueueLayout.lean`.
-
-## See also
-
-- [Trust base: Signature recovery](vyper-nonreentrant-deployed.md#trust-base)
