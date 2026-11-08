@@ -5257,7 +5257,23 @@ every shared module with its own summary and the branches that cite it.
   empty)) in
   [`Blanc/Lift/WitnessBoundary.lean`](../Blanc/Lift/WitnessBoundary.lean). Code tries given as
   generated literals (checked once by kernel `rfl`): `CodeTries.ofData` in
-  [`Blanc/Lift/CodeTriesData.lean`](../Blanc/Lift/CodeTriesData.lean).
+  [`Blanc/Lift/CodeTriesData.lean`](../Blanc/Lift/CodeTriesData.lean); the data checked in one
+  linear pass that also yields the length bound (`LTrie.build`, `LTrie.build_eq`,
+  `LTrie.eq_ofList_of_build`, `LTrie.length_le_of_build`; producer option `check.trie_build`) in
+  [`Blanc/Lift/CodeTriesBuild.lean`](../Blanc/Lift/CodeTriesBuild.lean). The machine a code
+  child of `CALL` starts with carries the caller's block environment (`childStart_stat`, in
+  [`Blanc/Lift/WitnessFork.lean`](../Blanc/Lift/WitnessFork.lean)).
+- Assemble the free-pointer check of a long certificate from range decisions: `fpRange`
+  (entries `k .. k + n - 1` under their annotations, one kernel decision), `fpFrom` over the tails
+  `(c.zip ann).drop k`, the link `fpFrom_range`, the end `fpFrom_of_le` and the assembly
+  `fpCert_of_fpFrom` in [`Blanc/Lift/FreePtrChain.lean`](../Blanc/Lift/FreePtrChain.lean), emitted by
+  the registered `scripts/lift/fp_annot.py` (registry key `fp`; ranges of at most
+  `CHECK_RANGE_BUDGET` summed cost proxy). For any other annotated check, instantiate the generic kit there:
+  `chainRange`/`chainFrom` over a check function, with `chainFrom_range` and `chainFrom_of_le`.
+- Assemble the write-site check of a long certificate the same way: `wsRange`, `wsFrom`,
+  `wsFrom_range`, `wsFrom_of_le` and `wsCert_of_wsFrom` in
+  [`Blanc/Lift/WriteSiteChain.lean`](../Blanc/Lift/WriteSiteChain.lean), emitted by the registered
+  `scripts/lift/ws_annot.py` (registry key `ws`).
 
 #### C9.3. I need the free-pointer or write-site checker's soundness
 
@@ -5737,9 +5753,6 @@ every shared module with its own summary and the branches that cite it.
   with `True`. This relation adds no interpreter or actual-node premise;
   the observation producer must supply provenance. No automatic recipe is
   registered for this relation-construction interface.
-  In [`Blanc/Lift/ObservedReachSplit.lean`](../Blanc/Lift/ObservedReachSplit.lean),
-  `ObservedReach.below` restores lower continuations; `ObservedKeccak.below`
-  lifts the same successful hash edge with unchanged input and source shape.
   `observed_reach_of_parentPrefix_noStateGas` in
   [`Cursor.lean`](../Blanc/Lift/Cursor.lean) builds that observation from the
   original prefix induction: `Cursor.RawEdgeAt` retains the actual parent
