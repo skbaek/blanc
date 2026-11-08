@@ -58,7 +58,14 @@ tables that only list modules), e.g. a lift option emitting its import. A module
 left with no public declaration counts as emptied: its private leftovers go
 with it unless something outside the removed and departing sets uses them
 (refused, with the user), and public declarations the census does not list
-(`X.below` theorems) go when no live module imports it. `--keep-file FILE`
+(`X.below` theorems) go when no live module imports it. Also kept: (e) a
+declaration a string literal of the remaining Blanc text names (resolved like
+an identifier, plus the `Blanc.` prefix: `Blanc.String.apply "Line.spx_dup"`);
+(f) every declaration of a module a recipe names as `owner_module` or a
+`module:` symbol, when the module would otherwise empty (the whole module, not
+an arbitrary stub, since the recipe sends authors to it as written); (g) a
+declaration a non-Lean tracked script names without its `Blanc.` prefix (gate
+manifests). `--keep-file FILE`
 adds names, one per line (`#` comments). Every input (keys, census, keep
 list, claim-map files, release.py's helpers) is read from the tree at run
 time, so the sweep reruns on any departed tree.
@@ -498,6 +505,9 @@ class Exposure:
             if row["name"] in self.rows:
                 self.ambiguous.add(row["name"])
             self.rows[row["name"]] = row
+        from pathlib import Path
+        self.script_prefixed = prefixed_script_mentions(
+            leaf_audit, leaf_audit.tracked_external_sources(Path(base)), self.population)
 
     def exposed(self, keep):
         result = self.cascade(self.population, self.users, self.permanent, self.departing, set(keep))
@@ -566,6 +576,73 @@ def recipe_keeps(root, candidates, module_for):
 
 
 TOOL_SUFFIXES = (".py", ".sh", ".toml", ".json")
+STRING_LIT = re.compile(r'"( +)"')
+
+
+def prefixed_script_mentions(leaf_audit, sources, population):
+    """Gap (g): a non-Lean script (a JSON or Python gate manifest) writes a declaration
+    without its `Blanc.` prefix, which leaf_audit's exact scan does not resolve.
+    -> {name: file} for the `Blanc.`-prefixed identifiers of non-Lean tracked script
+    text that name a population declaration."""
+    found = {}
+    for rel, text in sorted(sources.items()):
+        if rel == "Main.lean" or rel.endswith(".lean"):
+            continue
+        for m in leaf_audit.IDENT.finditer(text):
+            for tok in dict.fromkeys([m.group(0), m.group(0).rstrip("'")]):
+                if not tok.startswith("Blanc.") and "Blanc." + tok in population:
+                    found.setdefault("Blanc." + tok, rel)
+    return found
+
+
+def string_mentions(leaf_audit, texts, names, cache=None):
+    """Gap (e): a string literal of Blanc source naming a declaration (a tactic
+    applying `Blanc.String.apply "Line.spx_dup"`): the content resolves like an
+    identifier (innermost namespace, opens, and the `Blanc.` prefix). The census
+    records no edge for it. -> {name: file} among `names`."""
+    import bisect
+    found = {}
+    for rel, text in sorted(texts.items()):
+        key = (rel, hash(text))
+        if cache is not None and key in cache:
+            lits = cache[key]
+        else:
+            code = leaf_audit.strip_comments_and_strings(text, rel)
+            offsets, states = leaf_audit.context_events(code)
+            lits = []
+            for m in STRING_LIT.finditer(code):
+                body = text[m.start(1):m.end(1)]
+                if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_'!?.]*", body):
+                    ns, opens = states[bisect.bisect_right(offsets, m.start()) - 1]
+                    lits.append((body, ns, opens))
+            if cache is not None:
+                cache[key] = lits
+        for body, ns, opens in lits:
+            for cand in list(leaf_audit._candidates(body, ns, opens)) + ["Blanc." + body]:
+                if cand in names:
+                    found.setdefault(cand, rel)
+                    break
+    return found
+
+
+def recipe_modules(root):
+    """Keep rule (f): the modules (`Blanc.X`) scripts/proof-recipes.toml names as a
+    recipe's `owner_module` or a `module:Blanc/X.lean` symbol. -> {module: where}."""
+    import tomllib
+    path = os.path.join(root, "scripts", "proof-recipes.toml")
+    if not os.path.exists(path):
+        return {}
+    with open(path, "rb") as handle:
+        recipes = tomllib.load(handle).get("recipe", [])
+    mods = {}
+    for recipe in recipes:
+        where = f"scripts/proof-recipes.toml ({recipe.get('id')})"
+        paths = [recipe.get("owner_module", "")] + [
+            sym[len("module:"):] for sym in recipe.get("symbols", []) if sym.startswith("module:")]
+        for rel in paths:
+            if rel.startswith("Blanc/") and rel.endswith(".lean"):
+                mods.setdefault(rel[:-5].replace("/", "."), where)
+    return mods
 
 
 def tool_module_hits(texts, modules, token):
@@ -739,8 +816,11 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
     kept_cited.update(recipe_keeps(root, plain, ex.module_for))
     tool_hits = tool_keeps(root, release, {ex.module_for(d) for d in plain})
     kept_tool = {d: tool_hits[ex.module_for(d)] for d in plain if ex.module_for(d) in tool_hits}
-    keep_eff |= kept_generated | set(kept_cited) | set(kept_tool)
-    pinned = set(keep) | kept_generated | set(kept_cited) | set(kept_tool)
+    kept_scripted = {d: rel for d, rel in ex.script_prefixed.items() if d in plain}
+    keep_eff |= kept_generated | set(kept_cited) | set(kept_tool) | set(kept_scripted)
+    pinned = set(keep) | kept_generated | set(kept_cited) | set(kept_tool) | set(kept_scripted)
+    recipe_mods = recipe_modules(root)
+    kept_recipe_module = {}
     ranges = ex.census["ranges"]
     nested_kept = {}
     per_module_names = {}
@@ -754,7 +834,7 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
             with open(os.path.join(root, rel), encoding="utf-8", newline="") as handle:
                 disk[rel] = handle.read()
     mentioned_kept = {}
-    field_cache = {}
+    field_cache, string_cache, string_kept = {}, {}, {}
     while True:
         removed = ex.exposed(keep_eff) - keep_eff
         no_range = sorted(d for d in removed if d not in ranges)
@@ -826,6 +906,16 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
                 promoted[mod] = sorted(rest)
         emptied_set = set(emptied)
         promoted_names = {p for ps in promoted.values() for p in ps}
+        # Keep rule (f): a module a recipe names as its owner or a `module:` symbol
+        # stays meaningful: it keeps all its declarations rather than emptying.
+        hit = sorted(emptied_set & set(recipe_mods))
+        if hit:
+            for mod in hit:
+                kept_recipe_module[mod] = recipe_mods[mod]
+                keep_eff |= {d for d in plain if ex.module_for(d) == mod}
+                pinned |= {d for d in plain if ex.module_for(d) == mod}
+                pinned |= set(per_module_names.get(mod, set()))
+            continue
         # What the census misses: a removed declaration the remaining Blanc text
         # still names (a syntax quotation in a tactic `def`, chiefly) is kept.
         remaining = {}
@@ -836,6 +926,9 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
         mentions, _ = leaf_audit.scan_external_sources(remaining, removed)
         for d, rel in field_mentions(leaf_audit, remaining, removed, field_cache).items():
             mentions.setdefault(d, [rel])
+        for d, rel in string_mentions(leaf_audit, remaining, removed, string_cache).items():
+            mentions.setdefault(d, [rel])
+            string_kept[d] = rel
         if mentions:
             for d, paths in mentions.items():
                 mentioned_kept[d] = paths[0]
@@ -916,6 +1009,9 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
         "kept_generated": sorted(kept_generated),
         "kept_cited": [{"name": d, "cited_in": p} for d, p in sorted(kept_cited.items())],
         "kept_tool": [{"name": d, "named_in": p} for d, p in sorted(kept_tool.items())],
+        "kept_string_literal": [{"name": d, "named_in": p} for d, p in sorted(string_kept.items())],
+        "kept_script_unprefixed": [{"name": d, "named_in": p} for d, p in sorted(kept_scripted.items())],
+        "kept_recipe_module": {module_path(m): w for m, w in sorted(kept_recipe_module.items())},
         "removed_unlisted": {module_path(m): ls for m, ls in sorted(unlisted.items())},
         "kept_nested": [{"name": d, "inside": h} for d, h in sorted(nested_kept.items())],
         "kept_named": [{"name": d, "named_in": p} for d, p in sorted(mentioned_kept.items())],
@@ -944,6 +1040,12 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
         print(f"  cited by the claim map, kept: {d} in {p}")
     for path in sorted({module_path(ex.module_for(d)) for d in kept_generated}):
         print(f"  certificate-generated module, kept: {path}")
+    print(f"  string-literal uses kept {len(string_kept)}, unprefixed script mentions kept "
+          f"{len(kept_scripted)}, recipe-owned modules kept whole {len(kept_recipe_module)}")
+    for m, w in sorted(kept_recipe_module.items()):
+        print(f"  recipe module, kept whole: {module_path(m)} ({w})")
+    for d, rel in sorted(kept_scripted.items()):
+        print(f"  unprefixed script mention, kept: {d} in {rel}")
     for mod, rel in sorted(tool_hits.items()):
         print(f"  named by a live tool, kept: {module_path(mod)} in {rel}")
     for mod, ps in sorted(promoted.items()):
@@ -1181,6 +1283,34 @@ theorem dead_b : True := dead_a
     ok, _ = promotable_privates("M", {"M.p", "M.pub"}, rows, {}, mod_of, set(), set(), set())
     if ok:
         failures.append("a module keeping a public declaration was promoted")
+    # Control 9, gap (e): a string literal naming a declaration is a use.
+    lit = string_mentions(leaf_audit, {"Blanc/T.lean": 'namespace Blanc\ndef go := apply "Line.spx_dup"\n'
+                                                       'def other := "not a name here"\nend Blanc\n'},
+                          {"Blanc.Line.spx_dup", "Blanc.Line.spx_free"})
+    if lit != {"Blanc.Line.spx_dup": "Blanc/T.lean"}:
+        failures.append(f"string literal use: found {lit}")
+    else:
+        bites.append(("string literal", [f"Blanc.Line.spx_dup is named by a string literal in {lit['Blanc.Line.spx_dup']}"]))
+    # Control 10, gap (g): an unprefixed name in a JSON/Python manifest is a mention.
+    pre = prefixed_script_mentions(leaf_audit, {"scripts/m.json": '{"decl": "Lift.kept_decl"}',
+                                                "scripts/A.lean": "Lift.lean_only"},
+                                   {"Blanc.Lift.kept_decl", "Blanc.Lift.lean_only", "Blanc.Lift.free"})
+    if pre != {"Blanc.Lift.kept_decl": "scripts/m.json"}:
+        failures.append(f"unprefixed script mention: found {pre}")
+    else:
+        bites.append(("unprefixed script mention", ["Blanc.Lift.kept_decl is named by scripts/m.json"]))
+    # Control 11, keep rule (f): recipe owner and module: symbols name protected modules.
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="sweep-recipe-mod-") as raw:
+        os.makedirs(os.path.join(raw, "scripts"))
+        with open(os.path.join(raw, "scripts", "proof-recipes.toml"), "w", encoding="utf-8") as handle:
+            handle.write('[[recipe]]\nid = "r"\nowner_module = "Blanc/Owner.lean"\n'
+                         'symbols = ["module:Blanc/Lift/Sym.lean", "declaration:X.y"]\n')
+        mods = recipe_modules(raw)
+    if set(mods) != {"Blanc.Owner", "Blanc.Lift.Sym"}:
+        failures.append(f"keep rule (f): modules {sorted(mods)}")
+    else:
+        bites.append(("recipe module", [f"protected {sorted(mods)}"]))
     # Control 5, keep rule (b): claim-map citations keep their declarations.
     checker = load_claim_checker(root)
     doc = ("| x | `Blanc.Fix.cited` (`Blanc/Fix.lean:3`) | y |\n"
@@ -1222,9 +1352,9 @@ theorem dead_b : True := dead_a
     if failures:
         print(f"REGRESSION — sweep self-test: {len(failures)} failure(s)")
         return 1
-    print("OK — sweep self-test: 24 controls (exact fixture sweep with prefix, comment and blank "
+    print("OK — sweep self-test: 27 controls (exact fixture sweep with prefix, comment and blank "
           "line; dangling end; live use; keep and keep closure; nested deriving instance; kept "
-          "overlap; still-named declaration; field notation; claim-map keep rule (b); proof-recipe keep rule (c); tool keep rule (d); API-less module privates; emptied-module leftovers; import drop and rewrite; "
+          "overlap; still-named declaration; field notation; claim-map keep rule (b); proof-recipe keep rule (c); tool keep rule (d); string literal (e); recipe module (f); unprefixed script mention (g); API-less module privates; emptied-module leftovers; import drop and rewrite; "
           "SHARED table edit and its refusal)")
     return 0
 
