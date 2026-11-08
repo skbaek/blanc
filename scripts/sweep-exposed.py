@@ -42,6 +42,10 @@ stays byte-identical. Refused (exit 2, nothing written):
 - a keep, or a declaration the keep closure needs, in the removed set;
 - a touched module whose bytes differ from the tagged commit's (the ranges
   would not apply).
+Also kept: every declaration of a module a lift certificate generates
+(scripts/lift/certificates.json; retiring a certificate is release.py's job)
+and every declaration the claim map (docs/DEPLOYED_BYTECODE_CLAIM_MAP.md and
+docs/claim-map/) cites, since its checker resolves each citation.
 
 A SHARED module left with no declaration and no command other than imports,
 `open`, `variable`, `set_option`, `namespace`/`section`/`end`, file-local
@@ -517,6 +521,22 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
     if missing:
         raise Refusal(f"keep names no declaration: {', '.join(missing)}")
     keep_eff = set(keep) | (plain & ex.ambiguous)
+    # Registered surfaces that name shared declarations or modules outside the
+    # census's view: a lift certificate's generated modules (retiring a
+    # certificate is release.py's job), and the claim map's citations (its
+    # checker resolves every cited declaration).
+    plain_modules = sorted({ex.module_for(d).removeprefix("Blanc.") for d in plain})
+    generated = {path for _, _, paths in release.lift_certificates(root, plain_modules) for path in paths}
+    kept_generated = {d for d in plain if module_path(ex.module_for(d)) in generated}
+    claim_docs = {}
+    for rel in [release.CLAIM_MAP] + sorted(
+            os.path.join(release.CLAIM_MAP_DIR, f) for f in os.listdir(os.path.join(root, release.CLAIM_MAP_DIR))
+            if f.endswith(".md")):
+        with open(os.path.join(root, rel), encoding="utf-8") as handle:
+            claim_docs[rel] = handle.read()
+    cited, _ = leaf_audit.scan_external_sources(claim_docs, plain)
+    kept_cited = {d: paths[0] for d, paths in cited.items()}
+    keep_eff |= kept_generated | set(kept_cited)
     ranges = ex.census["ranges"]
     nested_kept = {}
     per_module_names = {}
@@ -648,6 +668,8 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
         "keep": sorted(keep),
         "keep_closure": sorted(closure - set(keep)),
         "kept_ambiguous": sorted(plain & ex.ambiguous),
+        "kept_generated": sorted(kept_generated),
+        "kept_cited": [{"name": d, "cited_in": p} for d, p in sorted(kept_cited.items())],
         "kept_nested": [{"name": d, "inside": h} for d, h in sorted(nested_kept.items())],
         "kept_named": [{"name": d, "named_in": p} for d, p in sorted(mentioned_kept.items())],
         "import_rewrites": {rel: [{"removed": m, "imports": a} for m, a in ch]
@@ -661,7 +683,8 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
     }
     print(f"SWEEP — {' + '.join(keys)} at {commit[:12]}: plan exposes {len(plain)} shared "
           f"declaration(s); keep {len(keep)} (closure {len(closure)}), ambiguous kept "
-          f"{len(record['kept_ambiguous'])}, nested kept {len(nested_kept)}, kept as still named "
+          f"{len(record['kept_ambiguous'])}, certificate-generated kept {len(kept_generated)}, "
+          f"claim-map cited kept {len(kept_cited)}, nested kept {len(nested_kept)}, kept as still named "
           f"{len(mentioned_kept)}; removing {len(removed)} "
           f"from {len(texts)} module(s), {len(emptied)} module(s) removed, "
           f"{len(kept_files)} emptied module(s) kept for other commands")
@@ -669,6 +692,10 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
         print(f"  emptied but kept: {m} (line {left[0][0]}: {left[0][1]})")
     for d, h in sorted(nested_kept.items()):
         print(f"  nested, kept: {d} inside {h}")
+    for d, p in sorted(kept_cited.items()):
+        print(f"  cited by the claim map, kept: {d} in {p}")
+    for path in sorted({module_path(ex.module_for(d)) for d in kept_generated}):
+        print(f"  certificate-generated module, kept: {path}")
     for d, p in sorted(mentioned_kept.items()):
         print(f"  still named, kept: {d} in {p}")
     for rel, ch in sorted(import_rewrites.items()):
@@ -692,6 +719,7 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
         handle.write(new_layering)
     failures = []
     removed_tokens = set(emptied) | {module_path(m) for m in emptied} | short
+    swept_tokens = set(texts) | {module_path(m) for m in texts} | {m.removeprefix("Blanc.") for m in texts}
     for argv, owned in release.WRITERS:
         before = {}
         for rel in owned:
@@ -709,10 +737,13 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
         for rel in owned:
             with open(os.path.join(root, rel), encoding="utf-8") as handle:
                 after = set(handle.read().splitlines())
+            # A removed row names a removed module; a changed row names a swept
+            # module (its size moved) or differs from a surviving line only in its digits.
+            digitless = {re.sub(r"\d+", "#", line) for line in after}
             for line in before[rel]:
-                if line not in after and not any(
+                if line not in after and re.sub(r"\d+", "#", line) not in digitless and not any(
                         re.search(r"(?<![A-Za-z0-9_.'/])" + re.escape(t) + r"(?![A-Za-z0-9_'])", line)
-                        for t in removed_tokens):
+                        for t in removed_tokens | swept_tokens):
                     failures.append(f"{rel}: writer removed a line naming no removed module: {line[:100]}")
                     break
     for rel, name, old, new in release.sync_doc_counts(root):
@@ -721,9 +752,10 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
     hits = release.row_hits(root, [m.removeprefix("Blanc.") for m in emptied])
     outstanding = []
     for rel, rows in sorted(hits.items()):
-        if rel in release.SHARED_DOCS:
+        if rel in release.SHARED_DOCS or any(rel in owned for _, owned in release.WRITERS):
             # Shared documents are prose and never edited by a tool (release.py's rule):
-            # their citations of a removed module are a hand edit, listed here.
+            # their citations of a removed module are a hand edit, listed here. A
+            # generated file's remaining citation comes from a live module's header prose.
             outstanding += [f"{rel}:{n}: {t.strip()[:110]}" for n, t in rows]
             continue
         failures.append(f"{rel}: {len(rows)} committed row(s) still name a removed module "
