@@ -823,7 +823,7 @@ class Departure:
         self.edit(RECIPE_HARNESS, new, f"suggestion-harness markers of {len(removed)} departing "
                   f"recipe(s) removed")
         try:
-            self.expected_writes = recipe_outputs_without(self.root, set(removed))
+            self.expected_writes = recipe_outputs_without(self.root, set(self.removed_recipes))
         except Exception as exc:  # the generator refusing the registry, chiefly
             self.outstanding.append(f"{RECIPE_GENERATOR}: cannot render the outputs without the "
                                     f"departing recipes: {exc}")
