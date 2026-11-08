@@ -49,7 +49,9 @@ lift certificate generates (scripts/lift/certificates.json; retiring a
 certificate is release.py's job), and (keep rule (b)) every declaration the
 shared claim map docs/DEPLOYED_BYTECODE_CLAIM_MAP.md or a live family's
 docs/claim-map/<key>.md cites (live: scripts/live-set.toml on disk), resolved
-with scripts/check-deployed-claim-map.py's own patterns. `--keep-file FILE`
+with scripts/check-deployed-claim-map.py's own patterns, and (keep rule (c))
+every declaration scripts/proof-recipes.toml names as a canonical example or a
+`declaration:` symbol (generate-proof-recipes.py resolves both). `--keep-file FILE`
 adds names, one per line (`#` comments). Every input (keys, census, keep
 list, claim-map files, release.py's helpers) is read from the tree at run
 time, so the sweep reruns on any departed tree.
@@ -522,6 +524,37 @@ def claim_map_keeps(root, candidates, survivors):
     return cited_keeps(checker, texts, candidates, survivors)
 
 
+def recipe_keeps(root, candidates, module_for):
+    """Keep rule (c): the declarations among `candidates` that the proof-recipe registry
+    scripts/proof-recipes.toml names, read from the file on disk: each recipe's
+    canonical example (a declaration of its file, matched by its full name or a
+    trailing dotted suffix, as generate-proof-recipes.py resolves it) and each
+    `declaration:` symbol (with or without the `Blanc.`/`_root_.` prefix). -> {name: where}."""
+    import tomllib
+    path = os.path.join(root, "scripts", "proof-recipes.toml")
+    if not os.path.exists(path):
+        return {}
+    with open(path, "rb") as handle:
+        recipes = tomllib.load(handle).get("recipe", [])
+    kept = {}
+    for recipe in recipes:
+        where = f"scripts/proof-recipes.toml ({recipe.get('id')})"
+        example = recipe.get("canonical_example", "")
+        file, _, decl = example.partition(":")
+        if decl:
+            for n in candidates:
+                if module_path(module_for(n) or "") == file and (n == decl or n.endswith("." + decl)):
+                    kept.setdefault(n, where)
+        for symbol in recipe.get("symbols", []):
+            if not symbol.startswith("declaration:"):
+                continue
+            name = symbol[len("declaration:"):].removeprefix("_root_.")
+            for n in (name, "Blanc." + name):
+                if n in candidates:
+                    kept.setdefault(n, where)
+    return kept
+
+
 def load_claim_checker(root):
     path = os.path.join(root, "scripts", "check-deployed-claim-map.py")
     spec = importlib.util.spec_from_file_location("claim_map_for_sweep", path)
@@ -638,6 +671,7 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
     generated = {path for _, _, paths in release.lift_certificates(root, plain_modules) for path in paths}
     kept_generated = {d for d in plain if module_path(ex.module_for(d)) in generated}
     kept_cited = claim_map_keeps(root, plain, ex.population - plain - ex.departing)
+    kept_cited.update(recipe_keeps(root, plain, ex.module_for))
     keep_eff |= kept_generated | set(kept_cited)
     ranges = ex.census["ranges"]
     nested_kept = {}
@@ -789,7 +823,7 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
     print(f"SWEEP — {' + '.join(keys)} at {commit[:12]}: plan exposes {len(plain)} shared "
           f"declaration(s); keep {len(keep)} (closure {len(closure)}), ambiguous kept "
           f"{len(record['kept_ambiguous'])}, certificate-generated kept {len(kept_generated)}, "
-          f"claim-map cited kept {len(kept_cited)}, nested kept {len(nested_kept)}, kept as still named "
+          f"claim-map or recipe cited kept {len(kept_cited)}, nested kept {len(nested_kept)}, kept as still named "
           f"{len(mentioned_kept)}; removing {len(removed)} "
           f"from {len(texts)} module(s), {len(emptied)} module(s) removed, "
           f"{len(kept_files)} emptied module(s) kept for other commands")
@@ -1021,6 +1055,22 @@ theorem dead_b : True := dead_a
         failures.append(f"keep rule (b): kept {sorted(kept_b)}")
     else:
         bites.append(("claim-map keep", [f"kept {sorted(kept_b)}; Blanc.Fix.free removable"]))
+    # Control, keep rule (c): the proof-recipe registry's canonical examples and
+    # declaration symbols keep their declarations.
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="sweep-recipe-keep-") as raw:
+        os.makedirs(os.path.join(raw, "scripts"))
+        with open(os.path.join(raw, "scripts", "proof-recipes.toml"), "w", encoding="utf-8") as handle:
+            handle.write('schema_version = 1\n\n[[recipe]]\nid = "r"\n'
+                         'canonical_example = "Blanc/Fix.lean:Ns.example_decl"\n'
+                         'symbols = ["declaration:Fix.symbol_decl", "module:Blanc/Fix.lean"]\n')
+        owners = {"Blanc.Fix.Ns.example_decl": "Blanc.Fix", "Blanc.Fix.symbol_decl": "Blanc.Fix",
+                  "Blanc.Fix.free": "Blanc.Fix", "Blanc.Other.Ns.example_decl": "Blanc.Other"}
+        kept_c = recipe_keeps(raw, set(owners), owners.get)
+    if set(kept_c) != {"Blanc.Fix.Ns.example_decl", "Blanc.Fix.symbol_decl"}:
+        failures.append(f"keep rule (c): kept {sorted(kept_c)}")
+    else:
+        bites.append(("recipe keep", [f"kept {sorted(kept_c)}; Blanc.Fix.free removable"]))
     # The SHARED table edit, through the AST, re-executed and compared.
     table = 'SHARED = ["A", "B",\n          "C"]\nSHARED += ["D"]\nOTHER = {"x": ["A"]}\n'
     new_t, problems = edit_shared_table(table, {"B", "D"}, release._exec_tables)
@@ -1035,9 +1085,9 @@ theorem dead_b : True := dead_a
     if failures:
         print(f"REGRESSION — sweep self-test: {len(failures)} failure(s)")
         return 1
-    print("OK — sweep self-test: 18 controls (exact fixture sweep with prefix, comment and blank "
+    print("OK — sweep self-test: 19 controls (exact fixture sweep with prefix, comment and blank "
           "line; dangling end; live use; keep and keep closure; nested deriving instance; kept "
-          "overlap; still-named declaration; field notation; claim-map keep rule (b); emptied-module leftovers; import drop and rewrite; "
+          "overlap; still-named declaration; field notation; claim-map keep rule (b); proof-recipe keep rule (c); emptied-module leftovers; import drop and rewrite; "
           "SHARED table edit and its refusal)")
     return 0
 
