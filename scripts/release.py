@@ -7,7 +7,7 @@ the whole operation. For now it has one subcommand, `plan`, a read-only dry
 run that reports what a release of KEY would remove or touch.
 
 Usage:
-  python3 scripts/release.py plan KEY [KEY ...] [--json] [--root DIR]
+  python3 scripts/release.py plan KEY [KEY ...] [--census FILE] [--json] [--root DIR]
 
 Several keys plan one release of all of them: a composition departs when it
 declares any of them, and the report names the live families outside the
@@ -25,12 +25,14 @@ release that such a composition also declares.
     declared in a departing file), so it lists candidates. The release itself
     must take pins from the leaf census, which knows each declaration's module.
 
-`plan` does not compute the shared declarations that only the departing set
-uses. That needs the leaf census with edges (`BLANC_LEAF_EDGES=1`), which
-elaborates the library. See `exclusive_shared_consumers`.
+With `--census FILE`, `plan` also computes the shared declarations that only
+the departing set uses, and the departing declarations still used from
+outside (claim pins among them), from the leaf census with edges
+(`BLANC_LEAF_EDGES=1`). The census elaborates the library once under a host
+hold and is saved to FILE for reuse. See `exclusive_shared_consumers`.
 
-It writes nothing, runs no Lean and no git, and exits 0 on success, 2 on
-refusal.
+Apart from FILE it writes nothing, runs no git, runs Lean only for the census,
+and exits 0 on success, 2 on refusal.
 """
 
 from __future__ import annotations
@@ -190,17 +192,109 @@ def pin_candidates(root, modules):
     return candidates, ambiguous
 
 
-def exclusive_shared_consumers(root, modules):
-    """SHARED declarations whose every user lies in the departing set.
+def load_census(root, census_path):
+    """The leaf census with edges: read from `census_path` if it exists,
+    otherwise elaborated once (a host hold, about the cost of
+    `leaf_audit.py check`) and saved there."""
+    sys.path.insert(0, os.path.join(root, "scripts"))
+    import gate_semaphore
+    import leaf_audit
+    from pathlib import Path
 
-    Needs `scripts/LeafCensus.lean` run with BLANC_LEAF_EDGES=1 (term_users),
-    merged with leaf_audit.py's lexical source users, iterated to a fixed
-    point. Not part of the dry run.
+    if census_path and os.path.exists(census_path):
+        with open(census_path, encoding="utf-8") as handle:
+            return leaf_audit, json.load(handle)
+    with gate_semaphore.admitted("the leaf census", memory_gib=8):
+        census = leaf_audit.run_census(Path(root), edges=True)
+    if census_path:
+        with open(census_path, "w", encoding="utf-8") as handle:
+            json.dump(census, handle)
+    return leaf_audit, census
+
+
+def exclusive_shared_consumers(root, modules, census_path, owner):
+    """What deleting every declaration of the departing modules exposes.
+
+    Users are the census's term users plus leaf_audit.py's lexical source
+    users (simp/rw lists, macros, attribute commands). Occurrences inside the
+    departing modules are dropped, since they leave with them. A declaration
+    is exposed when every user it has is gone, round by round
+    (`leaf_audit.cascade_closure`).
+
+    Reported:
+    - script uses: departing declarations named in a tracked script (Lean
+      drivers such as ClaimCheck.lean, and gate scripts). The release must
+      remove those mentions; the ClaimCheck ones are the family's claim pins.
+    - live uses: departing declarations still used by a live declaration, or
+      by a command outside any declaration in a live module. Layering should
+      make this empty; anything here blocks the release.
+    - exposed shared declarations: the ones the release removes.
+    - exposed live-family declarations: informational; they become leaves.
     """
-    raise NotImplementedError("exclusive shared consumers need the leaf census with edges")
+    from pathlib import Path
+
+    leaf_audit, census = load_census(root, census_path)
+    dotted = {"Blanc." + m for m in modules}
+    module_of = {r["name"]: r["module"] for r in census["population_declarations"]}
+    population = set(census["population_names"])
+
+    def module_for(name):
+        probe = name
+        while probe:
+            if probe in module_of:
+                return module_of[probe]
+            probe = probe.rpartition(".")[0]
+        return None
+
+    sources = leaf_audit.blanc_sources(Path(root))
+    hits = {}
+    leaf_audit.scan_uses(sources, population, hits)
+    hits = {t: [o for o in occ if o[0] not in dotted] for t, occ in hits.items()}
+    from_source, outside_any = leaf_audit.source_users(census, hits)
+    users = {n: set(u) for n, u in census.get("term_users", {}).items()}
+    for n, us in from_source.items():
+        users.setdefault(n, set()).update(us)
+    # Generated names (`.below`, `.match_1`, ...) can be users without being
+    # population declarations; they leave with the module that owns their parent.
+    named = population | {u for us in users.values() for u in us}
+    delete = {n for n in named if module_for(n) in dotted}
+    external_sources = leaf_audit.tracked_external_sources(Path(root))
+    mentions, _ = leaf_audit.scan_external_sources(external_sources, population)
+    traceless = leaf_audit.scan_uses(
+        {p: t for p, t in external_sources.items() if p.endswith(".lean")}, population)
+    scripted = set(mentions) | set(traceless)
+    result = leaf_audit.cascade_closure(
+        population, users, outside_any | scripted, delete, set())
+    script_uses = {d: sorted(mentions.get(d, [])) or ["a Lean script"]
+                   for d in sorted(delete & scripted)}
+    delete &= population | set(users)
+    live_uses = {d: us for d, us in sorted(result["blocked"].items())
+                 if d not in scripted}
+    exposed = [(t, module_for(t) or "?", i)
+               for i, rnd in enumerate(result["rounds"], 1) for t, _ in rnd]
+
+    def category(mod):
+        return owner.get(mod.removeprefix("Blanc."), "unclassified")
+
+    shared = [(t, m, i) for t, m, i in exposed if m not in dotted and category(m) == "shared"]
+    live = [(t, m, i) for t, m, i in exposed if m not in dotted and category(m) != "shared"]
+    per_module = {}
+    for row in census["population_declarations"]:
+        per_module.setdefault(row["module"], set()).add(row["name"])
+    gone = {t for t, _, _ in shared}
+    emptied = sorted(m for m in {m for _, m, _ in shared} if per_module.get(m, set()) <= gone)
+    return {
+        "shared_modules_emptied": emptied,
+        "departing_declarations": len(delete & population),
+        "script_uses": script_uses,
+        "live_uses": live_uses,
+        "exposed_shared": [{"name": t, "module": m, "round": i} for t, m, i in shared],
+        "exposed_live": [{"name": t, "module": m, "round": i} for t, m, i in live],
+        "rounds": len(result["rounds"]),
+    }
 
 
-def plan(root, keys):
+def plan(root, keys, census_path=None):
     try:
         with open(os.path.join(root, LIVE_SET), "rb") as handle:
             live = tomllib.load(handle).get("live", {})
@@ -228,7 +322,10 @@ def plan(root, keys):
         "lift_certificates": [{"id": i, "input": s, "generated": g} for i, s, g in certificates],
         "pin_candidates": [{"pin": p, "module": m} for p, m in pins],
         "pin_ambiguous": [{"pin": p, "modules": ms} for p, ms in ambiguous],
-        "exclusive_shared_consumers": "not computed: needs the leaf census with edges",
+        "exclusive_shared_consumers": (exclusive_shared_consumers(root, modules, census_path,
+                                                                  layering.classify())
+                                       if census_path else
+                                       "not computed: pass --census FILE"),
     }, None
 
 
@@ -259,8 +356,36 @@ def render(report):
         out.append(f"  {cert['id']}: input {cert['input']}, {len(cert['generated'])} generated module(s)")
     out.append(f"claim pin candidates (lexical): {len(report['pin_candidates'])}; "
                f"ambiguous: {len(report['pin_ambiguous'])}")
-    out.append("exclusive shared consumers: requires the leaf census with edges "
-               "(BLANC_LEAF_EDGES=1), not run by plan")
+    excl = report["exclusive_shared_consumers"]
+    if isinstance(excl, str):
+        out.append("exclusive shared consumers: not computed; pass --census FILE "
+                   "(runs the leaf census with edges once and saves it there)")
+    else:
+        out.append(f"census: {excl['departing_declarations']} departing declaration(s), "
+                   f"{excl['rounds']} exposure round(s)")
+        files = {}
+        for name, paths in excl["script_uses"].items():
+            for path in paths:
+                files.setdefault(path, []).append(name)
+        out.append(f"script uses to remove: {len(excl['script_uses'])} declaration(s) "
+                   f"in {len(files)} file(s)")
+        for path, names in sorted(files.items(), key=lambda kv: -len(kv[1])):
+            out.append(f"  {path}: {len(names)}")
+        out.append(f"live uses (blockers; layering should make this empty): {len(excl['live_uses'])}")
+        for name, us in list(excl["live_uses"].items())[:10]:
+            out.append(f"  {name}: {', '.join(us) if us else 'a command outside any declaration'}")
+        out.append(f"shared modules left with no declaration (leave whole): "
+                   f"{len(excl['shared_modules_emptied'])}")
+        for label, rows in (("exposed shared declarations (removed with the release)",
+                             excl["exposed_shared"]),
+                            ("exposed live-family declarations (become leaves; kept)",
+                             excl["exposed_live"])):
+            by_module = {}
+            for row in rows:
+                by_module.setdefault(row["module"], []).append(row["name"])
+            out.append(f"{label}: {len(rows)} in {len(by_module)} module(s)")
+            for mod, names in sorted(by_module.items(), key=lambda kv: -len(kv[1]))[:8]:
+                out.append(f"  {mod}: {len(names)}")
     return "\n".join(out)
 
 
@@ -271,6 +396,11 @@ def main(argv):
     if "--json" in args:
         args.remove("--json")
         as_json = True
+    census_path = None
+    if "--census" in args:
+        index = args.index("--census")
+        census_path = args[index + 1]
+        del args[index:index + 2]
     if "--root" in args:
         index = args.index("--root")
         root = args[index + 1]
@@ -278,7 +408,14 @@ def main(argv):
     if len(args) < 2 or args[0] != "plan" or len(set(args[1:])) != len(args[1:]):
         print(f"usage: {argv[0]} plan KEY [KEY ...] [--json] [--root DIR]")
         return 2
-    report, refusal = plan(root, args[1:])
+    try:
+        report, refusal = plan(root, args[1:], census_path)
+    except Exception as exc:  # the census failing to elaborate, chiefly
+        if type(exc).__name__ != "LeafAuditError":
+            raise
+        print(f"REFUSED — release: {exc}; build Blanc, Blanc.ProofRecipeTactic and "
+              f"Blanc.ProofRecipesGenerated first")
+        return 2
     if refusal:
         print(f"REFUSED — release: {refusal}")
         return 2
