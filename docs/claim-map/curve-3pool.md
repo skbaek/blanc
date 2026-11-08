@@ -419,6 +419,15 @@ The 3pool's
 `remove_liquidity` walk (`Blanc/Lift/Curve3Pool/Walk/RemoveLiquidity*.lean`) is the worked
 example.
 
+### From `docs/COMMON_API.md`: E3. I must carry a predicate over all entered child roots
+
+(used by Curve)
+
+### From `docs/COMMON_API.md`: E6. I need the exact successful wrapper trace, not only its final result
+
+The Curve
+  signed-transaction witness uses this proof.
+
 ### From `docs/COMMON_API.md`: I1. One instruction/line/function preserves an observation
 
 The Curve 3pool instances are
@@ -466,6 +475,13 @@ The Curve 3pool instances are
   message-entry, history and composed twins are `ExactMessage.lean`, `HistoryLiveExact.lean`
   and `Blanc/Composition/Curve3Pool3CrvHeadlinesExact.lean`.
 
+### From `docs/COMMON_API.md`: T2a. I need a frame invariant under trace-local entry premises
+
+Worked use: the Curve 3pool history
+  (curve-3pool-stableswap-v1).
+
+Worked use: `Lift.Curve3Pool.pool_trace_admitted`.
+
 ### From `docs/COMMON_API.md`: T2c. I need that ledger replay on every wrapper up to a whole configured history
 
 Worked use: the 3Crv callee crossing in
@@ -476,6 +492,16 @@ Worked use: the 3Crv callee crossing in
 Worked use:
   `Blanc/Lift/Curve3Pool/Check.lean`.
 
+### From `docs/COMMON_API.md`: C9.9. I need to walk a successful lifted run
+
+Curve 3pool's `Walk/AutoStep.lean`
+
+The 3pool's
+  `remove_liquidity_imbalance` liveness (`RliLiveCut`, `LiveLink`) is the worked example.
+
+such as
+  `getDMem_spec`
+
 ### From `docs/COMMON_API.md`: C9.10. I need a Vyper 0.2 runtime's idioms
 
 Worked use:
@@ -483,3 +509,5 @@ Worked use:
 
 Worked use:
   `Blanc/Lift/Curve3Pool/Walk/DispatchLive.lean` (`rxe_dispatch`, one line per `rx_dispatch_*`).
+
+(Curve 3pool: `poolLinks`/`pool_chain`)
