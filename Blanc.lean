@@ -861,6 +861,7 @@ import Blanc.ExecutionKeptFrames
 import Blanc.ExecutionKeptFacts
 import Blanc.ExecutionKeptTop
 import Blanc.ExecutionKeptChain
+import Blanc.ExecutionKeptValue
 import Blanc.ExecutionInCellProvenance
 import Blanc.ExecutionCommittedCell
 import Blanc.ExecutionSettledRootEntry
@@ -1242,6 +1243,7 @@ import Blanc.Lift.BuilderRequest.Exit.Static
 import Blanc.Lift.BuilderRequest.Flood
 import Blanc.Lift.BuilderRequest.Exit.Flood
 import Blanc.Lift.BuilderRequest.Surplus
+import Blanc.Lift.BuilderRequest.ValueKept
 import Blanc.Lift.BuilderRequest.Deposit.Properties
 import Blanc.Lift.BuilderRequest.Exit.Properties
 import Blanc.RequestFeeWordBound
