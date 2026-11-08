@@ -2398,6 +2398,124 @@ def live_set_failures(root, owner, found, contracts, compositions):
     return failures, len(live), len(released_keys)
 
 
+# ---------------------------------------------------------------------------
+# Check 11 (2026-11-08, whitelist W4): shared documents name no contract family.
+#
+# README.md, PORTING.md, docs/COMMON_API.md and scripts/GATES.md describe the
+# shared library and the gates; a family's uses of the shared API live in its
+# claim-map file, docs/claim-map/<key>.md, which a release takes whole. A token
+# `Blanc/X/Y.lean` or `Blanc.X.Y...` fails here when the module it names, or a
+# directory whose modules all belong to one family, is a contract or
+# composition module of any family, live or released (a released family's
+# modules come from its release manifest). DOC_LAYERING_ALLOWED lists the lines
+# that could not move without rewording; each entry must still match a
+# violation, and the table's size is pinned by DOC_LAYERING_ALLOWED_COUNT.
+# ---------------------------------------------------------------------------
+
+SHARED_DOCS = ("README.md", "PORTING.md", "docs/COMMON_API.md", "scripts/GATES.md")
+DOC_TOKEN = re.compile(r"Blanc(?:[./][A-Za-z0-9_'!?]+)+")
+
+DOC_LAYERING_ALLOWED = [
+    # A shared ledger paragraph's worked composed consumer.
+    ("docs/COMMON_API.md", "`Blanc/Composition/UsdcTokenLive.lean`)."),
+    # Worked uses inside shared-facility entries whose sentences also cite shared modules.
+    ("docs/COMMON_API.md", "`Blanc/Composition/Curve3PoolCalleeLive.lean` (`c3crv_msg_run`)."),
+    ("docs/COMMON_API.md", "Worked uses: `Blanc/Lift/Usdc/RefineSigned.lean`,"),
+    ("docs/COMMON_API.md", "`initFrame_sstore` in `Blanc/Lift/Usdc/InitRowsHistory.lean`)"),
+    ("docs/COMMON_API.md", "USDC `InitReachV2.initV2_reach` in `Blanc/Lift/Usdc/InitReachV2.lean`."),
+    ("docs/COMMON_API.md", "`Init06.wrap06_reach` in `Blanc/Lift/Usdc/InitReach06.lean`."),
+    # The Amsterdam request-system paragraph names each family's instance next to the shared path.
+    ("docs/COMMON_API.md", "`Blanc/Lift/BuilderRequest/SystemPath.lean`, family-local"),
+    ("docs/COMMON_API.md", "is `Blanc/Lift/BuilderRequest/Latch.lean`."),
+    ("docs/COMMON_API.md", "`Blanc/Lift/BuilderRequest/Delivery.lean`, family-local;"),
+    ("docs/COMMON_API.md", "`Blanc/Lift/WithdrawalRequest/AmsterdamSystem.lean`,"),
+    ("docs/COMMON_API.md", "`Blanc/Composition/RequestPhaseAmsterdam.lean`."),
+    # The catalogue row of the USDC history-anchor body generator names its outputs.
+    ("scripts/GATES.md", "sole writer of exactly `Blanc/Lift/Usdc/HistoryAnchorBodyGenerated.lean`"),
+]
+DOC_LAYERING_ALLOWED_COUNT = 12
+
+
+def family_modules(root, owner, found):
+    """{module: family} for every contract or composition module, live or released."""
+    import json
+
+    families = {}
+    for mod in found:
+        category = owner.get(mod)
+        if category == "composition":
+            families[mod] = "composition " + ", ".join(COMPOSITION.get(mod, ()))
+        elif category not in (None, "shared", "root"):
+            families[mod] = category
+    try:
+        with open(os.path.join(root, LIVE_SET), "rb") as handle:
+            released = tomllib.load(handle).get("released", [])
+    except (OSError, tomllib.TOMLDecodeError):
+        released = []
+    for entry in released if isinstance(released, list) else []:
+        try:
+            with open(os.path.join(root, entry["manifest"]), encoding="utf-8") as handle:
+                manifest = json.load(handle)
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+        for mod in manifest.get("modules", []) if isinstance(manifest, dict) else []:
+            families.setdefault(mod, f"{entry.get('key')} (released)")
+    return families
+
+
+def doc_layering_failures(root, owner, found):
+    """-> (failures, number of shared docs read, allowed lines used)."""
+    families = family_modules(root, owner, found)
+    shared = {m for m in found if m not in families}
+    owners = {}
+    for mod in list(families) + list(shared):
+        parts = mod.split(".")
+        for i in range(1, len(parts)):
+            owners.setdefault(".".join(parts[:i]), set()).add(families.get(mod, "shared"))
+    directory = {d: next(iter(f)) for d, f in owners.items() if len(f) == 1 and "shared" not in f}
+
+    def family(token):
+        parts = token.removesuffix(".lean").replace("/", ".").split(".")[1:]
+        for i in range(len(parts), 0, -1):
+            prefix = ".".join(parts[:i])
+            if prefix in families:
+                return families[prefix]
+            if prefix in directory:
+                return directory[prefix]
+        return None
+
+    failures, used, read = [], set(), 0
+    for doc in SHARED_DOCS:
+        path = os.path.join(root, doc)
+        if not os.path.exists(path):
+            continue
+        read += 1
+        with open(path, encoding="utf-8") as handle:
+            lines = handle.read().splitlines()
+        for number, line in enumerate(lines, 1):
+            named = sorted({f for f in (family(t) for t in DOC_TOKEN.findall(line)) if f})
+            if not named:
+                continue
+            allowed = [i for i, (d, needle) in enumerate(DOC_LAYERING_ALLOWED)
+                       if d == doc and needle in line]
+            if allowed:
+                used.update(allowed)
+                continue
+            failures.append(
+                f"{doc}:{number} names a module of {', '.join(named)} — a shared document "
+                f"names no contract family; move the passage into that family's "
+                f"docs/claim-map/<key>.md under \"Uses of the shared API\""
+            )
+    for i, (doc, needle) in enumerate(DOC_LAYERING_ALLOWED):
+        if i not in used and os.path.exists(os.path.join(root, doc)):
+            failures.append(f"DOC_LAYERING_ALLOWED entry no longer matches a violation in {doc}: "
+                            f"{needle!r} — remove it")
+    if len(DOC_LAYERING_ALLOWED) != DOC_LAYERING_ALLOWED_COUNT:
+        failures.append(f"DOC_LAYERING_ALLOWED has {len(DOC_LAYERING_ALLOWED)} entries; "
+                        f"DOC_LAYERING_ALLOWED_COUNT says {DOC_LAYERING_ALLOWED_COUNT}")
+    return failures, read, len(used)
+
+
 def load_root_generator():
     """scripts/generate-root.py, loaded beside this script."""
     import importlib.util
@@ -2463,6 +2581,10 @@ def main(argv):
     # Check 10: Blanc.lean matches its generator (scripts/generate-root.py).
     failures.extend(load_root_generator().check(root, sys.modules[__name__], owner))
 
+    # Check 11: shared documents name no contract family.
+    doc_failures, n_docs, n_allowed = doc_layering_failures(root, owner, found)
+    failures.extend(doc_failures)
+
     for line in failures:
         print(f"LAYERING — {line}")
     n_checked = sum(1 for m in found if owner.get(m) not in (None, "root"))
@@ -2484,7 +2606,8 @@ def main(argv):
         f"registry, {len(DISCOVERY_EXEMPT)} exempt with a stated reason; "
         f"{INVENTORY_DOC} matches its generator; "
         f"live set: {n_live} key(s) live, {n_released} released; "
-        f"Blanc.lean matches its generator"
+        f"Blanc.lean matches its generator; {n_docs} shared document(s) name no "
+        f"contract family outside {n_allowed} listed line(s)"
     )
     return 0
 

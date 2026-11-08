@@ -202,11 +202,6 @@ lines when next changed or relied on, not by a wholesale rewrite.
   `G + prices.extCode + rules.gas.codeReadSurcharge`, and stack room.
   It returns the actual pre-state code-size word, preserves `d.stateGas`,
   and needs no covered-fork, staticness or selected code-size premise.
-  A concrete source-fragment consumer is `ProxyCreation.isContract_runExact`
-  in [`Blanc/Lift/Usdc/ProxyCreation/CodeSize.lean`](../Blanc/Lift/Usdc/ProxyCreation/CodeSize.lean):
-  the registered constructor entry returns the actual B256 code-size predicate
-  at the flat charge plus 47 gas. This is an exact compiled source walk;
-  actual bytecode entry/return and whole-constructor execution remain separate.
 - For the loose gas-free walk prefix reaching an intermediate cut of a
   successful source run, with source-path accumulation, use
   [`Blanc/RunPrefix.lean`](../Blanc/RunPrefix.lean).
@@ -516,12 +511,6 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   `callChildMsg … 0 …` keeps the entry environment and ignores `stmid`);
   `callChildPost_facts_zero` projects the resumed parent
   when the output window is empty, whatever the child returned.
-  For a loop that calls once per iteration (`GAS; CALL` forwarding everything),
-  `calculateMsgCallGas_all` closes `calculateMsgCallGas` to all but one 64th of
-  the gas left after the fixed charge (plus the stipend), and the cut-run steps
-  `rxc_push0` / `rxc_calldataload` complete the `rxc_*` kit for
-  `SFunc.RunExactCut.iterate` bodies; the EIP-7002 flood looper
-  (`Blanc/Lift/WithdrawalRequest/FloodRun.lean`) is the worked example.
 - `accessDelegation_worldMeta` carries transient storage and the storage-access
   warm set through the exact delegation-resolution equation;
   `accessDelegation_createdAccounts` carries the created-account set.
@@ -619,19 +608,14 @@ spawn/resume equations at the consumer:
   operand-free projection (nonzero depth, one level deeper, resumes as a call),
   `Xinst.step_delegatecall_done_flag` the failure flag `0` of a call that completes without a
   child, and `Resume.call_run_inv` the resumed parent (flag `1`, the child's output and world on a
-  clean success; flag `0` otherwise). Worked uses: `Blanc/Lift/QuietDelegateSkip.lean`,
-  `Blanc/Lift/Usdc/ProxyForward.lean`, `Blanc/Lift/Usdc/ImplSpawns.lean`.
+  clean success; flag `0` otherwise).
 - For historical caller/context inheritance from a known operand stack, use
   `Xinst.step_delegatecall_spawn_St_noStateGas` in
   [`Blanc/Lift/HistSpawnExact.lean`](../Blanc/Lift/HistSpawnExact.lean). It needs only
   `stateGas = none` and the actual spawning step: the child retains target,
   caller, value and staticness and reads the exact physical input window. It
   does not fix the code address or assume commitment, BAL, access or delegation
-  settings. The raw USDC proxy consumer
-  [`Blanc/Lift/Usdc/ProxyRawCallers.lean`](../Blanc/Lift/Usdc/ProxyRawCallers.lean)
-  proves `Proxy.proxy_rawChild_inheritsH` and `proxy_rawChild_caller_selectorH`:
-  a child called by an address apart from the proxy target must inherit the
-  proxy caller through DELEGATECALL. Exact calldata/selector equality also
+  settings. Exact calldata/selector equality also
   uses the calldata word bound, supplied for historical raw frames by
   `ConfiguredHistoryTraceIn.calldata_bound_hist`.
 - `AcceptedCallerPayout` in `Blanc/Lift/SpawnExact.lean`: the entered, clean, success-consumed value
@@ -714,9 +698,7 @@ image (`ri_*_img`, `xa_call_img`, `xa_staticcall_img`, `xa_identity_img`), norma
 pc (`xa_nextAt`, `xa_jumpiAt`, …), and states image facts as `WordAt`/`Region` with the
 `Mem.Reads.forget` cut and the `wchain` tactic (a memory word read off its image is
 `WordAt.of_memWord`); it also holds the branch-condition lemmas,
-Vyper's checked product `mul_check_toNat`, and `ChildOf.congr_left`. The 3pool's
-`remove_liquidity` walk (`Blanc/Lift/Curve3Pool/Walk/RemoveLiquidity*.lean`) is the worked
-example.
+Vyper's checked product `mul_check_toNat`, and `ChildOf.congr_left`.
 
 If the property concerns which child roots were entered rather than only the
 terminal result, continue to E3.
@@ -787,9 +769,7 @@ the certified image `sem` installed at `a` when it starts, with no spawn restric
 For every *raw* frame, rolled back or not, [`Blanc/ExecutionRawFramesCodeImage.lean`](../Blanc/ExecutionRawFramesCodeImage.lean):
 `ConfiguredHistoryTrace.rawFrames_codeImage` (and `_of_installed`) carries a `ContractSpecSem`'s
 image through the admitted rungs (`*.rawFrames_codeImage` per wrapper, from the `*.stateInv_admitted_sem`
-message invariant) and `Exec.rawFrameRoots_codePreserve` inside each message. Worked uses: USDC
-(`Blanc/Lift/Usdc/HistorySlots.lean`, `HistoryFamily.lean`).
-For the In-carrier (`StagedBodyTrace` / `ConfiguredBlockTraceIn` /
+message invariant) and `Exec.rawFrameRoots_codePreserve` inside each message. For the In-carrier (`StagedBodyTrace` / `ConfiguredBlockTraceIn` /
 `ConfiguredHistoryTraceIn`), [`Blanc/ExecutionInCodeImage.lean`](../Blanc/ExecutionInCodeImage.lean):
 `…rawFrames_codeImageIn` per wrapper (and `_of_installedIn` for staged bodies,
 In-blocks and In-histories) carries the image through the In-rungs
@@ -1131,7 +1111,6 @@ the spawning step (`Ninst.StepRun.spawnParts`), the child's entry (`Evm.step_spa
 membership among the root's direct children supplied, so entry facts come off the spawn
 (`Evm.step_spawn_child`, `Evm.step_spawn_enter_getStor`) or off a child-classification theorem over
 `Exec.childFrames`; `Exec.FrameAdmitted.of_mem_descendantFrames` reads admission off membership.
-Worked use: `Blanc/Lift/Usdc/HistorySlotsCore.lean`.
 
 ### E4. I need a common terminal walk
 
@@ -1345,9 +1324,6 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   To decide many closed walk equalities in one kernel check (each boundary evaluated once, not
   once per equality), close a conjunction of them with `kernel_rfl_and`
   ([`Blanc/Lift/KernelBatch.lean`](../Blanc/Lift/KernelBatch.lean)).
-  Worked examples: `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Witness/Top.lean` (a read-only
-  spawn) and `.../Fixed/Witness2/{Run,Frames,Top}.lean` (an ETH-paying body, a nested reentry
-  through an EIP-1167 forwarder, a committing run).
 - To consume a call-family child whose code is a lifted certificate *without* walking it by the
   kernel — the child's inputs symbolic, its run built forward as `SProg.RunExact` with
   `Blanc/Lift/ExactWalk.lean` — use [`Blanc/Lift/ExactLeaf.lean`](../Blanc/Lift/ExactLeaf.lean).
@@ -1389,12 +1365,7 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   The bundles
   `scallSpawn_withFork`/`callSpawn_withFork`/`dcallSpawn_withFork` give a whole spawn (the
   preparation and the entry) under any covered fork from the Prague facts, and
-  `settle_withFork_of_stat` a child's settle. Generalize the run lemma over
-  `S = e0.sta.withFork g` and derive the fixed-fork statement at Prague; worked examples
-  `vplus_run_at`/`vplus_witness_covered` in
-  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Witness/Top.lean` (one nesting level) and
-  `vplus_run2_at`/`vplus_witness2_covered` in `.../Fixed/Witness2/{Frames,Top}.lean` (the
-  frame lemmas take the fork, six spawns of all three call kinds). The message-level layer
+  `settle_withFork_of_stat` a child's settle. The message-level layer
   underneath is [`Blanc/ForkUniform.lean`](../Blanc/ForkUniform.lean) (see the root's
   *Fork coverage* entry).
 - A `STATICCALL` into a precompile is no raw frame (its entry answers at once, `Exec.doneOk`),
@@ -1404,9 +1375,7 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   raw descendants unchanged), `staticcall_done_node` (at an agreeing configuration, a prepared
   call whose shadow entry answers successfully resumes at the configuration the shadows
   describe, with its agreement), and `scallDone_withFork` (the preparation and the synchronous
-  entry under any covered fork, for a frame avoiding `MODEXP`/`P256VERIFY`). Worked example: the
-  identity-precompile copy of `initialize` in
-  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Init/{Run,Top}.lean`.
+  entry under any covered fork, for a frame avoiding `MODEXP`/`P256VERIFY`).
 - To read a walk's final shadows back as finite maps: `canonS` drops shadowed and zero writes
   from a storage log and `lookupS_canonS` says it reads the same everywhere (a kernel equation
   `canonS l = l'` then gives a canonical storage table, `lookupS_eq_of_canonS`), and
@@ -1451,8 +1420,6 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `Blanc.Lift.Witness.CallPrep.re_adrs`, and `Blanc.Lift.NodeWalk.resumeCallB_re`.
   If an alias hides the update or projection, unfold only that local binding and
   run `blanc_suggest` again; the advice never normalizes a concrete machine.
-  Worked use: `forwarder_root_re`/`leaf_root_re` and the frames of
-  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Fund/{Root,Add}.lean` and `.../Fixed/Exit/`.
 - To run a walk (`pwalkH`) or a certificate run (`wrun`, `childRun`, `callResume`) whose
   `SSTORE` charges read a transaction-original state that is not a closed term (a root
   message's own input world): evaluate the kernel facts with the original state replaced by a
@@ -1504,11 +1471,7 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   [`Blanc/Lift/WitnessFork.lean`](../Blanc/Lift/WitnessFork.lean): the interpreter's
   synchronous precompile children and code children run only frames that avoid `MODEXP` and
   `P256VERIFY` (`frameEntryForkFree`), so a run is unchanged by the fork with no side
-  condition beyond zero excess blob gas. Restate each frame lemma for the machines
-  `X.withFork g`, taking the Prague kernel fact and the spawn facts (`callPrep_withFork`,
-  `frameEnterS_withFork_of_stat`, a kernel fact on the spawned frame's `codeAddress`); worked
-  example `vminus_witness_covered` in
-  `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/{ForkKernel,ForkFrames,ForkTop}.lean`.
+  condition beyond zero excess blob gas.
 - To state a transaction-level witness under every covered fork, give the transaction an access
   list that already names every precompile of every covered fork (`osakaPrecompiles`), the
   target and (via the coinbase) the sender: `prepareMessage` pre-warms the fork's own precompiles
@@ -1519,13 +1482,7 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   evaluate in the kernel, so a kernel `rfl` cannot show it. The per-transaction gas cap of EIP-7825
   (2^24, Osaka and later) needs a transaction with less gas. The admission checks and the
   `processTransaction` envelope are then per-fork kernel evaluations (`hg.cases`) feeding
-  `processTransaction_of_stages`. Worked example
-  `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/{TxTopC,TxC/*}.lean`
-  (`vminus_txC_message`, `vminus_txC_process`: a 16,043,200-gas transaction, one kernel run of the
-  Prague chain, every frame lemma restated for `withFork g`).
-  Its signature premise is discharged for the concrete transaction by `TxC.txC_recoveredSender`
-  (`TxCRecover.lean`): the access-list encoding by `toBLT_noKeys`/`join_entries`, the signing hash and
-  secp256k1 recovery by `decide +kernel` (the kernel cannot unfold `BLT.toBytes`, so rewrite the encoding first).
+  `processTransaction_of_stages`.
 - Pre-EIP-155 legacy transactions (`.zero` type, `v = 27` or `v = 28`, no chain id) for any `Tx`:
   [`Blanc/Lift/LegacyRecover.lean`](../Blanc/Lift/LegacyRecover.lean). `signingHash_pre155` evaluates
   `Tx.signingHash` to its six-field payload (encode it with `RlpConcrete.encode_list_at_last`, the
@@ -2767,9 +2724,7 @@ supply the actual message-code facts.
   message, instantiate the frame theorem at a fresh gas variable `F` with the premises transported
   by `*.withStaticGas F`, rewrite the cost back with the schedule's `*_withStaticGas`, and only
   then relate `F` to `R + c` (rewriting `← hF` rather than substituting, so no definitional check
-  unfolds the closed cost). The Curve 3pool instances are
-  `Blanc/Lift/Curve3Pool/ExactMessage.lean` (`*_msg_exact`), with the exchange/add_liquidity
-  stage transports in `Blanc/Lift/Curve3Pool/ExactStaticGas.lean`. Comparing runs from
+  unfolds the closed cost). Comparing runs from
   different dynamic gas values still needs the following gas-erasure branch.
   Existing recipe triggers cannot distinguish this static-coordinate update
   from ordinary run construction, so discovery remains in this registry.
@@ -2791,45 +2746,6 @@ supply the actual message-code facts.
   memory and the exact charge. These carry no new charge, world premise or gas quantifier.
   No registered trigger distinguishes these from the bounded steps, so discovery remains in
   this registry.
-- For the literal memory the 3pool's crossed callees leave (exact walks of `add_liquidity`,
-  `remove_liquidity_imbalance`, `remove_liquidity_one_coin`): `_A()`'s is `aMemNext` (`a_exactL`
-  in [`Blanc/Lift/Curve3Pool/Callee/A.lean`](../Blanc/Lift/Curve3Pool/Callee/A.lean), the
-  `0x1e0` variant `a_exact_1e0L` in
-  [`Blanc/Lift/Curve3Pool/Callee/AGrow.lean`](../Blanc/Lift/Curve3Pool/Callee/AGrow.lean));
-  `get_D_mem`'s is `getDMemNext` up to bytes (`Mem.EqExcept … fun _ => False`: one logical
-  size, every byte equal; `getDMem_exactL` in
-  [`Blanc/Lift/Curve3Pool/Callee/GetDMemExact.lean`](../Blanc/Lift/Curve3Pool/Callee/GetDMemExact.lean),
-  `getDMem_exact_400L` in
-  [`Blanc/Lift/Curve3Pool/Callee/GetDMemGrow.lean`](../Blanc/Lift/Curve3Pool/Callee/GetDMemGrow.lean)),
-  since the callee's scratch writes are not materialised alike; the caller's next growing
-  store makes it literal (`eqB_write_word_grow` in
-  [`Blanc/Lift/MemGlue.lean`](../Blanc/Lift/MemGlue.lean), below). The pool's literal-memory
-  forward steps are one kit: `rxe_mstoreL`, `rxe_calldatacopyL`, `rxe_identityL` (with the
-  identity call's canonical successor) and `rxe_sstoreX` (exact `SSTORE` charge) in
-  [`Blanc/Lift/Curve3Pool/Walk/LiveKit.lean`](../Blanc/Lift/Curve3Pool/Walk/LiveKit.lean), whose
-  bounded twins `rxe_mstore`, `rxe_calldatacopy`, `rxe_identity`, `rxe_sstore_le` are
-  projections; `rxe_mloadXL`, `rxe_sloadVX`, `rxe_staticWordE` (and the projections
-  `rxe_mloadX`, `rxe_sloadB`/`rxe_sloadV`, `rxe_sstoreB`/`rxe_sstoreV`/`rxe_sstoreVX`,
-  `rxe_mstoreW`, `rxe_staticWord`) in
-  [`Blanc/Lift/Curve3Pool/Walk/ExchangeLiveKit.lean`](../Blanc/Lift/Curve3Pool/Walk/ExchangeLiveKit.lean);
-  `add_liquidity`'s `rxe_mloadXE`/`rxe_staticWordAlE` are their projections. A fee iteration's
-  words are functions of its inputs (`RliDif.unique`, `RliFeeIter.unique` in
-  [`Blanc/Lift/Curve3Pool/Walk/RliExactKit.lean`](../Blanc/Lift/Curve3Pool/Walk/RliExactKit.lean)). The frame save/restore loops around them are literal
-  through `rx_svFromLM` / `rx_rsFromLM` (`saveMem`/`restoreMem`) in
-  [`Blanc/Lift/Curve3Pool/Walk/LiveLoops.lean`](../Blanc/Lift/Curve3Pool/Walk/LiveLoops.lean).
-  The bounded statements (`a_exact`, `getDMem_exact`, `rx_svFromL`, …) are their projections.
-- For the 3pool's exact-gas entry frames and their stage cores (an exact walk to reuse or extend):
-  `removeLiquidity_live_exact`, `exchange_live_exact`, `addLiquidity_live_exact`,
-  `removeLiquidityImbalance_live_exact`, `removeLiquidityOneCoin_live_exact` in
-  `Blanc/Lift/Curve3Pool/{RemoveLiquidityExactFrame,ExchangeExactLive,AddLiquidityExactFrame,RemoveLiquidityImbalanceExactFrame,OneCoinExactFrame}.lean`,
-  each over a schedule with call data, premise bundle, closed cost and static-gas transport
-  (`Walk/{RemoveLiquidity,AddLiquidity,Rli,OneCoin}ExactSchedule.lean`,
-  `ExchangeExactSchedule.lean`, `ExactStaticGas.lean`) and relation-parametric stage cores (the
-  `*E`/`*_core` walks in `Walk/RemoveLiquidityLive.lean`, `Walk/ExchangeLive*.lean`,
-  `Walk/AlLive*.lean`, `Walk/RliLive*.lean`, `Callee/CalcWithdrawLive*.lean` (`rx_cw_*E`) and
-  `Walk/OneCoinLive*.lean` (`rx_oc_*E`)), whose bounded statements are projections; the
-  message-entry, history and composed twins are `ExactMessage.lean`, `HistoryLiveExact.lean`
-  and `Blanc/Composition/Curve3Pool3CrvHeadlinesExact.lean`.
 - For equality modulo `gasLeft` across two successful runs of a whole lifted
   tree (`SFunc.RunP`), use
   [`Blanc/Lift/GasErasureRun.lean`](../Blanc/Lift/GasErasureRun.lean).
@@ -3787,25 +3703,7 @@ To read a footprint ledger off raw storage words, use [`Blanc/SlotFootprintWord.
 (`trackedWord_of_mem`, `trackedWord_of_not`); a write at a tracked key's slot is that key's row
 update under `Inj` (`trackedWord_set`), a write at a slot no tracked key uses leaves every row alone
 (`trackedWord_set_off`), touching fresh keys leaves the rows alone (`trackedWord_extend`), and
-`Support.set_fixed` is `Support.set` for a write at a fixed slot. Worked use: USDC's footprint
-(`Blanc/Lift/Usdc/Footprint.lean`).
-
-For old USDC blacklist writes, use `HistoricalMappingKey` in
-[`Blanc/Lift/Usdc/HistoricalMappingKeys.lean`](../Blanc/Lift/Usdc/HistoricalMappingKeys.lean).
-It embeds modern keys unchanged and adds the historical mapping at slot 3.
-[`Blanc/Lift/Usdc/V1MappingTouches.lean`](../Blanc/Lift/Usdc/V1MappingTouches.lean)'s
-`actualV1OldBlacklistKeys` collects actual successful writes from the same
-history, retaining order and duplicates. Its soundness theorem derives their
-slot identities from the checked V1 write sites. The off-implementation-slot
-consumer requires initial apartness and freshness of this exact list; modern
-balance-slot freshness does not establish historical blacklist freshness.
-`ConfiguredHistoryTraceIn.actualV1OldBlacklistKeys_hash` additionally retains
-the original frame, actual successful base-3 hash, its exact 64-byte
-calldata-account/base input, and its successful edge before the same store.
-`V1BlacklistReach.successfulSstore_hash` supplies this witness by following
-both original selectors through the blacklister guard and packed Boolean
-update; no final-call success or hash-injectivity premise is needed. The
-existing key-only interfaces project this stronger source proof.
+`Support.set_fixed` is `Support.set` for a write at a fixed slot.
 
 `ConfiguredHistoryTraceIn.v1Initializer_write_ne_implSlot` applies the concrete
 initializer range proof directly to actual raw-history stores. Fresh stack and
@@ -3814,68 +3712,7 @@ history's own raw-frame admission; the bound includes old-tail clearing stores.
 `V1WriteFamilies` checks every certified root site and reduces actual V1 stores
 to fixed-slot apartness or an initializer/mapping selector. This selects a
 source family without classifying mapping rows by digest equality.
-`ConfiguredHistoryTraceIn.v1_write_ne_implSlot` in
-[`V1WriteApart.lean`](../Blanc/Lift/Usdc/V1WriteApart.lean) closes every family,
-including transferFrom. `V1MappingFreshKeys` bundles freshness of the seven
-exact actual mapping collectors; initial apartness remains explicit.
-The earlier `v1_write_ne_implSlot_or_transferFrom` interface is retained.
-[`V1RetainedContext.lean`](../Blanc/Lift/Usdc/V1RetainedContext.lean)'s
-`settledRoot_v1_write_ne_implSlot` derives the retained-root premise from
-same-history raw membership. `settledRoot_proxyV1_context_of_freshKeys`
-then supplies the coupled retained code/slot context, and
-`settledRoot_proxyV1_preserves_of_freshKeys` preserves both deletion exclusion
-and the exact implementation word at settlement. These consumers retain the
-actual root-entry Proxy/V1 code, implementation address, absent retained upgrade
-log and initial NoDel premises; they do not yet propagate those entry facts
-between successive roots or authenticate a historical creation cut.
-`settledRoot_proxyV1_implSlot_eq_of_freshKeys` exposes the cell conclusion
-without an incoming NoDel premise. In
-[`V1TransactionContinuity.lean`](../Blanc/Lift/Usdc/V1TransactionContinuity.lean),
-`v1_transaction_preserves_retained` and `v1_transactions_preserve_retained`
-derive both installed entry codes and the implementation word through the
-actual ordered transaction sequence, without created-account exclusions for
-either account. The actual retained Proxy/V1 classifier supplies proxy terminal
-safety; V1's checked installed certificate supplies implementation safety.
-Initial code/slot, exact-list freshness, same-history root inclusion and absent
-retained upgrade logs remain explicit. The older `v1_transaction_preserves`
-and `v1_transactions_preserve` statements retain their extra exclusions and
-project these stronger results; historical creation binding is still separate.
-[`V1HistoryContinuity.lean`](../Blanc/Lift/Usdc/V1HistoryContinuity.lean)'s
-`v1_block_preserves` and `v1_history_preserves` extend this to actual block
-settlement and configured segments whose rule bits disable system stages.
-Withdrawals, rewards and finalization use the existing shared cell transport.
-Every retained root's entry control is derived from the segment's initial
-control. For genuine transaction boundaries,
-[`V1MidHistoryContinuity.lean`](../Blanc/Lift/Usdc/V1MidHistoryContinuity.lean)'s
-`v1_tail_preserves` begins at the original `TxSplit.afterBenv`, including a
-proxy created by that selected transaction. `v1_mid_preserves` appends actual
-later blocks; `v1_before_txSplit_preserves` stops at the original before-trace.
-`v1_between_txSplits_preserves` composes these into the exact after-C/before-D
-interval, deriving deletion exclusions and every intervening root's entry
-control from the initial state. Its conditions exclude the final selected
-transaction and its suffix. In
-[`V1MainnetContinuity.lean`](../Blanc/Lift/Usdc/V1MainnetContinuity.lean),
-`v1_between_txSplits_preserves_mainnet` derives all stage bits from the final
-block's actual pre-Cancun timestamp, mainnet selection and accepted-header
-chronology. Historical-domain capabilities and absent state gas/BAL are supplied
-by their existing theorems. Historical C/D identities, constructor state, the
-endpoint timestamp and receipt evidence for absent upgrade logs still require
-their own binding. [`V1ReceiptContinuity.lean`](../Blanc/Lift/Usdc/V1ReceiptContinuity.lean)'s
-`v1_between_txSplits_preserves_from_receipts` consumes absence of proxy Upgraded
-logs from the actual first-block suffix, every actual intermediate receipt, and
-the last-block prefix. It derives the retained-root absence needed for the same
-V1 continuity conclusion, with no separate per-root absence premise. The first
-and last selected transactions stay outside the scan; historical identities,
-constructor state and factual receipt-log absence are still caller obligations.
-`V1RetainedAllowanceZero`'s `settledRoot_v1_allowanceWrite_nonInc` and
-`settledRoot_v1_allowance_zero` reuse the retained Proxy/V1 context to classify
-actual stores and preserve a tracked zero row. They require no code restriction
-on discarded execution. V1's only caller exception is approve; initializer
-stores consume the existing calldata-key separation proof. In
-`V1ReceiptAllowanceZero`, `v1_allowance_zero_between_txSplits_from_receipts`
-composes these laws with the exact-cut cell fold, deriving zero at the later
-before-state from zero at the original after-state. Receipt absence supplies
-all root code/slot and deletion facts. Caller exclusion, row separation and the
+Caller exclusion, row separation and the
 actual constructor seed remain producer obligations; the final selected
 transaction and its settlement are outside this result. These contract-specific
 consumers do not add a generic recipe for arbitrary equality goals.
@@ -3888,66 +3725,6 @@ These are internal composition interfaces: actual historical authentication,
 initial V1 implementation code, finite separation and genuine pre-D approve
 safety remain producer obligations. Caller exclusion is not a new final
 assumption and does not follow from R3 or Pair target emptiness.
-For the original USDC boundary bloom literals, use
-[`Blanc/Lift/Usdc/HistoricalBloomExclusion.lean`](../Blanc/Lift/Usdc/HistoricalBloomExclusion.lean).
-The checked literals exclude USDC logs in both boundary blocks only when an
-application identifies them with the blooms supplied by its original execution.
-Intermediate blocks and actual historical header authentication remain separate
-obligations; these conditional literal identities are not historical adoption.
-
-For V1 `approve`, use
-[`Blanc/Lift/Usdc/V1ApproveMappingTouches.lean`](../Blanc/Lift/Usdc/V1ApproveMappingTouches.lean)'s
-`actualV1ApproveKeys`. It collects the allowance key of each actual successful
-store at the requested target with exact V1 code and the approve selector,
-preserving history order and duplicates. The checked V1 site fixes the caller
-and calldata spender; the recognizer does not test equality with the written
-key. Its separation consumer requires initial apartness and freshness of this
-same list. `ConfiguredHistoryTraceIn.actualV1ApproveKeys_hashes` additionally
-retains the original frame prefix and both successful nested-mapping hashes,
-with exact caller/base-10 and spender/inner-digest inputs before the store.
-Its producer in [`Blanc/Lift/Usdc/V1ApproveReach.lean`](../Blanc/Lift/Usdc/V1ApproveReach.lean)
-walks the checked dispatcher, guards and body; no final call success or hash
-injectivity is assumed. The hash PCs are the actual witnessed PCs, not a
-separate fixed-PC classification. Both collectors share `v1_store_site` and
-`v1Mapping_site_iff`; selectors with multiple mapping sites still require
-finer source attribution.
-
-For V2 `approve`, use
-[`Blanc/Lift/Usdc/V2ApproveMappingTouches.lean`](../Blanc/Lift/Usdc/V2ApproveMappingTouches.lean)'s
-`actualV2ApproveKeys`. Soundness and completeness cover every successful
-selected approve store in the original history's `rawNodes`, retaining order
-and duplicates. The recognizer tests target, exact code, selector and store
-success. [`Blanc/Lift/Usdc/V2ApproveReach.lean`](../Blanc/Lift/Usdc/V2ApproveReach.lean)'s
-`successfulSstore_ordered_hashes` derives its caller/spender nested slot10 key
-and the shared `KeccakPairBefore` witnesses from the same original frame
-prefix, without final-frame success, descriptor separation or hash injectivity.
-The off-implementation-slot consumer keeps initial apartness and freshness of
-this exact collected list explicit.
-
-For `approve`, `increaseAllowance` and `decreaseAllowance` in all three modern
-runtimes, use
-[`Blanc/Lift/Usdc/ModernCallerMappingTouches.lean`](../Blanc/Lift/Usdc/ModernCallerMappingTouches.lean).
-`ModernVersion` selects the exact existing code, certificate, annotations and
-selector table. `modernCaller_store_key` obtains the caller/calldata-spender
-slot-10 key from the certified site of the original successful store.
-`actualModernCallerKeys` filters the original `rawNodes` by target, exact code,
-caller selector and successful store, preserving order and duplicates. Its
-soundness/completeness theorems retain the actual root and store; recognition
-does not compare the written key. Under `checkFaithfulOn` for the exact
-observed Pair/spender list and this collected list, `modernCaller_write_source`
-derives the Pair caller and exact spender, and `modernCaller_write_allowed`
-supplies the existing `AllowedFrame` caller arm. Check truth remains an
-explicit premise. For successful hash-occurrence provenance, use
-[`ModernCallerReach`](../Blanc/Lift/Usdc/ModernCallerReach.lean) and its
-[`ModernCallerHashBodies`](../Blanc/Lift/Usdc/ModernCallerHashBodies.lean)
-inner-path lemmas. `successfulSstore_ordered_hashes` follows the original
-dispatcher, ABI decoder and guards in every version/method combination. It
-produces `KeccakPairBefore` for caller/base-10 followed by masked-spender/inner
-digest before the same successful store. The history adapters
-`modernCallerKey?_ordered_hashes` and `actualModernCallerKeys_ordered_hashes`
-retain the original root, node, written key and both successful hashes for
-the unchanged collector. The existing V2 approve witness is preserved.
-Other modern selectors and the full classifier remain outside this family.
 
 For an already placed interior cursor, use
 [`Blanc/Lift/CursorObservedCut.lean`](../Blanc/Lift/CursorObservedCut.lean)'s
@@ -3957,514 +3734,6 @@ root's `StepIn` child population and `RawEdgeAt` witnesses. It needs the existin
 certificate check and no-state-gas fact, without a final-success premise or
 restarting at pc zero. Its existential cursor/reach conclusion has no reliable
 single goal-head recipe trigger.
-
-For V2.1 owner writes, use
-[`V2_1PermitReach`](../Blanc/Lift/Usdc/V2_1PermitReach.lean)'s
-`successfulSstore_source`: it reuses the original pre-nonce prefix and separates
-the nonce increment at pc `0x41ae` from the approval setter. Both alternatives
-retain actual successful hash occurrences; the allowance pair is ordered.
-`ModernCallerReach.approval_core_source` generalizes the existing setter proof
-to its actual owner argument across all three modern versions while preserving
-`approve_core_hashes` as its caller specialization. The permit recovery helper
-must return on the observed path; no signature-success or final-frame-success
-premise is introduced.
-[`V2_1PermitMappingTouches`](../Blanc/Lift/Usdc/V2_1PermitMappingTouches.lean)'s
-`actualV2_1PermitKeys` selects exactly successful stores by target, code and
-selector, then uses the actual pc to choose nonce or allowance arguments.
-It preserves raw order and duplicates and never compares hash values in
-recognition. Soundness retains the original root and hash provenance;
-finite `checkFaithfulOn` identifies the Pair owner and exact spender and
-supplies the existing `AllowedFrame` owner arm. Fork-domain neutrality
-is discharged by `HistFork.neutral` on the historical domain.
-[`V2_1AllowanceWriteLocality`](../Blanc/Lift/Usdc/V2_1AllowanceWriteLocality.lean)
-combines that exact population with the covered modern population.
-`v2_1_allowance_write_locality` leaves only existing allowed frames or actual
-nonincrease, with no owner-selector residual for V2.1. Finite-check truth,
-initializer exclusion, retained owner-query exclusion and historical binding
-remain obligations; V2/V2.2 owner classification is separate.
-
-For V2's four owner routes, use
-[`V2PermitReach`](../Blanc/Lift/Usdc/V2PermitReach.lean) and
-[`V2OwnerAuthorizationReach`](../Blanc/Lift/Usdc/V2OwnerAuthorizationReach.lean).
-Their `successfulSstore_source` laws follow the original pc-zero dispatcher,
-ABI, guards and actual returning helpers, including frames that later revert.
-Permit separates nonce pc `0x47fd` from the allowance setter; the three
-approval/increase/decrease authorizations separate flag pc `0x4eb8` from
-that setter. Every selected store retains its actual hash inputs, with
-ordered pairs for authorization and allowance rows.
-[`V2AllowanceSetterReach`](../Blanc/Lift/Usdc/V2AllowanceSetterReach.lean)
-transports the actual owner/spender through returning addition/subtraction
-helpers and reuses the shared approval setter; it does not infer arguments
-from hash values or assume a signature result.
-[`V2PermitMappingTouches`](../Blanc/Lift/Usdc/V2PermitMappingTouches.lean) and
-[`V2OwnerAuthorizationMappingTouches`](../Blanc/Lift/Usdc/V2OwnerAuthorizationMappingTouches.lean)
-collect exactly the corresponding original successful-store keys, preserving
-raw order and duplicates. Recognition uses target, code, selector and pc;
-finite faithful-key separation identifies the protected owner and spender.
-[`V2AllowanceWriteLocality`](../Blanc/Lift/Usdc/V2AllowanceWriteLocality.lean)'s
-`v2_allowance_write_locality` combines these with the covered modern keys and
-concludes the existing `AllowedFrame` or actual same-node nonincrease, with
-no V2 owner-selector residual. Finite-check truth, retained owner exclusion
-and historical binding remain explicit obligations; V2.2 permit coverage
-is separate.
-
-For exhaustive modern successful-store coverage, use
-[`ModernWriteFamilies`](../Blanc/Lift/Usdc/ModernWriteFamilies.lean).
-`modern_store_fixed_nonInc_or_family` applies the unchanged certified root
-tables to the actual store: its key is a listed literal slot, its value is
-non-increasing at that same node, or its original selector is in a listed
-version-specific family. `actualModernCoveredKeys` concatenates the actual V2 transfer keys, increasing
-older-transferFrom credits, exact configure/mint family, cancellation and caller
-collectors and the applicable blacklist collector: old base-3 keys for V2/V2_1 and packed balance keys for V2_2;
-soundness retains the original root, node, successful store, owner and key.
-Under finite faithfulness for that exact list and apartness from
-`modernFixedWriteSlots`, `modern_allowance_write_reduction` eliminates fixed,
-cancellation, blacklist and established configure/mint aliases and attributes caller writes,
-leaving existing allowed exceptions, actual nonincrease or owner selectors.
-The covered list also includes both inherited initializers and all seven
-authorization-transfer collectors across V2, V2.1 and V2.2. Their original-store
-coverage removes the residual mapping-writer alternative entirely. Owner
-classification, finite check truth and historical input binding remain open.
-Both V2_2 packed-blacklist selectors are discharged;
-`initializeV2_1` is not promoted to an allowed exception.
-
-For `cancelAuthorization` in all three modern versions, including both V2_2
-overloads, use
-[`ModernCancelMappingTouches`](../Blanc/Lift/Usdc/ModernCancelMappingTouches.lean).
-`modernCancel_store_key` obtains the authorization-state key at base slot 16
-from the original successful store: masked calldata owner at word 4 and the
-full nonce at word 36. `actualModernCancelKeys` filters original `rawNodes`
-by target, exact runtime, cancellation selector and successful store, without
-testing the written key. Completeness and soundness retain the original root,
-node and actual write. `modernCancel_write_ne_allowSlot` consumes finite
-faithfulness for exactly this list; its key constructors distinguish an
-authorization entry from an allowance entry. Cancellation selectors are now
-discharged by the exhaustive family reduction. Finite-check truth remains
-an explicit obligation.
-
-[`ModernCancelReach`](../Blanc/Lift/Usdc/ModernCancelReach.lean) supplies the
-original ordered successful hashes for all four cancellation routes.
-`successfulSstore_ordered_hashes` follows the original entry, dispatcher,
-ABI decoding and pause guard into the unused-authorization check. The first
-hash consumes the masked calldata owner with base slot 16; the second consumes
-the full calldata nonce with that first result. Both occur before the same
-successful store, with no final-frame-success or signature-result premise.
-The history adapters `modernCancelKey?_ordered_hashes` and
-`actualModernCancelKeys_ordered_hashes` retain the original root, raw node,
-write owner and exact key from the unchanged collector. This proves occurrence
-and order within that prefix, without assuming hash injectivity or changing
-the finite population.
-
-[`ModernRemoveMinterReach`](../Blanc/Lift/Usdc/ModernRemoveMinterReach.lean)
-proves `successfulSstore_nonInc` for every actual removeMinter store in
-V2, V2_1 and V2_2. The original dispatcher, ABI bounds and master-minter
-guard lead to a masked same-key reload or a literal-zero store. Each value
-is bounded by that same node's current cell, including when earlier writes
-alias it. `modernRemoveMinter_nonInc` supplies the raw-history adapter.
-`modern_allowance_write_reduction` in `ModernWriteFamilies` consumes this result
-directly, removing selector 0x3092afd5 from the unresolved families without
-adding hash-separation premises or changing the actual-key population.
-
-For the balance-writing suffixes of modern burn, use
-[`ModernBurnStores`](../Blanc/Lift/Usdc/ModernBurnStores.lean).
-`caller_key_hash` covers V2 and V2_1's final caller-balance writer;
-`packed_setBalance_key_hash` covers V2_2's shared setBalance helper,
-including its cap, blacklist query and original internal return.
-Each retains the actual base-9 key and successful `ObservedKeccak` before
-that store under the original edge observation, without final-frame success
-or hash-separation premises. These are suffix producers; they do not alone
-establish an original-entry or history theorem. The complete nonincrease route
-below avoids needing a separate burn key collector.
-
-For complete original-entry V2_2 burn nonincrease, use
-[`V22BurnNonIncBodies`](../Blanc/Lift/Usdc/V22BurnNonIncBodies.lean) and
-[`V22BurnNonIncReach`](../Blanc/Lift/Usdc/V22BurnNonIncReach.lean).
-`successfulSstore_nonInc` follows the original dispatcher, ABI and role checks,
-actual balance/supply reads and checked subtractions. Each actual write is
-bounded by its own node's pre-state word. If the supply slot and balance hash
-coincide, the masked balance bound and monotone subtraction still discharge
-the second store after the first. No key-separation or final-frame-success
-premise is needed. `ConfiguredHistoryTraceIn.v22Burn_nonInc` supplies the
-raw-history adapter.
-
-For V2 and V2_1, use
-[`OldBurnNonIncCallees`](../Blanc/Lift/Usdc/OldBurnNonIncCallees.lean) and
-[`OldBurnNonIncBodies`](../Blanc/Lift/Usdc/OldBurnNonIncBodies.lean).
-The actual returning subtraction helpers preserve the storage base while
-changing scratch memory, and their guards prove the nonwrapping bound.
-The caller-balance read and exact first-store effect discharge both
-same-node bounds, including when its hash equals the supply slot.
-[`ModernBurnNonIncReach`](../Blanc/Lift/Usdc/ModernBurnNonIncReach.lean)
-combines all three original dispatchers and body proofs in
-`successfulSstore_nonInc`. `ConfiguredHistoryTraceIn.modernBurn_nonInc`
-connects this to actual raw-history nodes. The full
-`modern_allowance_write_reduction` consumes this theorem directly, removing
-burn from every modern residual selector list without a new collector,
-hash-separation premise or change to the finite actual-key populations.
-No final-frame-success or additional covered-fork premise is introduced.
-
-For V2_2 packed-blacklist updates, use
-[`V22BlacklistReach`](../Blanc/Lift/Usdc/V22BlacklistReach.lean) and
-[`V22BlacklistMappingTouches`](../Blanc/Lift/Usdc/V22BlacklistMappingTouches.lean).
-`successfulSstore_key_hash` follows the original dispatcher, public ABI,
-blacklister guard and both flag-update branches to the shared packed-word
-store. It proves the actual written key is the masked calldata address's
-base-9 balance slot and retains a successful `KeccakBefore` in that same
-original prefix, with no final-frame-success or hash-separation premise.
-`actualV22BlacklistKeys` collects one logical balance key per original
-matching successful store, preserving order and duplicates without testing
-the written digest. Its soundness carries the original root, node, owner,
-exact key and hash; completeness covers both selectors. Finite faithfulness
-for that exact population lets `v22Blacklist_write_ne_allowSlot` exclude
-these writes from protected allowance rows. The full modern family
-reduction consumes this collector alongside the unchanged older collectors.
-
-For V2 and V2_1 old-blacklist writes, use
-[`Blanc/Lift/Usdc/V2BlacklistMappingTouches.lean`](../Blanc/Lift/Usdc/V2BlacklistMappingTouches.lean)'s
-`actualV2OldBlacklistKeys` with its explicit version. The certificate and
-same original prefix derive the masked calldata address at slot 3. The
-collector selects actual successful blacklist/unblacklist stores, preserving
-raw-node order and duplicates, with soundness and completeness.
-`v2OldBlacklist_write_ne_allowSlot` consumes the exact finite
-observed-versus-collected-key check; its truth remains an explicit obligation.
-For successful hash provenance, import
-[`Blanc/Lift/Usdc/V2BlacklistReach.lean`](../Blanc/Lift/Usdc/V2BlacklistReach.lean).
-Its `successfulSstore_hash` follows the original dispatcher, ABI wrapper, role
-guard and memory writes in either version. The exact masked address/base-3
-input is hashed successfully before the same store. The history adapters
-`v2OldBlacklistKey?_hash` and `actualV2OldBlacklistKeys_hash` retain that
-original root, prefix, actual store and key equality for the unchanged
-collector. Final-frame success, hash injectivity and finite-check truth are
-not required to obtain these witnesses. Initializer writes are outside this
-two-selector collector.
-
-[`OldTransferBodyReach`](../Blanc/Lift/Usdc/OldTransferBodyReach.lean)
-owns the shared V2/V2.1 balance-transfer walk. `body_reach_bounded` retains
-the owner store's actual subtraction bound or the recipient store, together
-with each branch's own original hash. `recipient_v21` checks equality of the
-complete recipient suffix; the owner/debit walks use their exact version's
-return addresses and helper indices. The V2 interfaces in `V2TransferReach`
-remain specializations of this shared proof.
-
-[`OldTransferFromCallee`](../Blanc/Lift/Usdc/OldTransferFromCallee.lean)
-uses that walk with an arbitrary original caller continuation in V2 or V2.1.
-`body_bounded_source_or_return` retains the balance-store evidence or a return
-along the same observed path. `subtraction_return` derives the actual bound
-and unchanged storage base while retaining both observed cuts. Neither
-requires an assumed bound or a store-free caller. The V2 interfaces in
-[`V2TransferFromCallee`](../Blanc/Lift/Usdc/V2TransferFromCallee.lean)
-remain specializations. V2.2 is explicitly excluded from these older-version
-theorems.
-
-[`V22TransferFromCallee`](../Blanc/Lift/Usdc/V22TransferFromCallee.lean)
-uses the same observed split for the V2.2 balance body: either an original
-balance store carries its own successful mapping hash and setter return tag,
-or the actual callee returns into the original caller with both path segments.
-Its subtraction return retains storage and the checked arithmetic bound.
-[`V22TransferFromEntry`](../Blanc/Lift/Usdc/V22TransferFromEntry.lean)
-follows the original dispatcher, ABI wrapper and public guards into that body
-with the exact saved caller stack. Neither result assumes eventual frame
-success or hash separation.
-[`V22TransferFromAllowance`](../Blanc/Lift/Usdc/V22TransferFromAllowance.lean)
-checks the complete final writer equal to the shared older allowance suffix,
-then derives nonincrease from the actual post-balance reload and subtraction.
-[`V22TransferFromContinuation`](../Blanc/Lift/Usdc/V22TransferFromContinuation.lean)
-recovers the original caller stack from the checked body return and classifies
-every original successful store as a same-node nonincrease or one of the two
-balance setters with its own successful hash.
-[`V22TransferFromMappingTouches`](../Blanc/Lift/Usdc/V22TransferFromMappingTouches.lean)
-collects only actual strict increases, using the actual setter return tags to
-distinguish owner and recipient. `actualV22TransferFromKeys_sound` retains the
-original store, root and earlier successful hash; the complement is already
-non-increasing. No comparison between a written key and a proposed digest
-selects a source. `actualModernTransferFromKeys` combines these exact populations
-by version, and the modern-family reduction now handles every transferFrom case.
-
-The V2.1 signed-transfer and receive-authorization collectors in
-[`V2_1TransferWithAuthorizationMappingTouches`](../Blanc/Lift/Usdc/V2_1TransferWithAuthorizationMappingTouches.lean)
-and [`V2_1ReceiveWithAuthorizationMappingTouches`](../Blanc/Lift/Usdc/V2_1ReceiveWithAuthorizationMappingTouches.lean)
-derive all three reached stores from the original entry and the actual validity
-and recovery helper returns. The receive route retains its caller guard.
-The authorization flag has its ordered owner/base-16 and nonce/inner hash pair;
-each balance store has its original account/base-9 hash. Recognition tests the
-actual target, code, selector, store pc and successful store, never a digest.
-Their `actual...Keys_sound` and `actual...Keys_complete` theorems retain raw
-occurrences, including repeated keys. Finite separation truth and historical
-input binding remain separate obligations.
-The matching V2 collector is
-[`V2TransferWithAuthorizationMappingTouches`](../Blanc/Lift/Usdc/V2TransferWithAuthorizationMappingTouches.lean).
-V2.2 uses
-[`V22TransferWithAuthorizationMappingTouches`](../Blanc/Lift/Usdc/V22TransferWithAuthorizationMappingTouches.lean),
-[`V22ReceiveWithAuthorizationMappingTouches`](../Blanc/Lift/Usdc/V22ReceiveWithAuthorizationMappingTouches.lean),
-[`V22TransferWithAuthorizationBytesMappingTouches`](../Blanc/Lift/Usdc/V22TransferWithAuthorizationBytesMappingTouches.lean)
-and [`V22ReceiveWithAuthorizationBytesMappingTouches`](../Blanc/Lift/Usdc/V22ReceiveWithAuthorizationBytesMappingTouches.lean).
-Its authorization flag is identified by actual pc5060, and its balance stores
-by actual setter-return tags40e8/40f9. Source proofs preserve static-signature
-packing or dynamic ABI decoding and the receive caller guard before the same
-observed helper returns. No selector collector compares a written key with a
-proposed hash. `actualModernAuthorizationKeys` selects these exact populations
-by version; their soundness and completeness close every authorization arm in
-`modern_allowance_write_reduction` under its existing finite-check premises.
-
-[`V21InitializerReach`](../Blanc/Lift/Usdc/V21InitializerReach.lean) follows
-inherited `initializeV2_1` through its original dispatcher and optional transfer,
-recovers the checked returning stack and observes the target-blacklist hash.
-Every store is at fixed slot18, a same-node nonincrease, or an actual recipient
-balance/target blacklist write with its own successful hash.
-[`V21InitializerMappingTouches`](../Blanc/Lift/Usdc/V21InitializerMappingTouches.lean)
-collects exactly nonliteral strict increases at these two actual store pcs.
-It never selects an input by comparing a written key with a digest. Its original
-history soundness and fixed/nonincrease/collected completeness feed
-`actualModernInitializerKeys` and the modern-family allowance reduction. V2.1's
-inherited initializer is thereby covered without a new `AllowedFrame` exception.
-
-[`V22InitializerReach`](../Blanc/Lift/Usdc/V22InitializerReach.lean) covers the
-inherited initializer's original V2.2 entry, optional transfer return and packed
-blacklist return. `V22BlacklistReach.store_source` retains the actual value,
-flag and stack tail while `store_key_hash` preserves its existing interface.
-The source proof distinguishes transfer tags from the blacklist flag and gives
-the exact original address/base-9 hash before every nonliteral store.
-[`V22InitializerMappingTouches`](../Blanc/Lift/Usdc/V22InitializerMappingTouches.lean)
-collects only actual nonfixed increases, with original-root/hash soundness and
-store completeness. The modern family consumes this exact V2.2 population;
-both inherited initializer variants are covered without an AllowedFrame exception.
-
-[`OldTransferFromEntry`](../Blanc/Lift/Usdc/OldTransferFromEntry.lean) derives
-the original V2/V2.1 dispatcher, ABI and public-guard paths while retaining
-the exact caller stack below the balance helper. The actual runtime trees,
-helper indices and return tags are selected by version.
-[`OldTransferFromAllowance`](../Blanc/Lift/Usdc/OldTransferFromAllowance.lean)
-proves the allowance continuation non-increasing at the same original store.
-It reloads allowance after the balance helper and uses the actual checked
-subtraction return, so the bound tolerates balance/allowance hash aliasing.
-The complete final allowance tails are checked equal by `tail_v21`.
-[`V2TransferFromEntry`](../Blanc/Lift/Usdc/V2TransferFromEntry.lean) preserves
-its existing interface by specializing the shared entry proof.
-
-[`V2TransferFromContinuation`](../Blanc/Lift/Usdc/V2TransferFromContinuation.lean)
-and [`V2_1TransferFromContinuation`](../Blanc/Lift/Usdc/V2_1TransferFromContinuation.lean)
-use the checked frame return to recover the original caller stack.
-Their `successfulSstore_credit_or_nonInc` excludes actual owner debits and
-allowance writes, leaving only the recipient store and its own successful
-hash. The exact recipient sites are `0x40e8` and `0x3d11`, respectively.
-[`V2TransferFromCreditHashes`](../Blanc/Lift/Usdc/V2TransferFromCreditHashes.lean)
-and [`V2_1TransferFromCreditHashes`](../Blanc/Lift/Usdc/V2_1TransferFromCreditHashes.lean)
-connect each member of the unchanged `actualOldTransferFromCreditKeys` list
-for its version to the actual increasing store and original successful
-recipient hash occurrence in the same raw history. No digest comparison,
-final-frame-success premise, hash injectivity or finite-population widening
-is introduced.
-
-For modern `transferFrom`, use
-[`ModernTransferFromSites`](../Blanc/Lift/Usdc/ModernTransferFromSites.lean)
-to reuse the unchanged root certificates at the same original successful store.
-`modernTransferFrom_store_nonInc_or_balance` derives nonincrease, the recipient
-balance key, or (only in V2.2) the sender balance key. V2/V2.1 sender debits and
-all three allowance writes already have certified nonincrease.
-[`OldTransferFromMappingTouches`](../Blanc/Lift/Usdc/OldTransferFromMappingTouches.lean)
-collects only actual increasing V2/V2.1 writes by testing the actual pre-word
-and written value, without comparing a key to a proposed digest. Soundness
-identifies the exact recipient key at that original store; completeness proves
-all omitted selected writes non-increasing. `ModernWriteFamilies` adds this
-exact list to its finite faithful check and discharges the two older transferFrom
-cases. V2.2 transferFrom remains explicit. The two credit-hash modules above
-supply original successful hash occurrences for the old-version collector; certificate key
-denotation alone does not provide them or prove finite-check truth.
-
-All three modern transfer and mint producers are consumed by
-[`ModernWriteFamilies`](../Blanc/Lift/Usdc/ModernWriteFamilies.lean) and
-[`ModernMinterFamilies`](../Blanc/Lift/Usdc/ModernMinterFamilies.lean).
-Their exact per-version actual lists extend `actualModernCoveredKeys`; supply
-writes stay in the literal-word branch. The faithful check now removes ordinary
-transfer and mint from every modern residual-selector list. It remains an
-explicit check obligation, and authorization, initializer and V2.2 transferFrom
-families remain separate. The received V2.1 transfer body and recipient
-interfaces reuse `OldTransferBodyReach`, preserving the newer shared proof.
-
-For the combined configure/mint family, use
-[`ModernMinterFamilies`](../Blanc/Lift/Usdc/ModernMinterFamilies.lean).
-`actualModernMinterKeys` selects the version's actual configureMinter and mint keys. `modernMinter_write_source` derives either
-literal supply slot 11 or a collected logical key distinct from every allowance
-key. It assumes no hash separation. `ModernWriteFamilies` includes this exact
-list in `actualModernCoveredKeys`; its existing finite faithful/apart checks
-then eliminate configureMinter and mint in all three versions from the residual
-families. No AllowedFrame exception,
-spender population, or global hash-injectivity premise is added.
-
-For V2 `configureMinter`, use
-[`Blanc/Lift/Usdc/V2ConfigureMinterMappingTouches.lean`](../Blanc/Lift/Usdc/V2ConfigureMinterMappingTouches.lean)'s
-`actualV2ConfigureMinterKeys`. The collector preserves the original history's
-order and duplicates. Its completeness theorem derives the reached store site
-for every selected successful store; recognition never compares the written key
-with a proposed hash. `V2ConfigureMinterReach.successfulSstore_source` derives
-the minter flag at base 12 or allowance at base 13, retaining that store's own
-successful original hash strictly before it. No final-frame success or hash
-injectivity is required. Initial apartness and freshness of this exact list
-remain explicit in the implementation-slot separation consumer.
-
-V2.1 uses
-[`Blanc/Lift/Usdc/V2_1ConfigureMinterMappingTouches.lean`](../Blanc/Lift/Usdc/V2_1ConfigureMinterMappingTouches.lean)'s
-`actualV2_1ConfigureMinterKeys` with the same exact-history guarantees.
-`V2_1ConfigureMinterReach` proves its own dispatcher, ABI, guard and source-PC
-coverage. It reuses `V2ConfigureMinterReach.body_reach_observed`, generalized
-over the surrounding program, because the two concrete body trees are
-definitionally equal. The existing V2 body walk and store-tail definitions
-remain the single owners; each runtime has its own source-location proof.
-
-V2.2 uses
-[`Blanc/Lift/Usdc/V22ConfigureMinterMappingTouches.lean`](../Blanc/Lift/Usdc/V22ConfigureMinterMappingTouches.lean)'s
-`actualV22ConfigureMinterKeys` for the same exact-history interface.
-`V22ConfigureMinterReach` proves the route and source locations in `Impl.code`,
-then reuses the identical V2 body without another generalization. Each collected
-row retains its own original successful hash before that actual store.
-
-For V2 `mint`, use
-[`Blanc/Lift/Usdc/V2MintMappingTouches.lean`](../Blanc/Lift/Usdc/V2MintMappingTouches.lean)'s
-`actualV2MintKeys`. The actual-store completeness theorem classifies the literal
-total-supply write at slot 11 separately, deriving its exclusion from the
-mapping collector. The recipient balance at base 9 and caller minter allowance
-at base 13 retain their own successful original hashes before their stores.
-`V2MintReach.successfulSstore_source` traverses the checked dispatcher, guards
-and arithmetic returns; its subtraction bound comes from the actual earlier
-mint guard. Recognition tests source PCs and actual store success, never a
-proposed key digest. Order, duplicates and original history membership remain
-explicit, as do initial apartness and freshness for slot separation.
-
-For V2 `transfer`, use
-[`Blanc/Lift/Usdc/V2TransferMappingTouches.lean`](../Blanc/Lift/Usdc/V2TransferMappingTouches.lean)'s
-`actualV2TransferKeys`. Original entry coverage derives the caller and recipient
-base9 balance stores, each with its own earlier successful hash. The actual
-balance guard supplies the subtraction bound through the unchanged storage
-read; the source theorem adds no bound premise. The collector preserves raw-node
-order and duplicates and derives source sites without testing proposed hashes.
-
-For V2.1 mint, use
-[`Blanc/Lift/Usdc/V2_1MintMappingTouches.lean`](../Blanc/Lift/Usdc/V2_1MintMappingTouches.lean)'s
-`actualV2_1MintKeys`. Original entry coverage derives supply at `0x1fd6`,
-recipient balance at `0x202c`, and caller minter allowance at `0x204d`.
-The mapping collector preserves raw-node order and duplicates, excludes the
-literal supply store, and retains each mapping store's own successful earlier
-hash in the same history. The arithmetic bound comes from the original mint
-guard. `V2_1MintReach` follows its own ABI and arithmetic helper paths;
-`V2MintReach.minter_store_reach_observed` shares only the identical final store
-tail over an arbitrary surrounding program. `ObservedSourceFor` shares the
-three-way classification with the version-specific balance tail as a parameter.
-The existing V2 interface remains
-available. Separation consumes freshness for exactly this collected list.
-
-For V2.2 `mint`, use
-[`Blanc/Lift/Usdc/V22MintMappingTouches.lean`](../Blanc/Lift/Usdc/V22MintMappingTouches.lean)'s
-`actualV22MintKeys`. The original-entry proof separates the literal supply write
-at `0x21b8`, caller minter allowance at `0x21f5`, and recipient balance through
-the guarded shared setter. Its retained immediate return excludes the first two
-source sites, so the recognizer needs no separate exact balance PC or digest
-comparison. Completeness covers every successful selected store and excludes
-supply from the mapping list; history soundness retains each row's own original
-successful hash. `V22TransferReach.StoreSource` now also retains that actual
-terminal tree, with the existing public transfer producer unchanged. Mint reuses
-its packed query, arithmetic and setter helpers and the identical V2 final
-minter-store helper. Freshness and initial apartness remain explicit for exactly
-the collected mapping list.
-
-For V2.2 `transfer`, use
-[`Blanc/Lift/Usdc/V22TransferMappingTouches.lean`](../Blanc/Lift/Usdc/V22TransferMappingTouches.lean)'s
-`actualV22TransferKeys`. Both writes use the same setter; the actual stack word
-at index 2 distinguishes its caller-balance return tag `0x40e8` from its
-recipient-balance return tag `0x40f9`. `V22TransferReach.successfulSstore_source`
-derives those tags, the written account key and its own successful earlier hash
-from original entry. Recognition checks target/code/selector, the retained tag
-and successful store, without a digest comparison or separate PC requirement.
-Completeness exhausts both tags, and history soundness binds the original frame,
-store and hash. Packed-balance queries, arithmetic and setter guards are traversed
-internally; no arithmetic or final-frame-success premise is added. Initial
-apartness and freshness remain explicit for the exact collected list.
-
-For V2.1 `transfer`, use
-[`Blanc/Lift/Usdc/V2_1TransferMappingTouches.lean`](../Blanc/Lift/Usdc/V2_1TransferMappingTouches.lean)'s
-`actualV2_1TransferKeys`. Its original entry proof derives the caller's balance
-store at `0x3cd2` and the recipient's at `0x3d11`, each with its own successful
-hash earlier in the same frame. It reuses the V2 transfer source shapes and the
-V2.1 mint arithmetic helpers; the actual balance guard supplies the debit bound.
-The collector preserves original raw-node order and duplicates and establishes
-completeness and same-history hash provenance without testing key digests.
-Separation requires explicit initial apartness and freshness of this exact list.
-
-For V1 `burn`, use
-[`Blanc/Lift/Usdc/V1BurnMappingTouches.lean`](../Blanc/Lift/Usdc/V1BurnMappingTouches.lean)'s
-`actualV1BurnBalanceKeys`. The recognizer selects actual successful balance
-stores at 0x1f27, preserving history order and duplicates without comparing
-the digest. `V1BurnReach.successfulSstore_source` follows the checked selector,
-guards and two subtraction returns, classifying the supply store at 0x1ed1
-separately from the caller's base-9 balance write. The balance arm retains
-the successful hash at 0x1f24 and its exact caller/base input before that store;
-the earlier supply-store arm requires no later hash. The history soundness
-and completeness theorems bind this exact collector, and implementation-slot
-separation requires its explicit initial apartness and freshness. No final
-call success or hash injectivity is assumed.
-
-For V1 `mint`, use
-[`Blanc/Lift/Usdc/V1MintMappingTouches.lean`](../Blanc/Lift/Usdc/V1MintMappingTouches.lean)'s
-`actualV1MintKeys`. Its two recognized source PCs select the calldata recipient's
-base-9 balance row and the caller's base-13 minter-allowance row. The actual
-prefix producer `V1MintReach.successfulSstore_source` separates the supply
-write at 0x1bcc, balance write at 0x1c61 and allowance write at 0x1cb7; the
-mapping arms retain the successful hash at 0x1c5e or 0x1cb4, respectively.
-Each earlier write requires no later hash or final call success. The collector
-preserves actual history order and duplicates, never compares the written digest,
-and has same-history soundness, completeness and explicit exact-list freshness
-consumers for implementation-slot separation.
-
-For V1 ordinary transfers, use
-[`Blanc/Lift/Usdc/V1TransferMappingTouches.lean`](../Blanc/Lift/Usdc/V1TransferMappingTouches.lean)'s
-`actualV1TransferKeys`. It selects both actual successful balance writes by
-selector and source PC, preserving raw-history order and duplicates without
-recognizing a digest. `V1TransferReach.successfulSstore_source` proves the
-caller and calldata-recipient keys and each successful 64-byte hash on the
-same original prefix, including early writes before a later failure.
-`ConfiguredHistoryTraceIn.actualV1TransferKeys_sound` retains both occurrences,
-their actual frame, and their prefix order; `mem_actualV1TransferKeys_of_site`
-is complete for either site. `v1Transfer_write_ne_implSlot` uses freshness of
-exactly that collected list and an explicitly separated initial footprint.
-
-For V1 transferFrom, use
-[`Blanc/Lift/Usdc/V1TransferFromMappingTouches.lean`](../Blanc/Lift/Usdc/V1TransferFromMappingTouches.lean)'s
-`actualV1TransferFromKeys`. Its exact `filterMap` recognizes target, code,
-selector, source pc and successful SSTORE, never the written digest. It covers
-the calldata owner's balance, recipient's balance and owner/caller allowance.
-`V1TransferFromReach.successfulSstore_source` supplies each computed key and
-successful own-prefix hash, plus the allowance's linked inner→outer→store
-chronology. Its early balance-store alternatives need no later hash or call
-success. `ConfiguredHistoryTraceIn.actualV1TransferFromKeys_sound` retains the
-original frame, store and hash in the same history;
-`v1TransferFrom_allowance_ordered_hashes` exposes both original nested hash
-witnesses and their order. `mem_actualV1TransferFromKeys_of_successfulSstore`
-collects every selected successful row, while
-`v1TransferFrom_successfulSstore_ne_implSlot` derives separation directly from
-initial apartness and freshness of exactly this producer list. No key
-injectivity, final-state invariant or never-signer premise is inferred.
-
-For the actual V1 transferFrom allowance value, use
-[`Blanc/Lift/Usdc/V1TransferFromNonInc.lean`](../Blanc/Lift/Usdc/V1TransferFromNonInc.lean)'s
-`allowanceStore_nonInc`: at pc 0x14e2, a successful store writes no more than
-that same node's current cell under the original raw `ParentPrefix`.
-`successfulSstore_source` retains both balance-site alternatives and reuses the
-existing mapping-key and ordered-hash witnesses, adding the bound only to the
-allowance alternative. The proof follows the allowance reload after both
-balance writes and the checked subtraction; it needs no row separation or
-final-frame outcome. Its focused body walk is
-[`Blanc/Lift/Usdc/V1TransferFromNonIncReach.lean`](../Blanc/Lift/Usdc/V1TransferFromNonIncReach.lean).
-
-For V1 `removeMinter` and `configureMinter`, use
-[`Blanc/Lift/Usdc/V1MinterMappingTouches.lean`](../Blanc/Lift/Usdc/V1MinterMappingTouches.lean)'s
-`actualV1MinterKeys`. It recognizes each of the four successful store PCs
-separately, preserving order and duplicates without testing the written digest.
-`ConfiguredHistoryTraceIn.actualV1MinterKeys_sound` retains the original store
-and its successful earlier hash, exact input, and membership in the same
-history. The first store requires no later hash or final call success.
-`mem_actualV1MinterKeys_of_site` collects every matching actual row;
-`ConfiguredHistoryTraceIn.v1Minter_write_ne_implSlot` requires initial apartness
-and freshness of exactly this list. It reuses the modern minter and minter
-allowance keys without changing the modern collectors.
 
 To establish such a footprint at a concrete checkpoint world, decide it with
 [`Blanc/Lift/FiniteCheckpoint.lean`](../Blanc/Lift/FiniteCheckpoint.lean): for a finite row list
@@ -4492,9 +3761,7 @@ For a token with a privileged minter, the minter/supply facet `SupplyFacet B`
 and classifies mint and burn messages (zero amounts included); `SupplyFacet.run_supply` says that
 along an accepted run whose minter-sent messages keep the minter (`KeepsMinter`), the minter persists
 and the final supply plus `burned` equals the initial supply plus `minted`; `SupplyFacet.run_keep`
-says that a run none of whose messages the minter sends keeps supply and minter. Worked instance: 3Crv
-(`Blanc/Composition/Curve3CrvTokenCore.lean`, `c3crvSupply`, `c3crv_history_supply`), composed with
-the Curve 3pool over one history in `Blanc/Composition/Curve3PoolSupply.lean` (`pool_3crv_history`).
+says that a run none of whose messages the minter sends keeps supply and minter.
 
 When the token's positional replay law holds only at settled positions outside its own writers (a
 proxy token observed at the entry of a frame inside a `DELEGATECALL` chain), use the
@@ -4792,36 +4059,6 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   a successful final-frame premise. Local nondelegation, `NeutralFork`, entry
   registers, pointer bounds and structural SSTORE-freedom remain obligations;
   this generic theorem does not establish contract dispatcher coverage.
-  The concrete `Usdc.recoveryV2_1_consumes` specialization in
-  [`Blanc/Lift/Usdc/RecoveryV2_1.lean`](../Blanc/Lift/Usdc/RecoveryV2_1.lean)
-  follows the actual checked V2_1 recovery entry to STATICCALL at PC `0x4a78`,
-  derives its four-word input from the entry registers and memory writes,
-  and connects the actual native invocation and nonzero canonical answer to
-  the original checked caller's returned stack. Its entry, pointer,
-  nondelegation and `NeutralFork` premises remain local producer
-  obligations. It does not enumerate flag-zero invocations or establish
-  complete historical permit coverage.
-  For a later actual SSTORE with arbitrary final frame outcome,
-  `Usdc.permitV2_1_recovery_answer_toward_sstore` in
-  [`Blanc/Lift/Usdc/PermitRowRecoveryV2_1.lean`](../Blanc/Lift/Usdc/PermitRowRecoveryV2_1.lean)
-  follows the real recovery return through the `0x471c` epilogue to the
-  `0x421e` owner comparison, deriving that the native answer equals the saved
-  owner. Its companion `permitV2_1_owner_comparison_toward_sstore` excludes
-  the actual rejecting branch. Recovery-entry registers, pointer bounds,
-  continuations and nondelegation remain local premises; root-to-entry
-  coverage and pre-authentication nonce-slot separation are separate work.
-  The actual original-frame producer is
-  `Usdc.permitV2_1_root_recovery_toward_sstore` in
-  [`Blanc/Lift/Usdc/PermitRowPrefixV2_1.lean`](../Blanc/Lift/Usdc/PermitRowPrefixV2_1.lean).
-  From the fresh PC-zero permit frame and an observed later SSTORE, it derives
-  the actual recovery entry, original prefix, calldata-derived owner/signature
-  words, pointer geometry and preservation of address-1 code. It assumes no
-  successful final outcome. The target stack head and explicit inequality
-  between its key and the calldata owner's nonce slot remain premises of this
-  local producer; the history consumer must discharge finite separation.
-  `Usdc.permitV2_1_tracked_sstore_native` in
-  [`Blanc/Lift/Usdc/PermitRowNativeV2_1.lean`](../Blanc/Lift/Usdc/PermitRowNativeV2_1.lean)
-  discharges that inequality from the existing finite `RowSep.other` nonce site.
   For an actual successful tracked-row SSTORE with calldata owner equal to the
   Pair, it derives the original call occurrence, native execution/payment and
   Pair answer, preserving node, slot, result and return through `reRoot`.
@@ -4829,49 +4066,6 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   no enclosing-frame success or preselected recovery query is assumed.
   The actual query bytes remain existential; this theorem does not claim
   complete old-version coverage or the historical absence of Pair signatures.
-  `RetainedOldOwnerNativeQuery` in
-  [`Blanc/Lift/Usdc/RetainedOldRecovery.lean`](../Blanc/Lift/Usdc/RetainedOldRecovery.lean)
-  is the independent actual native-query carrier for globally retained old
-  owner-route parents. It keeps the parent position, original occurrence,
-  version/site, message and arbitrary child result; membership never tests the
-  desired answer or a tracked write. `global_retention` derives the same node's
-  retention under an actual settled root. `retained_old_owner_pair_query_at`
-  reuses the successful old-owner producer for both V2 and V2_1, deriving fresh
-  entry from history. `retained_old_owner_not_pair` applies exclusion only over
-  that retained universe. The corresponding `_effective` variants carry the
-  actual parent fork's `delegatedCodeAddress(code1) = none` readiness through
-  both recovery specializations, `ownerV2_query_consumed_effective` and
-  `permitV2_1_query_consumed_effective`, the shared old-owner backend and all
-  three retained endpoints (`retained_old_owner_pair_query_at_effective`,
-  `retained_old_owner_has_pair_query_effective`,
-  `retained_old_owner_not_pair_effective`).
-  Original pure-nondelegation APIs project to that same implementation; the
-  independent query carrier is unchanged. Domain capabilities, BAL absence
-  and actual routing readiness remain explicit producer obligations. This
-  does not constrain discarded raw frames or finish the allowance-history fold.
-  [`RetainedAllowanceWrites.lean`](../Blanc/Lift/Usdc/RetainedAllowanceWrites.lean)
-  connects an actual retained storage write under an original settled root to
-  its globally retained parent. `usdc_retainedRowWrite_nonInc_or_v2_2_owner`
-  reuses the raw writer classifier and transports its exception by same-frame
-  `sevm` equality, then applies retained old-query exclusion and initializer
-  separation. The actual caller producer and scoped old routing readiness
-  remain inputs; the exact V2_2 owner case remains in the conclusion.
-  `usdc_retainedRowWrite_nonInc` closes that case with a separate retained
-  V2_2 owner producer. These are local write inequalities, not a storage fold
-  or a proof of the endpoint zero seed.
-  `usdc_rawRowWrite_of_nodeCode` factors the implementation classifier at one
-  actual write; the original raw-code interface is a compatibility wrapper.
-  `usdc_retainedRowWrite_nonInc_of_retainedCode` consumes that local code fact,
-  preserving the original native-query population and retained parent witness.
-  The `_of_rootCallers` variant restricts caller exclusion to committed frames
-  of that actual root; native-query and old-owner evidence retain their original
-  full-history scope. The original theorem is a compatibility wrapper.
-  `settledRoot_allowanceWrite_nonInc_from_installations` derives the code fact
-  from retained F2′ governance, the initially selected runtime, and installations
-  at actual upgrade positions. It does not require the raw upgrade checker or
-  all future runtimes installed at root entry. Modern row separation, the V1
-  actual-write classifier, initializer separation, caller exclusion, R3/R4 and
-  the separate V2_2 owner producer remain explicit.
   `settledRoot_allowance_zero_from_installations` composes those write bounds
   with `Exec.cell_zero_of_retained_nonInc_noStateGas`: a tracked row entering
   the actual settled root at zero leaves at zero. The seed, outer transaction
@@ -4908,11 +4102,6 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   owner exception remains an obligation.
   `UsdcDeployedWorld.active_library_code` shares the existing active-library
   selection with `ctxAt_step`; it derives actual code from the world facts.
-  `Usdc.recoveryV2_consumes` in
-  [`Blanc/Lift/Usdc/RecoveryV2.lean`](../Blanc/Lift/Usdc/RecoveryV2.lean)
-  specializes the same engine at V2's actual `0x50a4` entry and `0x50ef` call.
-  Its actual caller remains a producer obligation, including the `0x4d93`
-  epilogue before any owner comparison.
   Shared signed-query fragments live in
   [`Blanc/Lift/SolcSignedQuery.lean`](../Blanc/Lift/SolcSignedQuery.lean).
   Its line inversions cover the prologue, calldata size, seven-argument permit
@@ -4960,45 +4149,7 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   buffer fact and actual source route. Use the existing `line-run-split`
   recipe for line inversions and these named facts for memory goals. The
   helpers do not establish a whole selector path or historical occurrence.
-  The concrete fresh-entry producer in
-  [`Blanc/Lift/Usdc/PermitQueryV2_1.lean`](../Blanc/Lift/Usdc/PermitQueryV2_1.lean),
-  `Usdc.permitV2_1_query_entry`, derives the recovery registers, pointer and
-  actual continuations from PC zero, empty stack/memory and the permit selector
-  on a successful checked V2_1 execution. Its digest uses the domain word
-  after the actual nonce write, without a storage-separation premise.
-  `Usdc.permitV2_1_query_consumed` connects that query's original native call
-  slot and answer through the real `0x471c` return to the `0x421e` owner check,
-  deriving the nonzero calldata-owner answer. Existing fork coverage and
-  address-1 nondelegation remain local premises; proxy/history entry, other
-  selectors and failed-call enumeration remain separate obligations.
-  The V2 family in
-  [`Blanc/Lift/Usdc/OwnerQueriesV2.lean`](../Blanc/Lift/Usdc/OwnerQueriesV2.lean)
-  derives all four registered owner-selector prefixes through
-  `Usdc.ownerV2_source_prefix`; `ownerV2_source_prefix_of_owner_selector`
-  uses the existing `selV2.owners` table, including signed decrease.
-  Fresh successful execution yields the decoded arguments, pause/blacklist
-  facts, exact scratch memory, state, pointer and actual continuations.
-  Permit reaches the source tail after its nonce increment; the other three
-  paths return from authorization validation with strict time bounds,
-  unused authorization state and no storage write. `ownerV2_query_entry`
-  derives the actual six- or seven-word struct hash, typed-data digest,
-  signature-guard route, full registers and continuations at `0x50a4`.
-  `ownerV2_query_consumed` uses existing owner-selector membership to connect
-  the actual `0x50ef` native call, its original slot, paid gas and canonical
-  nonzero answer through `0x4d93` and each real owner comparison. The answer
-  is the calldata owner; the native message and return observations remain
-  in the conclusion. Fork coverage and address-1 nondelegation are explicit
-  local premises. Historical transport, complete retained-query relevance
-  and failed-call enumeration remain separate obligations.
-  `Usdc.old_owner_query_nativeH` (on a `NeutralFork`; `old_owner_query_native` is its
-  `CoveredFork` corollary) in
-  [`Blanc/Lift/Usdc/OldRecoveryRelevance.lean`](../Blanc/Lift/Usdc/OldRecoveryRelevance.lean)
-  composes both version families at their original fresh execution root. It
-  preserves the actual call node, recursive slot, step result and returned
-  derivation through `CallOccurrenceStep.reRoot`, and derives the real
-  `initEvm msg` ECRECOVER answer, native entry, settlement and resume equations.
-  Its version-specific conclusion retains exact inputs, call sites and owner
-  comparisons. `implV1_allowLocality_observed`, `implV2_allowLocality_observed`
+  `implV1_allowLocality_observed`, `implV2_allowLocality_observed`
   and `implV2_1_allowLocality_observed` preserve the original `StepIn` and
   per-version `RowSep` in forward `RunP` protected-write observations. V1 has
   only caller/initializer exceptions; the signed versions replace the owner-word
@@ -6057,11 +5208,7 @@ the `beaconHistoryReplayIn` and `transactionsWithdrawalsRequestsReplayIn`
 junctions, at most two nested appends each), `configuredBlockIn`, and
 `configuredHistoryIn`.
 
-Curve 3Crv observes the
-ordered writer invocations of its settlement-committed frames, with the storage
-boundary as carrier and a model replay universally quantified over the opening
-abstraction (`Blanc/Lift/Curve3Crv/CommittedReplay.lean`,
-`CommittedHistory.lean`). A deployed contract whose certified bytes spawn only
+A deployed contract whose certified bytes spawn only
 by `STATICCALL` shares one descendant argument,
 [`Blanc/Lift/StaticOnlyFrames.lean`](../Blanc/Lift/StaticOnlyFrames.lean):
 `Xinst.isStaticcall` with `parentPrefix_exec_staticcall_of_cert` turns a
@@ -6210,8 +5357,7 @@ with a guard's verdict (`guardedBook_run`; `guardedBookCarrier_unguarded`: it sa
 unguarded boundary), and `ObserverChain` pairs each non-static entry with its observer so that
 `ObserverChain.run_eq` turns the book run over observer asks into the run over entry asks
 (`ObserverChain.prefix`, `observerView_flatMap`; `ObserverChain.of_local` in
-`Blanc/Lift/SettledFramePositions.lean` builds a chain from its two local conditions). Worked use:
-USDC (`Blanc/Lift/Usdc/HistoryFamily.lean`, `HistoryReplay.lean`).
+`Blanc/Lift/SettledFramePositions.lean` builds a chain from its two local conditions).
 
 For a list induction over settled positions, use
 [`Blanc/ExecutionTraceSettledForest.lean`](../Blanc/ExecutionTraceSettledForest.lean): the settled
@@ -6231,8 +5377,7 @@ of descendants covers its position; `PositionalParents` with the one-rung `paren
 `Exec.single_child_of_silentAfter` (a run that decodes no external instruction after its first one
 has at most one child, which heads its descendants), and
 `ConfiguredHistoryTrace.settled_mem_rawFrames` (a settled frame's root derivation is a raw frame;
-the Lift-stratum form of the composition stratum's `mem_rawFrames_of_mem_settledFrames`). Worked
-use: `Blanc/Lift/Usdc/HistoryReplayFrames.lean`.
+the Lift-stratum form of the composition stratum's `mem_rawFrames_of_mem_settledFrames`).
 
 
 **A token's storage over a mid history, and receipt-log premises.**
@@ -6324,8 +5469,7 @@ settled state (gas refund and coinbase fee credited, accounts deleted) under the
 settlement facts (`CoveredFork.rules_touchedSweep`, `CoveredFork.rules_refundQuotient`). The
 sender-account part is the rule-selected `checkTransactionSenderAccountFor`, and
 `calculateIntrinsicCost_two_call` takes the nonzero-byte price and calldata floor
-(`CoveredFork.rules_dataNonZero`, `CoveredFork.rules_calldataFloor`).  Worked use:
-`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Tx/Envelope.lean`.
+(`CoveredFork.rules_dataNonZero`, `CoveredFork.rules_calldataFloor`).
 
 For historical refund and sweep rules, use
 [`Blanc/TransactionHistoricalForward.lean`](../Blanc/TransactionHistoricalForward.lean).
@@ -7042,8 +6186,6 @@ current recipe matchers have no forward-transition shape to bind.
   the previous world; `runMessages fork W ms` returns the final world, or `none` at the first
   message that does not return `.ok` with no error. `runMessages_cons_of_ok` restates one
   already-proved settlement as one fold step. Message level only: no transaction admission.
-  Worked uses: `vminus_attack` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Reach/ViolFinal.lean`)
-  and `vplus_exit` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exit/Capstone.lean`).
 - For a `CREATE2` address from an init-code digest, admitted `CREATE2` spawns,
   or an EIP-1167 clone of a lifted implementation, use
   [`Blanc/Lift/Create2Deploy.lean`](../Blanc/Lift/Create2Deploy.lean) and
@@ -7217,28 +6359,24 @@ every shared module with its own summary and the branches that cite it.
   hand-written `Jumps` module, which then proves `jumps_ok` by `Cert.jumpsOk_of_rangeOk`), replacing the per-entry theorems, their `cert[i]'(by decide +kernel)`
   index proofs and the per-entry `rest_`/`jrest_` chain. Measured on WSL (2026-11-01): Curve3Pool's
   generated check modules went from about 2,100 s to about 575 s of elaboration and from 30.6k to
-  5.9k lines at `B = 600` (largest part 5.0 GiB, the 4,041-node entry alone). Worked use:
-  `Blanc/Lift/Curve3Pool/Check.lean`.
+  5.9k lines at `B = 600` (largest part 5.0 GiB, the 4,041-node entry alone).
 - Assemble the free-pointer check of a long certificate from range decisions: `fpRange`
   (entries `k .. k + n - 1` under their annotations, one kernel decision), `fpFrom` over the tails
   `(c.zip ann).drop k`, the link `fpFrom_range`, the end `fpFrom_of_le` and the assembly
   `fpCert_of_fpFrom` in [`Blanc/Lift/FreePtrChain.lean`](../Blanc/Lift/FreePtrChain.lean), emitted by
   the registered `scripts/lift/fp_annot.py` (registry key `fp`; ranges of at most
-  `CHECK_RANGE_BUDGET` summed cost proxy). Worked use: `Blanc/Lift/Usdc/ImplFp/Check.lean`,
-  `Blanc/Lift/Usdc/ImplFp.lean`. For any other annotated check, instantiate the generic kit there:
+  `CHECK_RANGE_BUDGET` summed cost proxy). For any other annotated check, instantiate the generic kit there:
   `chainRange`/`chainFrom` over a check function, with `chainFrom_range` and `chainFrom_of_le`.
 - Assemble the write-site check of a long certificate the same way: `wsRange`, `wsFrom`,
   `wsFrom_range`, `wsFrom_of_le` and `wsCert_of_wsFrom` in
   [`Blanc/Lift/WriteSiteChain.lean`](../Blanc/Lift/WriteSiteChain.lean), emitted by the registered
-  `scripts/lift/ws_annot.py` (registry key `ws`). Worked use: `Blanc/Lift/Usdc/ImplWs/Check.lean`,
-  `Blanc/Lift/Usdc/ImplWs.lean`.
+  `scripts/lift/ws_annot.py` (registry key `ws`).
 - Sharpening a checked certificate's declared entry frames without re-deciding every entry:
   [`Blanc/Lift/CertRefine.lean`](../Blanc/Lift/CertRefine.lean). `Cert.refine c k i v` replaces position `i` of entry `k`'s
   frame and keeps every tree (`Cert.refine_prog`, `Cert.refine_getElem?_ne`);
   `Cert.check_of_agree` reduces the refined certificate's `Cert.check` to the entries of a list `T`
   (re-decided through `Cert.entryOk`, trie form `Cert.entryOkT` with `Cert.entryOkT_eq`) when every
-  other entry is unchanged and references no refined entry (`checkNode_congr`). Worked use:
-  `Blanc/Lift/Usdc/ImplFrames.lean`.
+  other entry is unchanged and references no refined entry (`checkNode_congr`).
 - Jump destinations: Jaune's own `jumpable_eq_jumpdestOk` (`Jaune/Machine.lean`)
   replaces its exponential `jumpable` by the linear `jumpdestOk` scan, for every
   byte string; Blanc keeps no copy.
@@ -7306,8 +6444,7 @@ every shared module with its own summary and the branches that cite it.
   `ConcreteRun.stepN` (at most `n` continuing steps), `stepN_add`, `stepN_sta`, and the
   bridges into the canonical derivation `ConcreteRun.exec_of_stepN`,
   `exec_of_stepN_halt` and `exec_of_stepN_spawn_runOk` (across one `.spawn`), in
-  [`Blanc/ConcreteRun.lean`](../Blanc/ConcreteRun.lean). Worked use:
-  `Blanc/Lift/VyperNonreentrantDeployed/Concrete/ProxyConcrete.lean`.
+  [`Blanc/ConcreteRun.lean`](../Blanc/ConcreteRun.lean).
 - A concrete frame run over a lifted certificate, as a gas-exact `SProg.RunExact`
   (an executable witness: liveness from one start state, by kernel evaluation): the
   interpreter `Witness.wrun` over the certificate's decoded tree, its single step
@@ -7373,8 +6510,7 @@ every shared module with its own summary and the branches that cite it.
   [`Blanc/Lift/CodeTriesData.lean`](../Blanc/Lift/CodeTriesData.lean); the data checked in one
   linear pass that also yields the length bound (`LTrie.build`, `LTrie.build_eq`,
   `LTrie.eq_ofList_of_build`, `LTrie.length_le_of_build`; producer option `check.trie_build`) in
-  [`Blanc/Lift/CodeTriesBuild.lean`](../Blanc/Lift/CodeTriesBuild.lean). Worked use:
-  `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Top.lean` (`vminus_witness`).
+  [`Blanc/Lift/CodeTriesBuild.lean`](../Blanc/Lift/CodeTriesBuild.lean).
 
 #### C9.3. I need the free-pointer or write-site checker's soundness
 
@@ -7419,9 +6555,6 @@ every shared module with its own summary and the branches that cite it.
   and `lift_sound_fp_noStateGas` variants use the executing rules'
   `stateGas = none`. They share the original induction and checker, retaining
   the actual `Exec` and `StepIn` witnesses; modern interfaces remain projections.
-  The USDC worked specialization `implRun_fp_noStateGas` in
-  `Blanc/Lift/Usdc/ImplFp.lean` applies that capability to the existing checked
-  annotations and the same original successful implementation run.
 - For the write-site checker's step and join soundness, use
   [`Blanc/Lift/WriteSiteStep.lean`](../Blanc/Lift/WriteSiteStep.lean) and
   [`Blanc/Lift/WriteSiteJoin.lean`](../Blanc/Lift/WriteSiteJoin.lean): `WSt.Holds`/`WSt.Sat`
@@ -7618,14 +6751,7 @@ every shared module with its own summary and the branches that cite it.
   For the legacy layout with extra push/swap staging and an indirect return,
   `legacyBody_store_cut` derives the actual zero store and its continuation;
   `legacyRunP_zeroStores_noExec` follows both the head and return table entries.
-  It shares the comparison and back-edge fold with the compact layout. The
-  concrete [`OldInitializerV1Clearing`](../Blanc/Lift/Usdc/OldInitializerV1Clearing.lean)
-  theorems `v1Clear_zeroStores_noExec` and `v1ClearEntry_zeroStores_noExec`
-  instantiate the actual V1 clearing head and helper prefix, retaining the
-  original `StepIn R` relation and outcome. They require no memory bounds,
-  nonwrapping arithmetic or initial zero seed; whole-initializer coverage
-  and historical execution remain separate obligations.
-  For a string allocation that stores a length header then copies bytes,
+  It shares the comparison and back-edge fold with the compact layout. For a string allocation that stores a length header then copies bytes,
   use [`Blanc/Lift/SolcStringAllocation.lean`](../Blanc/Lift/SolcStringAllocation.lean).
   It derives the actual copy-window bound, preserved header and unwrapped
   rounded next pointer from the actual header/copy memory equations and
@@ -7648,11 +6774,7 @@ every shared module with its own summary and the branches that cite it.
   their composition by `rfl`. Their `_lift` forms (`strFrag_lift`,
   `rotFrag_lift`, `staticFrag_lift`) also return `Lifts`, the rebuild of the
   state-silent prefix under any stronger step relation (`lstep`, `ldest`,
-  `Lifts.trans`). `Blanc/Lift/Usdc/OldInitializerV1Staging.lean`
-  (`wrapper_strengthen`, `wrapper_stage`) is the worked three-string example
-  and `Blanc/Lift/Usdc/OldInitializerV1Callee.lean` (`initialize_observed`)
-  uses the rebuild to classify the whole wrapper run.
-  For the source-shaped memory-to-storage payload loop, use
+  `Lifts.trans`). For the source-shaped memory-to-storage payload loop, use
   [`Blanc/Lift/SolcStoragePayload.lean`](../Blanc/Lift/SolcStoragePayload.lean).
   `runP_enriched` retains the actual step relation, entry state and outcome,
   classifying stores as zero or an indexed modular payload key. Its count is
@@ -7664,18 +6786,6 @@ every shared module with its own summary and the branches that cite it.
   storage-update law. Keys remain modular. Initial potential, concrete
   wrapper staging, whole-root coverage and protected-key separation must
   still be established by the consumer; none follows from this local loop.
-  The concrete V2 consumer in
-  [`Blanc/Lift/Usdc/OldInitializerEffects.lean`](../Blanc/Lift/Usdc/OldInitializerEffects.lean)
-  derives `implV2_initializeV2_observed` from successful fresh execution with
-  `stateGas = none` and the actual initializer selector: every store targets metadata key4/15/18,
-  writes zero, or targets a bounded modular payload word of the actual long
-  decoded name; the same route has no external instruction. The wrapper
-  derives its calldata bounds. `implV2_initializeV2_writeClass` projects
-  the write classification. `implV2_initializeV2_short_nonInc` and
-  `implV2_initializeV2_short_zero` require an actual decoded length at most31
-  and separation from the three fixed keys; the latter also requires the
-  initial zero seed. They do not establish the historical name profile,
-  seed, long-payload separation or arbitrary nonzero-word preservation.
   When a caller continues after such a storage-string helper, use
   [`Blanc/Lift/SolcStorageReturn.lean`](../Blanc/Lift/SolcStorageReturn.lean)
   for what the helper returns: `legacyRunP_returned` gives the returned stack
@@ -7685,16 +6795,7 @@ every shared module with its own summary and the branches that cite it.
   fork-free `SLOAD`/`SSTORE` walk inversions with exact memory
   (`ri_sload_any`, `ri_sstore_any`) and the branch/jumpdest rebuilders
   `qdest`, `qbranch`, `qbranchTo` for strengthening a run in place.
-  [`Blanc/Lift/Usdc/OldInitializerV1Callee.lean`](../Blanc/Lift/Usdc/OldInitializerV1Callee.lean)
-  is the worked V1 consumer (`callee_obs`).
-  [`Blanc/Lift/Usdc/OldInitializerV1Root.lean`](../Blanc/Lift/Usdc/OldInitializerV1Root.lean)
-  composes it with the original successful fresh V1 execution as V2 does:
-  `implV1_initialize_observed` walks the actual dispatcher (free-pointer
-  store, `div`/`and` selector, comparison chain, nonpayable entry 60), which
-  derives the wrapper-entry seams, and lifts by `lift_sound_in_noStateGas`
-  and `FreePtr.SFunc.RunP.withPot`. Its local premises are `stateGas = none`
-  (`_hist` discharges it from `HistFork`) and the initial potential
-  `pre.gasMeasure < 2 ^ 256`. `implV1_initialize_writeClass`,
+  `implV1_initialize_writeClass`,
   `implV1_initialize_short_nonInc` and `implV1_initialize_short_zero`
   (fork-free, through `progRunP_zero_noExec`) mirror the V2 consumers; they
   do not establish the historical string profile, seed or payload-key
@@ -7704,13 +6805,7 @@ every shared module with its own summary and the branches that cite it.
   [`Blanc/ExecutionStagedRootFacts.lean`](../Blanc/ExecutionStagedRootFacts.lean)
   `ConfiguredHistoryTraceIn.rawFrame_entryFacts` gives pc zero, the selected
   fork, `stateGas = none`, fresh stack and memory and `gasMeasure < 2 ^ 256`
-  from `BodyStageCapabilities` alone. For historical initializer writes, use
-  `ConfiguredHistoryTraceIn.initFrame_sstore` and `initRowWritesNonInc` in
-  [`Blanc/Lift/Usdc/InitRowsHistory.lean`](../Blanc/Lift/Usdc/InitRowsHistory.lean):
-  the node-level classifier covers prefixes of raw frames, including delegated
-  children and reverted executions, with the explicit finite `InitRowsApart`
-  separation premise.
-  [`Blanc/ExecutionStagedSstoreAttribution.lean`](../Blanc/ExecutionStagedSstoreAttribution.lean)
+  from `BodyStageCapabilities` alone. [`Blanc/ExecutionStagedSstoreAttribution.lean`](../Blanc/ExecutionStagedSstoreAttribution.lean)
   `ConfiguredHistoryTraceIn.rawFrames_closed` (with the stage and staged-body
   forms) closes the raw frames under descent, and
   `ConfiguredHistoryTraceIn.exists_retainedSstore_frame` attributes a cell
@@ -7720,13 +6815,7 @@ every shared module with its own summary and the branches that cite it.
   is a raw frame of the history executing at the owner. It is per raw frame;
   relating checkpoint and endpoint storage across transaction settlement is
   not part of it.
-  The allowance-locality laws have the same historical form in
-  [`Blanc/Lift/Usdc/AllowLocalityHistory.lean`](../Blanc/Lift/Usdc/AllowLocalityHistory.lean):
-  `implV1Run_ws_noStateGas`, `implV2Run_ws_noStateGas`,
-  `implV2_1Run_ws_noStateGas` and `implRun_ws_noStateGas` instantiate
-  `lift_sound_ws_noStateGas`; `implV1/V2/V2_1/V2_2_allowLocality_noStateGas`
-  and `implV1_allowLocality_observed_noStateGas` take `stateGas = none` in
-  place of `CoveredFork` with unchanged conclusions. For V2, V2_1 and V2_2 the
+  For V2, V2_1 and V2_2 the
   `_selectorObserved_noStateGas` forms read the exception at the frame's
   selector. V2 and V2_1 take a `NeutralFork`, a fresh entry and a non-delegated
   address 1, and their owner arm is the native `OldUsdcNativePairAnswer`, as in
@@ -7761,10 +6850,6 @@ every shared module with its own summary and the branches that cite it.
   base and actual code-size word; use `Ninst.exec_of_stepRun` for continuation.
   Neither route proves nonzero code size, callee liveness or the concrete
   constructor execution.
-- Selected permit consumers `ric_seg_e8digest_noStateGas` in
-  `Blanc/Lift/Usdc/ShuffleSegments.lean` and `ric_seg_w149_noStateGas` in
-  `Blanc/Lift/Usdc/RefineSignedPermitFrames.lean` reuse the original shuffle
-  checks.
 - A `STATICCALL` to an arbitrary callee, whose code is unknown: its abstract outcome
   (`StaticCallPost`: flag, returned bytes as output window and return data, every storage
   map and the log list kept) and, for a set flag, the successful static child message
@@ -7896,15 +6981,7 @@ every shared module with its own summary and the branches that cite it.
   same-frame edge that spawns nothing and stores elsewhere) and
   `LockCheck.cursor_sstore_node`. The continuing arm uses the generic
   `Evm.step_cont_getStor_get` directly; no separate no-executable-opcode
-  storage bridge is needed. Worked use:
-  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/LockDominance.lean`; the full
-  `lock_exclusion` instance (dominance, `ownerDiscipline_of_world` for a
-  forwarder owner, `NoDelegateFrom` from the cursor, release-pc activity) is
-  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exclusion.lean`; its transaction
-  and history forms (`vplus_excludes`, `TransactionTrace.vplus`,
-  `ConfiguredHistoryTrace.vplus`: the well-formed-root premise derived from the
-  prepared message, every raw root of a history covered) are
-  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/ExclusionTrace.lean`.
+  storage bridge is needed.
 
 #### C9.7. I need every execution prefix to a node, whatever the outcome
 
@@ -7959,37 +7036,7 @@ every shared module with its own summary and the branches that cite it.
   `rs_dest`, `rs_branch`, `rs_branchTo`, `rs_jump`, `rs_callOver`, `rs_callInto` in
   [`Blanc/Lift/ReachWalkSstore.lean`](../Blanc/Lift/ReachWalkSstore.lean); with
   `reach_of_parentPrefix_noStateGas` and `CursorOK.tree_of_sstore` it names the key and
-  value of every `SSTORE` a certified frame reaches, whatever its outcome. Worked use: USDC
-  `Proxy.proxy_sstoreNodeH` in `Blanc/Lift/Usdc/ProxySstoreH.lean`.
-  The shared `Proxy.proxy_sstoreCursorH` also retains the checked cursor and
-  continuation geometry. `Proxy.proxy_implSstore_emitsUpgraded` in
-  [`Blanc/Lift/Usdc/ProxyUpgradeLog.lean`](../Blanc/Lift/Usdc/ProxyUpgradeLog.lean)
-  follows that continuation to an actual retained `Upgraded` log for a committing
-  proxy frame (`stateGas = none`, `bal = none`). Its same-frame prefix identifies
-  an implementation-slot write; the result specifies address and topic with an
-  existential payload. It does not assert receipt correspondence or history-wide
-  implementation continuity. `ConfiguredHistoryTraceIn.implSlot_change_emitsUpgraded`
-  in [`Blanc/Lift/Usdc/ProxyCommittedUpgradeLog.lean`](../Blanc/Lift/Usdc/ProxyCommittedUpgradeLog.lean)
-  composes this with retained-write attribution and frame-log inclusion: a
-  committing raw frame changing the implementation slot yields that log at the
-  proxy address. Its premises include nonempty proxy code at the frame entry,
-  `ImplSlotApart`, and the history's body-stage capabilities and BAL restriction.
-  The same module's `retained_implSstore_emitsUpgraded_of_proxyCode` instead
-  takes the actual retained node's proxy-code identity directly and proves
-  the log occurs in the same committed root. It does not require global
-  implementation-slot separation; establishing the node's code remains the
-  caller's obligation.
-  [`Blanc/Lift/Usdc/ProxyRetainedContextCodes.lean`](../Blanc/Lift/Usdc/ProxyRetainedContextCodes.lean)'s
-  `ConfiguredHistoryTraceIn.retained_proxyV1_context` couples strict earlier
-  retained-write exclusion with current Proxy/V1 code classification in one
-  committing root. It derives the unchanged implementation word and excludes
-  each current write using the same root's absence of an Upgraded log. Its
-  explicit remaining inputs are installed Proxy/V1 code and implementation
-  address at that root, own-code at the actual input root, and local separation
-  for actual writes already known to run V1. It requires no global raw-write
-  apartness; supplying that local V1 separation and the actual root/receipt
-  facts remains a separate obligation.
-  For an actual `R ∈ history.settledRoots`, use
+  value of every `SSTORE` a certified frame reaches, whatever its outcome. For an actual `R ∈ history.settledRoots`, use
   `ConfiguredHistoryTraceIn.settledRoot_retained_proxyV1_context`. It supplies
   raw-frame membership, commitment and conditional own-code from that same
   root. Installed Proxy/V1 code, the implementation word, the same-root
@@ -8040,27 +7087,6 @@ every shared module with its own summary and the branches that cite it.
   no old-header shape or additional gas assumption is required.
   `ReachPayload.payloadB_reach_exact` retains equality of the exit index to
   `count fin p`; the original `payloadB_reach` projects the same traversal.
-  USDC's `InitReachV1.tail7_reach_range` and `helper46_reach_range` in
-  [`Blanc/Lift/Usdc/InitReachV1.lean`](../Blanc/Lift/Usdc/InitReachV1.lean)
-  carry the clearing interval through the old initializer helper, retaining
-  the old endpoint computed from its actual input storage word. Their original
-  interfaces remain projections. These range facts do not by themselves prove
-  that a clearing key differs from a control slot.
-  [`Blanc/Lift/Usdc/InitV1KeyBounds.lean`](../Blanc/Lift/Usdc/InitV1KeyBounds.lean)
-  bounds the decoded old length and clearing count for any stored header.
-  `helper46_reach_ne_implSlot` consumes the helper range with explicit numeric
-  hash-base bounds and the new-length cap.
-  [`Blanc/Lift/Usdc/InitV1ConcreteBounds.lean`](../Blanc/Lift/Usdc/InitV1ConcreteBounds.lean)
-  proves the exact Keccak values for initializer headers 4, 5 and 7 in the kernel.
-  Its `bounds` theorem supplies header separation, the hash-base margin and
-  the implementation-slot exclusion interval for those three headers.
-  `InitReachV1.callFrag_reach_range`, `callee_reach_range`, `wrapper_reach_range`
-  and `initV1_reach_range` propagate the actual clearing ranges through the
-  initializer; `BoundedRange` retains the three length caps derived from actual
-  staging. The original caller interfaces project that same traversal.
-  `InitV1KeyBounds.initV1_reach_ne_implSlot_concrete` combines these ranges and
-  checked hashes to exclude the implementation slot at every reached initializer
-  store, with no numerical-bound, length-cap or old-header-format premise.
   Also there: `rs_callIn`/`rs_ret` (enter a callee with its continuation pending, return into
   it), `rs_callOverAny` (an `SSTORE`-free callee from any machine), `rsk` (one step taken
   without inverting it), `rsa` (`rsd`, `rsx` or `rsld`, for `repeat rsa`), `mapSlot_scratch`
@@ -8077,11 +7103,7 @@ every shared module with its own summary and the branches that cite it.
   string allocation fragment (`alloc06Frag`, `alloc06Frag_reach` into `Alloc06`: header at the
   old free pointer, free pointer advanced past the rounded payload, lower memory kept) and
   `memWord_write_far` (a word read clear of a write); worked use: USDC
-  `Init06.wrap06_reach` in `Blanc/Lift/Usdc/InitReach06.lean`. The solc ABI string decoder
-  fragments of `Blanc/Lift/SolcAbiStringStaging.lean` on a reach (`ReachAbi.strFrag_reach`,
-  `rotFrag_reach`, `staticFrag_reach`; the allocation is `allocMem` by `strFrag_mem`, its size
-  bounded by the potential) are there too; worked use: USDC `InitReachV1.wrapper_reach` in
-  `Blanc/Lift/Usdc/InitReachV1.lean`.
+  `Init06.wrap06_reach` in `Blanc/Lift/Usdc/InitReach06.lean`.
 - Further prefix-reach facts for a certified frame: the goto inversions `rr_branchTo`/`rr_jump`
   and the instruction inversions `ri_address`/`ri_dup_any` in
   [`Blanc/Lift/RunPWalk.lean`](../Blanc/Lift/RunPWalk.lean); the first external instruction of a store-free region
@@ -8100,8 +7122,7 @@ every shared module with its own summary and the branches that cite it.
   `SFunc.selWalk_mem_pairs`/`_leaves`; `SFunc.toCall` with `SFunc.RunP.callee_of_toCall` for a
   wrapper's ABI decoding before its body call) in [`Blanc/Lift/SelectorRoute.lean`](../Blanc/Lift/SelectorRoute.lean); the
   reach forms of the two route-C skips below, `rr_shuffle` and `rr_call_silent`, in
-  [`Blanc/Lift/ReachSkip.lean`](../Blanc/Lift/ReachSkip.lean). Worked uses: USDC (`Blanc/Lift/Usdc/RefineSignedAuth.lean`,
-  `RefineSignedPermitNodes.lean`, `RefineAdminRescue.lean`, `HistoryFamilyProxy.lean`).
+  [`Blanc/Lift/ReachSkip.lean`](../Blanc/Lift/ReachSkip.lean).
 - Preserve an actual external-instruction target while routing a literal
   comparison dispatcher: [`Blanc/Lift/ReachDispatch.lean`](../Blanc/Lift/ReachDispatch.lean)
   provides `rr_cmp_gt` and `rr_cmp_eq` for `DUP`/`PUSH4`/comparison/`PUSH2`
@@ -8193,8 +7214,7 @@ every shared module with its own summary and the branches that cite it.
   `P n a` at every straight-line node; `Cert.framesSat` over every entry gives
   `Cursor.framesSat_of_reachable` (through `SStep.framesSat`), `CursorOK.framesSat_exec` applies `P`
   to a cursor-placed node's actual instruction and abstract frame, and `CursorOK.stack_const` with
-  `FrameMatches.getElem?_const` reads a `.const` frame position as the actual stack word. Worked
-  uses: `Blanc/Lift/QuietDelegateSkip.lean`, `Blanc/Lift/Usdc/ImplFrames.lean`.
+  `FrameMatches.getElem?_const` reads a `.const` frame position as the actual stack word.
 - To identify the pc of an already supplied checked cursor from a literal
   byte prefix, use [`Blanc/Lift/CursorCheckPrefix.lean`](../Blanc/Lift/CursorCheckPrefix.lean).
   `bytesAt_append` joins adjacent checked slices; `checkNode_bytesAt_prefix`
@@ -8209,25 +7229,7 @@ every shared module with its own summary and the branches that cite it.
   These projections do not traverse execution, establish family reachability,
   or identify computed storage keys. No recipe is registered: the joint cursor,
   literal tree and singleton premises are not a reliable equality-goal trigger.
-  The concrete [`Usdc/V1MinterReach.lean`](../Blanc/Lift/Usdc/V1MinterReach.lean)
-  consumer derives the V1 removeMinter dispatcher/body path and retains the
-  same final cursor: `successfulSstore_source` pairs each actual source pc
-  with its computed base-12/base-13 key and exact SSTORE tail. Its first-store
-  stop branch precedes any continuation to the second hash.
-  [`Usdc/V1ConfigureMinterReach.lean`](../Blanc/Lift/Usdc/V1ConfigureMinterReach.lean)
-  proves the configureMinter twin through its distinct V1 entry-65 wrapper,
-  paused/master-minter guards and body, pairing 0x20b2/base12 or 0x20f6/base13
-  at the same actual cursor, with the same first-store stopping boundary.
-  Both family walks have observed variants; the original interfaces project them.
-  [`Usdc/V1MinterHashOccurrences.lean`](../Blanc/Lift/Usdc/V1MinterHashOccurrences.lean)
-  uses one synchronized prefix and the same final cursor to derive actual
-  successful hashes before each reached store. `remove_successfulSstore_hashes`
-  pairs 0x15f5→0x160b/base12 or 0x164d→0x1650/base13;
-  `configure_successfulSstore_hashes` pairs 0x209c→0x20b2/base12 or
-  0x20f3→0x20f6/base13. Each retains the exact account-word/base-word 64-byte
-  input and original parent-prefix cuts. Hash pcs come from the same checked
-  hash cursor's literal lead and the existing singleton store anchors.
-  Collection and freshness remain separate. No recipe is registered for these
+  No recipe is registered for these
   contract-specific producers: their joint raw-prefix and selector inputs
   are not a reliable generic goal trigger.
 - To advance a checked certificate cursor through an actual successful raw
@@ -8524,7 +7526,6 @@ every shared module with its own summary and the branches that cite it.
   `rpw_branch`, `rpw_branchTo`, `rpw_jump`, `rpw_call`, `rpw_callOver` for a `NoHaltSet` callee,
   `rpw_callRet` in a returning run, `rpw_ret`, `rpw_revert`; `SFunc.haltsOnly` with
   `SFunc.RunP.not_returned_of_haltsOnly`; `St.self'`) in [`Blanc/Lift/RunPWalk.lean`](../Blanc/Lift/RunPWalk.lean).
-  Worked use: the USDC proxy (`Blanc/Lift/Usdc/ProxyWalk.lean`, `ProxyHalt.lean`).
 - One-lemma straight-line steps and the inversion helpers of solc walks:
   [`Blanc/Lift/InvWalkStep.lean`](../Blanc/Lift/InvWalkStep.lean). `stepX` computes the successor walk state of the
   straight-line instructions a walk crosses and `ri_stepX` inverts any of them at once; the
@@ -8544,8 +7545,7 @@ every shared module with its own summary and the branches that cite it.
   dispatcher's comparison rows decided by a closed comparison (`ric_gt_le`/`ric_gt_gt`/
   `ric_eq_miss`/`ric_eq_hit` and the `rr_*` reach forms), the storage projections of the walk
   bases, and solc's reuse of the previous hash's key word (`keccak_scratch2`, from
-  `Mem.read_after_right_write`). Worked uses: USDC (`Blanc/Lift/Usdc/RefineTransferCallees.lean`,
-  `RefineAdminBits.lean`). The shared accumulated walk is owned by
+  `Mem.read_after_right_write`). The shared accumulated walk is owned by
   [`Blanc/Lift/AccumulatedWalk.lean`](../Blanc/Lift/AccumulatedWalk.lean).
 - Straight-line inversion steps of a cut run without writing them out: `winv n` / `winv` read
   the node off the tree of `h : SFunc.RunCut …` (or `SFunc.RunCutP P …` with `using project`) and
@@ -8593,8 +7593,7 @@ every shared module with its own summary and the branches that cite it.
   `Ninst.delegatecall_getStor_of_quiet`, `Ninst.Run.getCode_eq`, `ric_delegatecall_quiet`,
   framed runs (`SFunc.RunP.framed` over `Cert.framesSat`), `SFunc.RunP.qdKeep` over a
   `QuietDelegateSet` closure whose every `DELEGATECALL` names one constant word (`QDKeep`), and
-  `ric_call_quietDelegate`. Worked uses: USDC (`Blanc/Lift/Usdc/ShuffleSegments.lean`,
-  `SignedSkip.lean`, `RefineSignedPermitNodes.lean`).
+  `ric_call_quietDelegate`.
 - Loops: a back-edge to entry `k` is reasoned about one iteration at a time on
   runs cut at `k` (`SFunc.RunCutP`, `SFunc.RunExactCut`). Safety:
   `SFunc.RunCutP.loop` (invariant; `SFunc.RunP.loop`), which
@@ -8688,9 +7687,6 @@ as parameters, so a generated tree is an instance by `rfl`. `init_inv`/`init_exa
 `guard_inv`/`guard_exact` over `guardTree` and `return_inv`/`return_exact` over `returnTree`, with
 the post state `feeGetterPost`. Exact walks take `PUSH0`'s activation as a hypothesis. The excess
 read, the inhibitor guard and the submission body are not here, since they differ by contract.
-The worked consumers are `Blanc/Lift/WithdrawalRequest/FeeLoop.lean` and
-`Blanc/Lift/BuilderRequest/FeePath.lean`. The builder family's queue layout, generic over record
-width, is family-local at `Blanc/Lift/BuilderRequest/QueueLayout.lean`.
 The builder family's user frames are walked once over a fork's `StorageSteps` (`FeePath.lean`), with
 `coveredSteps` and `amsterdamSteps` (`UserFrameAmsterdam.lean`) as its instances: only `SLOAD` and `SSTORE`
 differ between them, and those certificates have no call-family node, so `lift_sound_noExec` lifts on any fork.
@@ -8755,15 +7751,13 @@ an `Exec` at any system-caller `Sevm`, not only the phase's message), and `SysOu
   from the list) and `xa_vyChain_miss` takes a selector missing every test to the chain's end,
   with the prologue's memory `vyMem Mem.empty w` kept (`ri_mload_vy0`, `vyMem_word0_selector`);
   one test or skip alone is `xa_vyTest`/`xa_vyPass`; in
-  [`Blanc/Lift/VyperDispatchWalk.lean`](../Blanc/Lift/VyperDispatchWalk.lean). Worked use:
-  `Blanc/Lift/Curve3Pool/Walk/Dispatch.lean` (`xa_dispatch`, `xa_dispatch_miss`).
+  [`Blanc/Lift/VyperDispatchWalk.lean`](../Blanc/Lift/VyperDispatchWalk.lean).
 - The same dispatcher forward and gas-exact over a lifted program's trees: `SFunc.vyFwd σ n t`
   evaluates the chain of tests (28 gas), always-taken skips (19) and `JUMPDEST`s (1) from the tree
   `t` for the selector `σ`, returning the arm reached and the gas spent; `rx_vyFwd`/`rxe_vyFwd`
   turn a run of that arm (prologue memory `vyMem Mem.empty w`) into a run of `t` for that gas
   more, the pair closed by `kernel_rfl` for a concrete program; in
-  [`Blanc/Lift/VyperDispatchExact.lean`](../Blanc/Lift/VyperDispatchExact.lean). Worked use:
-  `Blanc/Lift/Curve3Pool/Walk/DispatchLive.lean` (`rxe_dispatch`, one line per `rx_dispatch_*`).
+  [`Blanc/Lift/VyperDispatchExact.lean`](../Blanc/Lift/VyperDispatchExact.lean).
 - Unrolled Vyper frame save/restore chains (a counter word walks a frame `[lo, lo + 32 n)`,
   pushing or popping one word per copy): templates `frameSaveIter`/`frameRestoreIter`,
   constants `FrameLoopTpl`, one-`rfl` chain facts `FrameSaveChain`/`FrameRestoreChain`;
@@ -8891,8 +7885,7 @@ an `Exec` at any system-caller `Sevm`, not only the phase's message), and `SysOu
   `creation_runtime_window` reads the runtime window, `push0RuntimeReturn_runExact` is the
   terminal walk from empty memory (the PUSH0 twin of `solcRuntimeReturn_runExact`), and
   `install_of_run` turns a checked constructor run into the settled account with the
-  runtime installed, no code or storage outcome assumed. The EIP-8282 builder contracts
-  are the worked consumers (`Blanc/Lift/BuilderRequest/{Deposit,Exit}/Creation/Deploy.lean`).
+  runtime installed, no code or storage outcome assumed.
 
   For Solidity's terminal code-window sequence, use `solcRuntimeReturn` and
   `solcRuntimeReturn_runExact` from `Lift/Deploy.lean`. The common forward
@@ -9011,64 +8004,10 @@ an `Exec` at any system-caller `Sevm`, not only the phase's message), and `SysOu
   lookup remain explicit. Select these APIs by their actual trace/cut and
   certificate witnesses; their compound premises have no reliable goal-head
   recipe trigger.
-  The contract-specific V1 binding is in
-  [`Usdc/ImplV1Origin`](../Blanc/Lift/Usdc/ImplV1Origin.lean).
-  `create_address` proves nonce18 at the already registered proxy creator
-  yields the registered initial implementation address.
-  `constructor_effects_of_original_receipt` specializes the shared result to
-  the original index30 cut and derives its admitted sender from recovery.
-  `constructor_effects_of_original_slot` binds fields through the actual body
-  slot and decoder; `constructor_effects_of_signed_slot` supplies recovery from
-  explicit signature fields and a signing-hash equality via
-  `recoveredSender_of_signingHash`. That hash equality remains a caller
-  obligation, not a proved payload computation. Creation code and certificate
-  stay parameters with checked entry and runtime-window identities; no new
-  input, original field correspondence or historical inclusion is adopted.
   The `solc-runtime-return` recipe matches only a named terminal-body exact
   run ending in a halted outcome; it never unfolds arbitrary certificate
   entries or concrete machine images to discover this pattern.
-  `ProxyCreation.runtimeReturn_runExact` in
-  [`Blanc/Lift/Usdc/ProxyCreation/RuntimeReturn.lean`](../Blanc/Lift/Usdc/ProxyCreation/RuntimeReturn.lean)
-  is the existing concrete specialization, retaining its exact 2186-byte window
-  at offset 671 and 226 fixed gas plus actual memory expansion. The original
-  `ProxyCreation.runtimeReturn_effects` is likewise a projection of the common
-  inverse. The separate kernel-checked `ProxyCreation.runtime_window` in
-  [`Blanc/Lift/Usdc/ProxyCreation/RuntimeWindow.lean`](../Blanc/Lift/Usdc/ProxyCreation/RuntimeWindow.lean)
-  identifies that window in the registered creation input with the registered
-  proxy runtime. The companion `ProxyCreation.prefix_runExact` and
-  `adminPrefix_runExact` in
-  [`Blanc/Lift/Usdc/ProxyCreation/Prefix.lean`](../Blanc/Lift/Usdc/ProxyCreation/Prefix.lean)
-  consume the shared `rx_callRet` API to compose the actual registered entry
-  and admin-label guard with their actual internal callees and continuations.
-  They derive the constructor argument, fixed label hashes, memory image and
-  gas charges; the admin argument is the executing message's caller.
-  `terminal_runtimeReturn` connects the final caller continuation to the
-  accepted runtime return. For inversion of a successful whole registered
-  constructor run, `ProxyCreation.constructor_effects_of_run` in
-  [`Blanc/Lift/Usdc/ProxyCreation/Effects.lean`](../Blanc/Lift/Usdc/ProxyCreation/Effects.lean)
-  derives the implementation-slot write, admin-slot write using the actual
-  caller, returned runtime window, and preservation of every other account's
-  storage. Its internal-callee inversions consume actual successful runs and
-  work without a fork restriction. `ProxyCreation.constructor_message_zero` in
-  [`Blanc/Lift/Usdc/ProxyCreation/Settlement.lean`](../Blanc/Lift/Usdc/ProxyCreation/Settlement.lean)
-  composes the actual zero-value CREATE entry, the source constructor run at
-  that same entry and raw result, and successful touch/code-charge settlement.
-  A row distinct from both literal slots is zero in the installed result,
-  including the empty-account deletion branch of code installation.
-  `ProxyCreation.constructor_message_effects` uses the same actual entry,
-  source run, raw result and successful charging to derive the installed
-  registered proxy runtime and the entire target storage: empty storage with
-  the initial implementation and actual caller admin written. Runtime length
-  rules out account deletion and preserves those administrative words; no new
-  nonempty-code, nonce, fork or desired-state premise is required. Actual
-  bytecode-to-source lifting, historical occurrence and transaction settlement
-  remain separate obligations; the local source run is an explicit premise.
-  At a raw frame of a `ConfiguredHistoryTraceIn`,
-  [`Blanc/Lift/Usdc/ProxyCreation/HistoryFrame.lean`](../Blanc/Lift/Usdc/ProxyCreation/HistoryFrame.lean)
-  derives that source run from the frame (`constructor_run_of_exec` over
-  `lift_sound_noStateGas`, entry facts from `rawFrame_entryFacts`):
-  `constructor_effects_rawFrame` and `constructor_row_preserved_rawFrame`
-  need only success and the registered creation code. Installation by
+  Installation by
   `processCreateMessage` is not part of them.
   `ProxyCreation.constructor_effects_of_createTrace` in Settlement starts
   from the same clean `ProcessCreateMessageTrace`: it derives the actual
@@ -9083,20 +8022,6 @@ an `Exec` at any system-caller `Sevm`, not only the phase's message), and `SysOu
   deletion set from actual preparation and clean CREATE; both transaction-effect
   theorems consequently need no caller-supplied deletion exclusion. Actual
   transaction identity, success and the chain-boundary seed remain obligations.
-  `ProxyCreation.original_constructor_effects_after_cut22` in
-  [`Blanc/Lift/Usdc/ProxyCreation/HistoryCut.lean`](../Blanc/Lift/Usdc/ProxyCreation/HistoryCut.lean)
-  applies those effects to the selected head of a configured block's actual
-  `TxSplit 22`, at `cut.afterBenv.state` immediately after settlement.
-  `original_constructor_seed_after_cut22` packages that code, exact two-slot
-  storage and tracked zero allowance rows as `OriginalConstructorSeed`, using
-  explicit separation from the implementation and admin slots.
-  `original_constructor_seed_of_receipt_cut22` derives that same head's clean
-  message outcome from a successful receipt at the final block output, through
-  the existing bounded receipt-preservation API. Constructor receiver, input,
-  value, recovered sender and nonce remain explicit; identifying the supplied
-  block with historical C, authenticating its receipt commitment and placing
-  it in the consumed history remain caller obligations. No C-to-D continuity
-  or pre-D governance restriction follows from this seed adapter.
   For exact creation walks under the selected historical schedule, use
   [`Blanc/Lift/HistAccessWalk.lean`](../Blanc/Lift/HistAccessWalk.lean):
   `Ninst.runCompiled_sload_selectedH`/`runCompiled_sstore_selectedH`,
@@ -9241,30 +8166,6 @@ shapes a trigger could match.
 
 #### C9.15. I need the USDC proxy-history adapters
 
-For the exact value of an actual retained USDC proxy implementation write, use
-`ConfiguredHistoryTraceIn.retained_implSstore_emitsUpgraded_data_of_proxyCode`
-in `Blanc/Lift/Usdc/ProxyCommittedUpgradeLog.lean`; the `_data` sibling derives
-proxy code from existing `ImplSlotApart`. The same original committed root
-contains an `Upgraded` log whose data equals `write.value.toBytes`, including
-same-value or later-restored writes. Actual prefix classification carries the
-duplicate stack word and memory initialization through `UpgradeStoreDataConf`;
-the history theorem derives memory well-formedness from original `FreshEntry`.
-No memory or free-pointer premise should be added to a final history consumer.
-Existing address/topic APIs remain compatible projections. Provider census
-correspondence and deployment chronology are separate producer obligations.
-
-`UpgradedTargetSatisfies` decodes the target of an actual proxy Upgraded log.
-`retained_implSstore_target_of_logs` transfers any such address predicate to
-each actual retained implementation write in the same root.
-`retained_implSstore_target_between_txSplits_of_census` combines that result
-with the original census-to-cut adapter and derives full-history root membership.
-Instantiate the predicate with target inequality to exclude selection before
-creation, or with membership in an already-created family. The theorem covers
-same-value/restored writes and requires no earlier address-emptiness, final
-runtime-readiness or additional temporal F2prime assumption. Actual ranged
-census correspondence remains explicit; both selected cut transactions are
-outside this interval and need their own producer evidence.
-
 The V2.2 owner-exclusion producer is needed only on consumed retained frames.
 In `RetainedAllowanceWrites`, the `_of_rootFrames` variants of
 `usdc_retainedRowWrite_nonInc_of_retainedCode`,
@@ -9272,95 +8173,9 @@ In `RetainedAllowanceWrites`, the `_of_rootFrames` variants of
 `settledRoot_allowance_zero_from_installations` use owner exclusion only on
 `Exec.committedFrames R.run`; the latter two also use root-local governance
 and caller exclusion. Existing full-history APIs remain compatibility wrappers.
-In `Blanc/Lift/Usdc/ProxyRetainedNoDel.lean`, `UsdcEntriesReady` records
-runtime availability at a genuine interval start, for only the entries already
-created there. `UsdcUpgradeTargetsIn` is an address-only restriction on actual
-retained proxy implementation writes. `TransactionTrace.usdc_origins_of_available_targets`
-derives local readiness and transaction-entry origins; the configured-history
-`transactions_origins_of_available_targets` carries those entries through the
-original transaction list, yielding all origins, guarded installations and
-final availability. Neither producer assumes final runtime or allowance facts.
-In the same runtime-producer module,
-`upgradeTargetsIn_between_txSplits_of_census` supplies that address restriction
-from original ranged receipt evidence, and
-`transactions_origins_between_txSplits_of_census` composes it with the actual
-transaction-list producer. Earlier-cut availability and actual root membership
-remain explicit; selected boundary transactions need separate constructor
-proofs. These are internal producers, not replacement fields in a final
-original-history assumption record. Census correspondence remains unadopted.
 
 
-The available-runtime producer in `Blanc/Lift/Usdc/ProxyRetainedNoDel.lean`
-also covers actual system messages, both request messages, optional beacon,
-history and request stages, withdrawals and rewards via the `usdc_available_targets`
-family and `usdc_available_targets_after_transactions`. Configured-history
-`block_origins_of_available_targets`, `after_txSplit_origins_of_available_targets`,
-`before_txSplit_origins_of_available_targets` and `mid_origins_of_available_targets`
-compose those stages with the original transaction lists. Their conclusion
-contains the derived origins and guarded installations, plus final availability.
-`origins_between_txSplits_of_census` covers the complete original interval:
-source-cut suffix, intervening blocks, and target-block opening/prefix. It
-requires availability only at the actual source cut and derives availability
-at the target cut; all root membership and target restrictions come from the
-same original history/census. Selected boundary transactions remain separate.
-The general stage/mid producers handle enabled system calls; the receipt-census
-adapter retains its existing pre-Cancun bound. No original observation has been
-adopted and no final origin/readiness fields have replaced the concrete producers.
 
-
-`Blanc/Lift/Usdc/V1WriteApart.lean` supplies
-`ConfiguredHistoryTraceIn.usdc_rawRowWrite_of_actualKeys_of_nodeCode`: the
-original four faithful-key checks and two fixed-slot separation checks classify
-one actual node with its own `UsdcContextCode`, preserving parent attribution.
-The existing whole-scope classifier remains a compatible wrapper.
-`Blanc/Lift/Usdc/RetainedAllowanceWrites.lean` exposes `_of_actualKeys` versions
-of the retained write, root non-increase and root zero endpoints. They derive
-code locally from the original guarded installations and use these same actual
-successful-store populations, without descriptor-wide modern row separation.
-
-
-For an original selected creation between available-runtime intervals,
-`TransactionTrace.usdc_origins_of_create_noExecs` in
-`Blanc/Lift/Usdc/ProxyRetainedNoDel.lean` discharges guarded origin and installation
-obligations using the common constructor target exclusion.
-`ConfiguredHistoryTraceIn.creation_txSplit_origins_and_available_targets`
-applies it to the actual supplied cut and transports already-created runtimes
-through complete transaction settlement. `UsdcEntriesReady.cons` extends that
-family only with the new original constructor's derived installation/library facts.
-`UsdcTransactionsOrigins.append`, `.cast` and `.of_txSplit` reassemble the actual
-ordered trace by determinism. `UsdcMidHistoryOrigins.splice` and
-`UsdcGuardedInstallations.splice` join the two intervals across that selected
-head, preserving its original prefix, suffix and all system roots. These are
-producer compositions; concrete signed creation/census correspondence and
-initial selected-zero evidence still need their existing original observations.
-
-For concrete original USDC creation boundaries, `CreationHistory.lean` connects
-`ImplV2Creation`, `ImplV2_1Creation`, `LibCreation` and `ImplV2_2Creation` original
-observations to guarded transaction origins and runtime availability. Each
-`OriginalObservation.origins_and_available_targets` preserves older available
-entries and adds the checked runtime at its actual after-cut state. V2.2 also
-uses the already-created library entry. Entry metadata remains unchanged;
-these results establish runtime availability, not historical boundary adoption.
-`OriginalModernCreationChain` records the four original blocks and five actual
-intervening histories; its entry definitions retain the actual after-cut state
-and canonical raw-node prefix. The chain definition alone asserts no runtime,
-origin or installation property across the intervening intervals.
-The shared `ProxyRetainedNoDel` adapter
-`ConfiguredHistoryTraceIn.txSplit_origins_and_available_of_retainedTargets_ne`
-accepts a concrete observation's checked retained-target exclusion, so callers
-do not repeat its signed-input, CREATE-address or no-external-instruction proof.
-`OriginalModernCreationChain.Censuses` states the four original receipt ranges,
-with only entries already created at each interval. Its
-`origins_and_available_of_censuses` composes all four intervals and constructor
-heads, then the continuation after V2.2, deriving guarded origins, installations
-and final family availability from initial V1 availability. The result retains
-the actual trace and every enabled system root. A subset argument permits the
-consumer's entry ordering without changing the original evidence population.
-In `ProxyCompleteAvailable.lean`,
-`ConfiguredHistoryTraceIn.mid_origins_of_complete_available_family` supplies the
-last interval once all allowed implementation addresses have available runtimes;
-it needs no later upgrade census. The concrete chain derives that availability
-at the V2.2 cut using its original constructor observations.
 
 #### C9.16. I need a fixed synthetic token for a concrete witness
 
