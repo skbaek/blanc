@@ -8,6 +8,9 @@ open private TopRun TopRun.shape TopRun.prepared TopRun.frame TopRun.entered Top
   settle_error_rollback settle_inner_clean precomp_post Prepared.caller Prepared.currentTarget Prepared.stat
   Prepared.kept Prepared.code Prepared.codeAt Prepared.codeAddress Prepared.transfer Prepared.value Prepared.bal
   Entered.transfer Entered.pc Entered.sta Entered.state from Blanc.ExecutionKeptTop
+open private processTransaction_form transactionMessage_facts PreparedTx PreparedTx.caller PreparedTx.routed
+  PreparedTx.deletions PreparedTx.stat PreparedTx.created PreparedTx.debit debit_getCode settleSelfdestructs_get
+  withdrawalsPass_getCode from Blanc.ExecutionKeptChain
 
 /-!
 # Kept-frame value: never falls, and covers the kept values
@@ -1094,5 +1097,270 @@ theorem MessageRoots.bal_covers {msg : Msg} {state : State} {out : MsgCallOutput
             exact clean
           rw [Root.keptAt, dite_eq_right rolled, List.map_nil, List.sum_nil, Nat.add_zero]
           exact Nat.le_of_eq (congrArg B256.toNat (topRun_rolled_bal t hc hd clean).symm)
+
+/-! ## The transaction level -/
+
+/-- A credit that does not wrap at `a` leaves `a` no poorer. -/
+private theorem addBal_bal_mono {st : State} {x a : Adr} {v : B256}
+    (fit : x = a → (st.bal a).toNat + v.toNat < 2 ^ 256) :
+    (st.bal a).toNat ≤ ((st.addBal x v).bal a).toNat := by
+  by_cases same : x = a
+  · subst same
+    have nof := fit rfl
+    change (st.bal x).toNat ≤ (((st.setBal x (st.bal x + v)).get x).bal).toNat
+    rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
+    change (st.bal x).toNat ≤ (st.bal x + v).toNat
+    rw [B256.toNat_add_eq_of_nof _ _ nof]
+    exact Nat.le_add_right _ _
+  · apply Nat.le_of_eq
+    change (st.bal a).toNat = (((st.setBal x (st.bal x + v)).get a).bal).toNat
+    rw [State.setBal_get_ne same]
+    rfl
+
+/-- **No wrap at the tip.** When a transaction's settlement credits its fee recipient `a`, `a`'s
+balance plus the tip stays below `2 ^ 256`. A virtual certainty: no pinned read answers it today. -/
+def TipFits (a : Adr) (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat) : Prop :=
+  ∀ (sender : Adr) (msg : Msg) (messageState : State) (messageOut : MsgCallOutput) (refund tip : B256)
+    (state : State) (bout' : BlockOutput),
+    processTransaction benv bout tx index = .ok (state, bout') →
+    transactionMessage benv bout tx index = .ok (sender, msg) →
+    processMessageCall msg = .ok (messageState, messageOut) →
+    state = sweepTouchedAccounts benv.stat.rules messageOut.touchedAccounts.toList
+      (settleSelfdestructs benv.stat.rules messageOut.accountsToDelete.toList
+        ((messageState.addBal sender refund).addBal benv.stat.coinbase tip)) →
+    benv.stat.coinbase = a → ((messageState.addBal sender refund).bal a).toNat + tip.toNat < 2 ^ 256
+
+/-- A transaction's prepared message moves its value. -/
+private theorem transactionMessage_transfers {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {sender : Adr} {msg : Msg} (h : transactionMessage benv bout tx index = .ok (sender, msg)) :
+    msg.shouldTransferValue = true := by
+  unfold transactionMessage at h
+  dsimp only at h
+  obtain ⟨_, _, h⟩ := Except.bind_eq_ok h
+  obtain ⟨⟨intrinsic, floor⟩, _, h⟩ := Except.bind_eq_ok h
+  obtain ⟨⟨sender', price, hashes, blob⟩, _, h⟩ := Except.bind_eq_ok h
+  obtain ⟨debit, -, h⟩ := Except.bind_eq_ok h
+  obtain ⟨msg', hprepared, h⟩ := Except.bind_eq_ok h
+  simp only [Except.ok.injEq, Prod.mk.injEq] at h
+  obtain ⟨rfl, rfl⟩ := h
+  unfold prepareMessage at hprepared
+  split at hprepared
+  all_goals
+    dsimp only at hprepared
+    obtain rfl := Except.ok.inj hprepared
+    rfl
+
+/-- **The transaction level.** With `a` holding code `C` that is no precompile, created in no
+earlier transaction of the block and not the sender: `a`'s balance covers its start plus the values
+the transaction's roots kept there, given the world-sum bound at each root and no wrap at the tip. -/
+theorem TransactionRoots.bal_covers {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput} {sender : Adr} {rs : List Root}
+    (h : TransactionRoots benv bout tx index state bout' sender rs) (rules : KeptRules benv.stat.rules)
+    {a : Adr} {C : ByteArray} (V : KeptValueAt a C) (code : benv.state.getCode a = C)
+    (precomp : ¬ benv.stat.rules.isPrecomp a) (created : a ∉ benv.createdAccounts)
+    (notSender : sender ≠ a) (fits : RootsFit rs) (tip : TipFits a benv bout tx index) :
+    BalCovers a benv.state rs state := by
+  obtain ⟨result, msg₀, state₀, out₀, hm₀, roots⟩ := h
+  obtain ⟨sender', msg, messageState, messageOut, refund, tipAmount, hm, hmessage, final, -⟩ :=
+    processTransaction_form result
+  have same := Except.ok.inj (hm₀.symm.trans hm)
+  simp only [Prod.mk.injEq] at same
+  obtain ⟨rfl, rfl⟩ := same
+  have sameOut := Except.ok.inj (roots.1.symm.trans hmessage)
+  simp only [Prod.mk.injEq] at sameOut
+  obtain ⟨rfl, rfl⟩ := sameOut
+  have facts := transactionMessage_facts hm
+  obtain ⟨v, hdebit⟩ := PreparedTx.debit facts
+  have hcode := debit_getCode hdebit a
+  have debitBal : msg₀.benv.state.bal a = benv.state.bal a := by
+    obtain ⟨-, hmid⟩ := State.of_subBal hdebit
+    rw [hmid]
+    change (((benv.state.incrNonce sender).setBal sender _).get a).bal = _
+    rw [State.setBal_get_ne notSender]
+    exact congrFun State.incrNonce_bal a
+  have hc' : (msg₀.benv.state.getCode a).toList ≠ [] := by rw [hcode, code]; exact V.nonempty
+  have hd' : ¬ isValidDelegation (msg₀.benv.state.getCode a) := by rw [hcode, code]; exact V.nondelegating
+  have message := roots.bal_covers V (hcode.trans code) (PreparedTx.routed facts)
+    (by rw [PreparedTx.stat facts]; exact precomp)
+    (fun _ => by rw [PreparedTx.caller facts]; exact notSender)
+    (fun stays => by rw [transactionMessage_transfers hm] at stays; cases stays) fits
+  have notDeleted := roots.not_deleted hc' hd'
+    (by rw [PreparedTx.deletions facts]; exact AdrSet.not_mem_empty)
+    (by rw [PreparedTx.created facts]; exact created) (by rw [PreparedTx.stat facts]; exact rules.selfdestruct)
+  have notList : ∀ x ∈ out₀.accountsToDelete.toList, x ≠ a :=
+    fun x member same => notDeleted (same ▸ Std.HashSet.mem_toList.mp member)
+  have fit := tip sender msg₀ state₀ out₀ refund tipAmount state bout' result hm hmessage final
+  rw [sweepTouchedAccounts_of_not_touchedSweep rules.noSweep] at final
+  have hget := settleSelfdestructs_get notList benv.stat.rules
+    ((state₀.addBal sender refund).addBal benv.stat.coinbase tipAmount)
+  have finalBal : state.bal a =
+      ((state₀.addBal sender refund).addBal benv.stat.coinbase tipAmount).bal a := by
+    rw [final]
+    exact congrArg Acct.bal hget
+  have refundBal : (state₀.addBal sender refund).bal a = state₀.bal a := by
+    change ((state₀.setBal sender _).get a).bal = _
+    rw [State.setBal_get_ne notSender]
+    rfl
+  have tipMono := addBal_bal_mono (st := state₀.addBal sender refund) (x := benv.stat.coinbase)
+    (a := a) (v := tipAmount) (fun same => fit same)
+  unfold BalCovers at message ⊢
+  rw [debitBal] at message
+  rw [finalBal]
+  rw [refundBal] at tipMono
+  omega
+
+/-- No wrap at any tip of a transaction list, along its run. -/
+def TipsFit (a : Adr) : List (Nat × Tx) → Benv → BlockOutput → Prop
+  | [], _, _ => True
+  | (i, tx) :: rest, benv, bout => TipFits a benv bout tx i ∧
+      ∀ st bout', processTransaction benv bout tx i = .ok (st, bout') → TipsFit a rest (benv.withState st) bout'
+
+/-- **The transaction-list level.** -/
+theorem TransactionsRoots.bal_covers {txis : List (Nat × Tx)} {benv final : Benv} {bout finalOut : BlockOutput}
+    {txs : List (Adr × Tx)} {rs : List Root} (h : TransactionsRoots txis benv bout final finalOut txs rs)
+    {a : Adr} {C : ByteArray} (V : KeptValueAt a C) :
+    KeptRules benv.stat.rules → benv.state.getCode a = C → ¬ benv.stat.rules.isPrecomp a →
+      a ∉ benv.createdAccounts → NoSenderAt a txs → RootsFit rs → TipsFit a txis benv bout →
+      BalCovers a benv.state rs final.state := by
+  induction h with
+  | nil benv bout =>
+      intro _ _ _ _ _ _ _
+      exact BalCovers.nil (Nat.le_refl _)
+  | cons head tail ih =>
+      intro rules code precomp created senders fits tips
+      have hc : (_ : State).getCode a = C := code
+      obtain ⟨tipHead, tipRest⟩ := tips
+      have first := head.bal_covers rules V code precomp created (senders _ List.mem_cons_self)
+        fits.left tipHead
+      have code₁ := (head.chain rules (by rw [code]; exact V.nonempty) (by rw [code]; exact V.nondelegating)
+        created).2
+      have second := ih rules (by simpa only [Benv.withState, code₁] using code) precomp created
+        (fun p hp => senders p (List.mem_cons_of_mem _ hp)) fits.right (tipRest _ _ head.1)
+      exact first.append second
+
+/-! ## The block level -/
+
+/-- A system message's roots, at a code-bearing account that is no precompile. -/
+private theorem systemRoots_bal_covers {benv : Benv} {target : Adr} {data : Bytes} {st : State}
+    {out : MsgCallOutput} {rs : List Root} (roots : MessageRoots (systemTransactionMessage benv target data) st out rs)
+    {a : Adr} {C : ByteArray} (V : KeptValueAt a C) (code : benv.state.getCode a = C)
+    (precomp : ¬ benv.stat.rules.isPrecomp a) (fits : RootsFit rs) :
+    BalCovers a benv.state rs st ∧ st.getCode a = benv.state.getCode a := by
+  obtain ⟨hnone, htarget, hca, hcode, -, -, hstate⟩ := systemTransactionMessage_shape benv target data
+  have codeM : (systemTransactionMessage benv target data).benv.state.getCode a = C := by
+    rw [hstate]; exact code
+  have covers := roots.bal_covers V codeM ⟨fun _ => ⟨hca, hcode⟩, fun h => by rw [hnone] at h; cases h⟩
+    precomp (fun h => by cases h) (fun _ => rfl) fits
+  rw [hstate] at covers
+  refine ⟨covers, ?_⟩
+  have chain := (roots.chain (a := a) (by rw [codeM]; exact V.nonempty) (by rw [codeM]; exact V.nondelegating)).2
+  rw [hstate] at chain
+  exact chain
+
+private theorem PreCall.bal_covers {on : Bool} {benv : Benv} {target : Adr} {data : Bytes} {st : State}
+    {rs : List Root} (h : PreCall on benv target data st rs) {a : Adr} {C : ByteArray} (V : KeptValueAt a C)
+    (code : benv.state.getCode a = C) (precomp : ¬ benv.stat.rules.isPrecomp a) (fits : RootsFit rs) :
+    BalCovers a benv.state rs st ∧ st.getCode a = benv.state.getCode a := by
+  unfold PreCall at h
+  split at h
+  · obtain ⟨out, roots⟩ := h
+    exact systemRoots_bal_covers roots V code precomp fits
+  · obtain ⟨rfl, rfl⟩ := h
+    exact ⟨BalCovers.nil (Nat.le_refl _), rfl⟩
+
+private theorem PreRoots.bal_covers {benv : Benv} {st : State} {bal : BalBuilder} {rs : List Root}
+    (h : PreRoots benv st bal rs) {a : Adr} {C : ByteArray} (V : KeptValueAt a C)
+    (code : benv.state.getCode a = C) (precomp : ¬ benv.stat.rules.isPrecomp a) (fits : RootsFit rs) :
+    BalCovers a benv.state rs st ∧ st.getCode a = benv.state.getCode a := by
+  obtain ⟨beacon, -, beaconRoots, historyRoots, -, first, -, second, rfl⟩ := h
+  obtain ⟨covers₁, code₁⟩ := first.bal_covers V code precomp fits.left
+  obtain ⟨covers₂, code₂⟩ := second.bal_covers (a := a) V (by simpa only [Benv.withState, code₁] using code)
+    precomp fits.right
+  exact ⟨covers₁.append covers₂, code₂.trans code₁⟩
+
+private theorem RequestRoots.bal_covers {idx : Nat} {contracts : List (UInt8 × Adr)} {benv : Benv}
+    {acc acc' : List Bytes} {bal bal' : BalBuilder} {final : State} {steps : List RequestStep}
+    (h : RequestRoots idx contracts benv acc bal final acc' bal' steps) {a : Adr} {C : ByteArray}
+    (V : KeptValueAt a C) :
+    benv.state.getCode a = C → ¬ benv.stat.rules.isPrecomp a → RootsFit (requestRootsOf steps) →
+      BalCovers a benv.state (requestRootsOf steps) final := by
+  induction h with
+  | nil benv acc bal =>
+      intro _ _ _
+      exact BalCovers.nil (Nat.le_refl _)
+  | cons hcall roots tail ih =>
+      intro code precomp fits
+      unfold requestRootsOf at fits ⊢
+      rw [List.flatMap_cons] at fits ⊢
+      obtain ⟨covers₁, code₁⟩ := systemRoots_bal_covers roots V code precomp fits.left
+      have covers₂ := ih (by simpa only [Benv.withState, code₁] using code) precomp fits.right
+      exact covers₁.append covers₂
+
+private theorem RequestPass.bal_covers {benv : Benv} {bout : BlockOutput} {st : State} {out : BlockOutput}
+    {steps : List RequestStep} (h : RequestPass benv bout st out steps) {a : Adr} {C : ByteArray}
+    (V : KeptValueAt a C) (code : benv.state.getCode a = C) (precomp : ¬ benv.stat.rules.isPrecomp a)
+    (fits : RootsFit (requestRootsOf steps)) : BalCovers a benv.state (requestRootsOf steps) st := by
+  unfold RequestPass at h
+  split at h
+  · obtain ⟨deposits, acc, bal, -, roots, -⟩ := h
+    exact roots.bal_covers V code precomp fits
+  · obtain ⟨rfl, -, rfl⟩ := h
+    exact BalCovers.nil (Nat.le_refl _)
+
+/-- **No wrap at a withdrawal credit.** Along the block's withdrawals, every credit to `a` keeps `a`'s
+balance below `2 ^ 256`. A virtual certainty: no pinned read answers it today. -/
+def WdsFit (a : Adr) : State → List Withdrawal → Prop
+  | _, [] => True
+  | st, wd :: rest => (wd.recipient = a → (st.bal a).toNat + (wd.amount * (10 ^ 9).toB256).toNat < 2 ^ 256) ∧
+      WdsFit a (st.addBal wd.recipient (wd.amount * (10 ^ 9).toB256)) rest
+
+private theorem processWithdrawalsState_bal_mono {a : Adr} :
+    ∀ (wds : List Withdrawal) (st : State), WdsFit a st wds →
+      (st.bal a).toNat ≤ ((processWithdrawalsState st wds).bal a).toNat
+  | [], _, _ => Nat.le_refl _
+  | wd :: rest, st, ⟨head, tail⟩ => by
+      unfold processWithdrawalsState
+      rw [List.foldl_cons]
+      exact Nat.le_trans (addBal_bal_mono head) (processWithdrawalsState_bal_mono rest _ tail)
+
+private theorem withdrawalsPass_bal_mono {a : Adr} (rules : ForkRules) (benv : Benv) (bout : BlockOutput)
+    (wds : List Withdrawal) (fit : WdsFit a benv.state wds) :
+    (benv.state.bal a).toNat ≤ ((withdrawalsPass rules benv bout wds).1.bal a).toNat := by
+  unfold withdrawalsPass
+  split
+  · exact processWithdrawalsState_bal_mono wds benv.state fit
+  · exact Nat.le_refl _
+
+/-- **The block level.** -/
+theorem BodyRoots.bal_covers {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput} {run : BodyRun}
+    (h : BodyRoots benv txs ommers wds state bout run) (rules : KeptRules benv.stat.rules) {a : Adr}
+    {C : ByteArray} (V : KeptValueAt a C) (code : benv.state.getCode a = C)
+    (precomp : ¬ benv.stat.rules.isPrecomp a) (created : a ∉ benv.createdAccounts)
+    (senders : NoSenderAt a run.senders) (fits : RootsFit run.roots)
+    (tips : ∀ decoded, txs.mapM (decodeTx benv.stat.rules) = .ok decoded →
+      TipsFit a decoded.putIndex (benv.withState run.preState) {BlockOutput.init with bal := run.preBal})
+    (withdrawals : WdsFit a run.txEnv.state wds) :
+    BalCovers a benv.state run.roots state := by
+  obtain ⟨st, out, pass, final, -⟩ := h.stages
+  obtain ⟨decoded, hdecoded, roots⟩ := h.transactions
+  unfold BodyRun.roots at fits ⊢
+  obtain ⟨covers₁, code₁⟩ := h.pre.bal_covers V code precomp fits.left.left
+  have covers₂ := roots.bal_covers V rules (by simpa only [Benv.withState, code₁] using code) precomp created
+    senders fits.left.right (tips decoded hdecoded)
+  have code₂ := (roots.chain rules (a := a) (by simpa only [Benv.withState, code₁, code] using V.nonempty)
+    (by simpa only [Benv.withState, code₁, code] using V.nondelegating) created).2
+  simp only [Benv.withState] at covers₂ code₂
+  have codeT : run.txEnv.state.getCode a = C := code₂.trans (code₁.trans code)
+  have wdsMono := withdrawalsPass_bal_mono (a := a) benv.stat.rules run.txEnv run.txOut wds withdrawals
+  have hcodeW := withdrawalsPass_getCode benv.stat.rules run.txEnv run.txOut wds a
+  have covers₃ := pass.bal_covers V (by simpa only [Benv.withState, hcodeW] using codeT)
+    (by simpa only [Benv.withState, h.txEnv_stat] using precomp) fits.right
+  simp only [Benv.withState] at covers₃
+  rw [final rules.noRewards]
+  have joined := covers₁.append covers₂
+  unfold BalCovers at joined covers₃ ⊢
+  simp only [Root.paidAt_append] at joined ⊢
+  omega
 
 end Blanc
