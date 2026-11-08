@@ -35,6 +35,20 @@ other committed row verbatim, per-release counts (modules, declarations,
 leaves among them, pins) and the statement fingerprints of the shared
 declarations the release uses. Without `--tag`/`--depart` it is a dry run.
 
+Departing scripts: a tracked Lean script under scripts/ all of whose Blanc
+imports depart leaves with its same-stem siblings (one importing departing and
+live modules is OUTSTANDING). A tracked non-Lean file under scripts/ (not one
+the release edits or regenerates) leaves when it is family-only
+(`family_only_files`): it names a departing module or declaration or a gone
+file, or departing files or a removed JSON row name it; every tracked file
+naming it departs too (in the JSON row files, only references left after
+pruning count, and a bare path in a surviving row always counts); and it names
+no live family's module. A file that names departing entries but stays (a live
+gate, document or script uses it) is OUTSTANDING, never deleted silently. The
+manifest records each departing script with its reason (`departing_scripts`)
+besides its sha256 under `files`, and the departure record lists it as deleted,
+so restore brings it back from the tag.
+
 `--tag` creates the annotated tags `release/<key>-<date>` at HEAD, the
 manifest as message. Locally only: the master pushes and verifies.
 
@@ -632,6 +646,7 @@ class Departure:
         self.notes = []            # (path, how) for the output
         self.outstanding = []      # hand decisions; --depart refuses while any remain
         self.extra = {k: {} for k in keys}
+        self.family_live_users = {}
         for path, mod in self.paths.items():
             self.deletes[path] = self.owner_key[mod]
 
@@ -678,6 +693,7 @@ class Departure:
     # computation ----------------------------------------------------------
     def compute(self):
         self.departing_scripts()
+        self.family_files()
         self.claim_map()
         self.shared_docs()
         self.layering_tables()
@@ -701,10 +717,82 @@ class Departure:
             if imports and all(i in self.dotted for i in imports):
                 stems.add(rel[:-len(".lean")])
                 self.deletes[rel] = self.key_for_text(" ".join(imports))
+            elif rel != CLAIMCHECK and any(i in self.dotted for i in imports):
+                gone = [i for i in imports if i in self.dotted]
+                self.outstanding.append(f"{rel}: imports departing {gone[0]}"
+                                        f"{' and more' if len(gone) > 1 else ''} and live modules; "
+                                        f"edit its imports by hand")
         for rel in tracked:
             stem = os.path.splitext(rel)[0]
             if stem in stems and rel not in self.deletes:
                 self.deletes[rel] = self.deletes[stem + ".lean"]
+
+    def family_files(self):
+        """Tracked non-Lean files under scripts/ that only the departing families use
+        leave with the release (`family_only_files`); one that names a departing entry
+        but is still used by a live file is a hand decision."""
+        tracked = git(self.root, "ls-files").splitlines()
+        texts = {}
+        for rel in tracked:
+            try:
+                with open(os.path.join(self.root, rel), encoding="utf-8") as handle:
+                    texts[rel] = handle.read()
+            except (OSError, UnicodeDecodeError):
+                continue
+        candidates = {rel for rel in tracked if rel.startswith("scripts/")
+                      and not rel.endswith(".lean") and rel not in self.deletes
+                      and not is_protected(rel)}
+        gone = set(self.deletes) | {f"{CLAIM_MAP_DIR}/{k}.md" for k in self.keys}
+        owner = self.layering.classify()
+
+        def departing_token(token):
+            return self.departing_str(token)
+
+        def live_family_token(token):
+            if not self.blancish(token) or self.departing_str(token):
+                return False
+            mod = self.paths.get(token)
+            if mod is None:
+                if token.endswith(".lean"):
+                    mod = token[len("Blanc/"):-len(".lean")].replace("/", ".")
+                else:
+                    found = self.module_for(token) if token in self.population else token
+                    mod = found.removeprefix("Blanc.") if found else None
+            return owner.get(mod, "shared") not in ("shared", "root", "composition")
+
+        json_rows = {}
+        for rel in JSON_HAND:
+            if rel in texts:
+                try:
+                    json_rows[rel] = json.loads(texts[rel])
+                except ValueError:
+                    pass
+        result = family_only_files(texts, candidates, gone, departing_token,
+                                   live_family_token, json_rows, blancish=self.blancish,
+                                   paths=tracked,
+                                   ignored_users={o for _, owned in WRITERS for o in owned})
+        self.family_live_users = result["live_users"]
+        # Departing files first (named-only ones take their users' key), so a file
+        # takes the key of the departing files that name it.
+        order = sorted(result["depart"], key=lambda r: (result["depart"][r]["reason"]
+                                                         == "named only by departing files", r))
+        for rel in order:
+            why = result["depart"][rel]
+            keys = set(self.keys_of_text(texts.get(rel, "")))
+            if not keys:
+                keys = {self.deletes[u] for u in why["users"] if u in self.deletes}
+            key = next((k for k in self.keys if k in keys), self.keys[0])
+            self.deletes[rel] = key
+            self.extra[key].setdefault("departing_scripts", {})[rel] = why["reason"]
+        for rel, entry in sorted(result["blocked"].items()):
+            why = (f"live {', '.join(entry['users'][:3])} use(s) it" if entry["users"] else
+                   "it is not family-only (it calls departing files but nothing departing names it)")
+            self.outstanding.append(f"{rel}: names departing {entry['names'][0]}"
+                                    f"{' and more' if len(entry['names']) > 1 else ''}, but stays: "
+                                    f"{why}; remove the departing reference or that use first")
+        for rel in sorted(result["mixed"]):
+            self.outstanding.append(f"{rel}: names both departing entries and a live family's; "
+                                    f"split or edit it by hand")
 
     def layering_tables(self):
         text = read(self.root, LAYERING)
@@ -779,16 +867,30 @@ class Departure:
                     self.extra[key].setdefault("lift_certificates", []).append(record)
         if removed_inputs:
             remaining = self.current(CERTIFICATES)
+            moved = set()
             for path, key in removed_inputs:
-                if path in remaining:
+                if path in self.deletes and path not in moved and path in self.extra[
+                        self.deletes[path]].get("departing_scripts", {}):
+                    # family_only_files took it; it belongs to its certificate's key.
+                    moved.add(path)
+                    reason = self.extra[self.deletes[path]]["departing_scripts"].pop(path)
+                    self.extra[key].setdefault("departing_scripts", {})[path] = reason
+                    self.deletes[path] = key
+                if path in remaining or path in self.deletes:
                     continue
-                users = [u for u in git(self.root, "grep", "-l", "-F", path, check=False).splitlines()
-                         if u not in self.deletes and u != CERTIFICATES]
+                # Live users by family_only_files's reference index (a bare file name
+                # counts), else by the full path.
+                users = self.family_live_users.get(path) or [
+                    u for u in git(self.root, "grep", "-l", "-F", path, check=False).splitlines()
+                    if u not in self.deletes and u != CERTIFICATES]
                 if users:
                     self.outstanding.append(f"{path}: input of a departing certificate, still named "
                                             f"by {', '.join(users[:3])}")
                 elif os.path.exists(os.path.join(self.root, path)):
                     self.deletes[path] = key
+            for key in self.keys:
+                if self.extra[key].get("departing_scripts") == {}:
+                    del self.extra[key]["departing_scripts"]
         for rel, writer in WRITER_JSON.items():
             full = os.path.join(self.root, rel)
             if os.path.exists(full) and any(self.departing_str(t) for t in
@@ -908,7 +1010,8 @@ class Departure:
             for rel in owned:
                 rows = []
                 for number, line in enumerate(read(self.root, rel).splitlines(), 1):
-                    if any(self.departing_str(t) for t in BLANC_TOKEN.findall(line)):
+                    tokens = BLANC_TOKEN.findall(line) + re.findall(r"scripts/[A-Za-z0-9_./-]+", line)
+                    if any(self.departing_str(t) for t in tokens):
                         rows.append([number, line])
                 if rows:
                     self.rows[rel] = rows
@@ -1066,6 +1169,171 @@ def json_prune(data, departing, blancish, where="$"):
             problems += p
         return out, removed, problems
     return data, removed, problems
+
+
+PATH_TOKEN = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]*")
+
+
+def is_protected(rel):
+    """Files a release edits, regenerates or records rather than deletes: never
+    candidates of `family_only_files` (they still count as users)."""
+    protected = ({r for r, _ in ROW_FILES} | set(JSON_HAND) | set(TEXT_HAND) | set(WRITER_JSON)
+                 | {o for _, owned in WRITERS for o in owned} | set(SHARED_DOCS)
+                 | {LIVE_SET, LAYERING, CLAIMCHECK, ROOTS_TSV, CLAIM_MAP, "scripts/release.py",
+                    "scripts/leaf-count.json"})
+    return (rel in protected or rel.startswith(RELEASES_DIR + "/")
+            or rel.startswith("scripts/claim-pin-hash/"))
+
+
+def reference_index(paths, targets):
+    """-> refs(text) -> the targets the text names. A target is named by any
+    suffix of its path (`scripts/a/b.py`, `a/b.py`, `b.py`) that no other tracked
+    path shares, or, for a Python file, by its module stem as an import head."""
+    owners = {}
+    stems = {}
+    for rel in paths:
+        parts = rel.split("/")
+        for i in range(len(parts)):
+            owners.setdefault("/".join(parts[i:]), set()).add(rel)
+        if rel.endswith(".py") and parts[-1][:-3].isidentifier():
+            stems.setdefault(parts[-1][:-3], set()).add(rel)
+    unique = {s: next(iter(o)) for s, o in owners.items() if len(o) == 1 and next(iter(o)) in targets}
+    stems = {s: next(iter(o)) for s, o in stems.items() if len(o) == 1 and next(iter(o)) in targets}
+    last = {s.rsplit("/", 1)[-1] for s in unique}
+
+    def refs(text):
+        found = set()
+        for match in PATH_TOKEN.finditer(text):
+            token = match.group(0).rstrip(".")
+            parts = token.split("/")
+            if parts[-1] in last:
+                for i in range(len(parts)):
+                    hit = unique.get("/".join(parts[i:]))
+                    if hit:
+                        found.add(hit)
+                        break
+            if "/" not in token:
+                hit = stems.get(token.split(".", 1)[0])
+                if hit:
+                    found.add(hit)
+        return found
+
+    return refs
+
+
+def family_only_files(texts, candidates, gone, departing_token, live_family_token, json_rows,
+                      blancish=None, paths=None, ignored_users=frozenset()):
+    """Which candidate files leave with a release, exactly and conservatively.
+
+    `texts` maps tracked paths to their text; `gone` is what already departs
+    (modules, Lean scripts, claim-map files); `departing_token` and
+    `live_family_token` classify Blanc tokens (modules, paths, declarations);
+    `json_rows` maps the JSON row files a release prunes to their data.
+
+    A candidate F departs when it is
+    - grounded: it names a departing module or declaration, or a gone file, or
+      is named by a gone file or by a JSON row the release removes whole; or a
+      grounded departing candidate names it (a lock file or helper only the
+      family uses). Naming a departing candidate does not ground a file: a
+      tool that calls a family script is reported, not deleted;
+    - unused by live files: every tracked file naming F departs too (gone, or a
+      departing candidate: so same-stem siblings and generator/lock pairs leave
+      together), except in a JSON row file, where only a reference left after
+      pruning counts (a row removed whole leaves with the release; a bare path
+      in a surviving row still counts, so a live gate never loses a script); and
+    - names no live family's module or declaration (shared ones are fine).
+    The set is the greatest one with these properties, iterated down from all
+    candidates, so it is computed, not listed.
+
+    -> {"depart": {F: {"reason", "users"}}, "blocked": {F: {"names", "users"}} for
+    candidates that name a departing entry (module, declaration, gone or
+    departing file, or a file a removed JSON row names) yet stay (a live file
+    uses them, or they are not grounded), "mixed": [F naming departing and
+    live-family entries], "live_users": {F: live users} for the files that stay}."""
+    paths = sorted(set(paths or texts) | set(candidates) | set(gone))
+    # Blanc modules are named by their module tokens (`departing_token`), not by
+    # path suffixes: `A.lean` in a fixture is not Blanc/Lift/X/Callee/A.lean.
+    refs = reference_index(paths, set(candidates) | {g for g in gone if not g.startswith("Blanc/")})
+    blancish = blancish or (lambda s: bool(BLANC_TOKEN.fullmatch(s)))
+    names = {}
+    for rel, text in texts.items():
+        if rel in json_rows:
+            continue
+        names[rel] = refs(text) - {rel}
+    users = {}
+    for rel, targets in names.items():
+        for target in targets:
+            users.setdefault(target, set()).add(rel)
+    tokens = {rel: BLANC_TOKEN.findall(texts.get(rel, "")) for rel in candidates}
+    direct = {rel for rel in candidates if any(departing_token(t) for t in tokens[rel])}
+    mixed = {rel for rel in candidates if any(live_family_token(t) for t in tokens[rel])}
+
+    def prune(departs):
+        """-> (refs left in surviving rows per file, refs of rows removed whole)."""
+        left, seeds = {}, set()
+        dep = lambda s: departing_token(s) or s in gone or s in departs
+        bl = lambda s: blancish(s) or s in gone or s in departs
+        for rel, data in json_rows.items():
+            pruned, removed, _ = json_prune(data, dep, bl)
+            mine = refs(json.dumps(pruned)) - {rel}
+            for _, value in removed:
+                if isinstance(value, str):
+                    mine |= refs(value)
+                else:
+                    seeds |= refs(json.dumps(value))
+            left[rel] = mine
+        return left, seeds
+
+    _, seeds = prune(set())
+    seeds &= set(candidates)
+    base = {rel for rel in candidates
+            if rel in direct or rel in seeds or names.get(rel, set()) & set(gone)
+            or users.get(rel, set()) & set(gone)}
+    depart = set(candidates) - mixed
+    while True:
+        left, _ = prune(depart)
+        all_users = {t: set(us) for t, us in users.items()}
+        for rel, targets in left.items():
+            for target in targets:
+                all_users.setdefault(target, set()).add(rel)
+        grounded = base & depart
+        frontier = list(grounded)
+        while frontier:
+            rel = frontier.pop()
+            near = names.get(rel, set()) & depart
+            for other in near - grounded:
+                grounded.add(other)
+                frontier.append(other)
+        live_users = {rel: sorted(u for u in all_users.get(rel, set())
+                                  if u not in gone and u not in depart and u != rel
+                                  and u not in ignored_users)
+                      for rel in candidates}
+        kept = {rel for rel in grounded if not live_users[rel]}
+        if kept == depart:
+            break
+        depart = kept
+    # A file a removed row names counts as departing for the report while only
+    # candidates still use it (an input kept by its family's lock file), not when a
+    # live tool does (a shared script a removed certificate cites).
+    entries = set(gone) | depart | {s for s in seeds if all(u in candidates for u in live_users[s])}
+    out = {"depart": {}, "blocked": {}, "mixed": sorted(mixed & (direct | {
+        r for r in candidates if names.get(r, set()) & entries})),
+        "live_users": {r: us for r, us in live_users.items() if us and r not in depart}}
+    for rel in sorted(depart):
+        if rel in direct:
+            reason = "names a departing module or declaration"
+        elif names.get(rel, set()) & (set(gone) | depart):
+            reason = "names departing files: " + ", ".join(sorted(names[rel] & (set(gone) | depart))[:3])
+        else:
+            reason = "named only by departing files"
+        out["depart"][rel] = {"reason": reason,
+                              "users": sorted(all_users.get(rel, set()) - {rel})}
+    for rel in sorted(set(candidates) - depart - mixed):
+        named = sorted({t for t in tokens[rel] if departing_token(t)}
+                       | (names.get(rel, set()) & entries))
+        if named:
+            out["blocked"][rel] = {"names": named, "users": live_users[rel]}
+    return out
 
 
 def edit_layering_tables(text, keys, compositions):
@@ -1434,6 +1702,9 @@ def cmd_release(root, keys, date, log, census_path, commit_arg, do_tag, do_depar
               f"{len(m['files'])} file(s), rows in {len(m['rows'])} file(s), "
               f"{len(m['shared_used'])} shared declaration(s) used")
     print(f"delete: {len(dep.deletes)} file(s)")
+    for key in keys:
+        for rel, why in sorted(dep.extra[key].get("departing_scripts", {}).items()):
+            print(f"departing script ({key}): {rel}: {why}")
     for rel, how in dep.notes:
         print(f"hand edit: {rel}: {how}")
     for argv, owned in WRITERS:
@@ -1643,6 +1914,71 @@ def cmd_restore(root, tag, build_label, census_path):
     return 1 if conflicts else 0
 
 
+FAMILY_CONTROLS = 10
+
+
+def family_only_controls():
+    """In-memory controls of `family_only_files` on a planted tree: family Fam
+    departs (its module Blanc/Fam/A.lean is gone), family Live stays."""
+    texts = {
+        "Blanc/Fam/A.lean": "/-! Generated only by scripts/gen.py. -/\n",
+        # A generator naming the departing module, with its lock file and an input
+        # the lock names: the pair names each other (same-family siblings).
+        "scripts/gen.py": "import shared\nOUT = 'Blanc/Fam/A.lean'\nLOCK = ROOT / 'gen-lock.json'\n",
+        "scripts/gen-lock.json": '{"by": "scripts/gen.py", "input": "scripts/lift/inputs/fam.hex"}\n',
+        "scripts/lift/inputs/fam.hex": "6000\n",
+        # A helper the departing generator and a live script both use.
+        "scripts/shared.py": "def f():\n    pass\n",
+        "scripts/live.py": "import shared\nM = 'Blanc/Live/B.lean'\n",
+        # A family-only script a live gate runs, and the gate.
+        "scripts/tool.py": "N = 'Blanc.Fam.thm'\n",
+        "scripts/check.sh": "python3 scripts/tool.py\n",
+        "scripts/mixed.py": "A = 'Blanc/Fam/A.lean'\nB = 'Blanc/Live/B.lean'\n",
+        # Two files naming each other and nothing departing.
+        "scripts/orphan-a.py": "import orphan_b\n",
+        "scripts/orphan_b.py": "X = 'orphan-a.py'\n",
+        # Run by a gate row that also covers a live module, and by a family-only row.
+        "scripts/gated.py": "M = 'Blanc/Fam/A.lean'\n",
+        "scripts/famgate.py": "print(1)\n",
+    }
+    registry = {"gates": [
+        {"command": ["scripts/gated.py"], "inputs": ["Blanc/Live/B.lean"]},
+        {"command": ["scripts/famgate.py"], "inputs": ["Blanc/Fam/A.lean"]},
+    ]}
+    texts["scripts/gate-registry.json"] = json.dumps(registry)
+    gone = {"Blanc/Fam/A.lean"}
+    candidates = {r for r in texts if r.startswith("scripts/") and r != "scripts/gate-registry.json"}
+    fam = lambda t: t.startswith(("Blanc/Fam/", "Blanc.Fam."))
+    live = lambda t: t.startswith(("Blanc/Live/", "Blanc.Live."))
+    out = family_only_files(texts, candidates, gone, fam, live,
+                            {"scripts/gate-registry.json": registry})
+    depart = set(out["depart"])
+    failures = []
+
+    def control(label, ok):
+        if not ok:
+            failures.append(f"family-only control: {label} (depart {sorted(depart)}, "
+                            f"blocked {sorted(out['blocked'])}, mixed {out['mixed']})")
+
+    control("a generator naming the departing module departs", "scripts/gen.py" in depart)
+    control("its lock file departs though the two name each other", "scripts/gen-lock.json" in depart)
+    control("data only departing files name departs", "scripts/lift/inputs/fam.hex" in depart)
+    control("a helper a live script also uses stays, unreported",
+            "scripts/shared.py" not in depart and "scripts/shared.py" not in out["blocked"])
+    control("a family-only script a live gate runs stays and is reported",
+            "scripts/tool.py" not in depart
+            and out["blocked"].get("scripts/tool.py", {}).get("users") == ["scripts/check.sh"])
+    control("the gate calling it does not depart by naming it", "scripts/check.sh" not in depart)
+    control("a file naming departing and live-family entries stays and is reported",
+            "scripts/mixed.py" not in depart and out["mixed"] == ["scripts/mixed.py"])
+    control("an ungrounded cycle stays",
+            not depart & {"scripts/orphan-a.py", "scripts/orphan_b.py"})
+    control("a script a surviving registry row runs stays and is reported",
+            "scripts/gated.py" not in depart and "scripts/gated.py" in out["blocked"])
+    control("a script only a removed registry row names departs", "scripts/famgate.py" in depart)
+    return failures
+
+
 def self_test(root):
     failures = []
 
@@ -1685,13 +2021,14 @@ def self_test(root):
     hunks = [[1, 2, []], [3, 3, ["d\n"]]]
     if apply_hunks(lines, hunks) != ["a\n", "c\n", "d\n"]:
         failures.append("apply_hunks does not reproduce a recorded departure")
+    failures += family_only_controls()
     for line in failures:
         print(f"SELF-TEST — {line}")
     if failures:
         print(f"REGRESSION — release self-test: {len(failures)} failure(s)")
         return 1
-    print("OK — release self-test: 13 controls (dirty tree, non-live key, catalogue log for another "
-          "commit and its variants, hunk replay)")
+    print(f"OK — release self-test: {13 + FAMILY_CONTROLS} controls (dirty tree, non-live key, "
+          f"catalogue log for another commit and its variants, hunk replay, family-only files)")
     return 0
 
 
