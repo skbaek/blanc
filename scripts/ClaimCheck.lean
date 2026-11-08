@@ -7,17 +7,11 @@ import Blanc.Lift.WithdrawalRequest.ExactFeeDomain
 import Blanc.Composition.WithdrawalRequestFeeRefutation
 import Blanc.Lift.WithdrawalRequest.NatLiveness
 import Blanc.Lift.WithdrawalRequest.Creation.Deploy
-import Blanc.Lift.Token.Signed
-import Blanc.Lift.StableSwapNewton.D
-import Blanc.Lift.StableSwapNewton.Y
-import Blanc.Lift.Token.Supply
-import Blanc.Lift.StaticGasMessage
 import Blanc.Lift.WithdrawalRequest.HeadlineFee
 import Blanc.Lift.WithdrawalRequest.HeadlineSystem
 import Blanc.Lift.WithdrawalRequest.HeadlineHistory
 import Blanc.Lift.WithdrawalRequest.FifoDrainControl
 import Blanc.Composition.WithdrawalRequestFeeHeadline
-import Blanc.Lift.RootMessages
 -- `open private` below; no longer reached transitively under mathlib 4.35.
 import Batteries.Tactic.OpenPrivate
 
@@ -512,7 +506,6 @@ namespace LidoCircuitBreaker
 
 
 
-open scoped BigOperators
 
 
 
@@ -828,69 +821,6 @@ end Blanc
 
 
 
-
-namespace Blanc.LockExclusion
-open Jaune
-open Jaune.Exec.Deriv
-
--- Vyper V± definition: CPFrame
-example (P : Adr) (code : ByteArray) (F : Exec.Deriv) :
-    CPFrame P code F ↔
-      (F.pc = 0 ∧ F.sevm.currentTarget = P ∧ F.sevm.code = code) :=
-  Iff.rfl
-
-end Blanc.LockExclusion
-
-namespace Blanc.LockExclusion.LockSpec
-open Jaune
-open Jaune.Exec.Deriv
-
--- Vyper V± definition: Enters
-example (L : LockSpec) (P : Adr) (G : Exec.Deriv) :
-    Enters L P G ↔
-      (CPFrame P L.code G ∧ ∃ x, ParentPrefix G x ∧ x.pc ∈ L.bodies) :=
-  Iff.rfl
-
-end Blanc.LockExclusion.LockSpec
-
-namespace Blanc.LockExclusion.LockSpec
-open Jaune
-open Jaune.Exec.Deriv
-
--- Vyper V± definition: HashAvoidIn
-example (L : LockSpec) (P : Adr)
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) :
-    HashAvoidIn L P run ↔
-      (∀ G ∈ Exec.rawFrameRoots run, CPFrame P L.code G → HashAvoid L.slot G) :=
-  Iff.rfl
-
-end Blanc.LockExclusion.LockSpec
-
-namespace Blanc.Lift.Witness
-open Jaune Blanc.Lift
-
--- Vyper V− definition: SpawnedBy
-example (sevm : Sevm) (devm : Devm) (x : Xinst) (child : Evm) :
-    SpawnedBy sevm devm x child ↔
-      (∃ f rsm, Xinst.step sevm devm x = .spawn f rsm ∧ f.enter = .run child) :=
-  Iff.rfl
-
-end Blanc.Lift.Witness
-
-namespace Blanc.Lift.Witness
-open Jaune Blanc.Lift
-
--- Vyper V− definition: Agree
-example (c : Cfg) :
-    Agree c ↔
-      ((∀ x, x ∈ c.devm.accessedStorageKeys ↔ x ∈ c.keys) ∧
-    (∀ a, a ∈ c.devm.accessedAddresses ↔ a ∈ c.adrs) ∧
-    (∀ a k, storOf c.devm.state a k = lookupS c.stor a k) ∧
-    AcctAgree c.devm.state c.acs) :=
-  Iff.rfl
-
-end Blanc.Lift.Witness
 
 namespace Blanc.Lift.WithdrawalRequest
 open Jaune ExecutionTrace ExecutionAccountingReplay Blanc.WithdrawalRequest
@@ -1399,28 +1329,6 @@ records by their exact constructor, so a weakened body or an added, removed or r
 here.  A premise record's own sub-records (for example the per-call environments a forward
 environment is built from) are not unfolded here. -/
 
-namespace Blanc.Lift.UniswapV2Pair
-open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
-
--- Uniswap V2 Pair definition: Blanc.Exec.Frame.obsAt
-example (pair : Adr) (frame : Exec.Frame)  :
-    Blanc.Exec.Frame.obsAt pair frame =
-      (if frame.sevm.currentTarget = pair ∧ frame.sevm.isStatic = false then [frame] else []) :=
-  rfl
-
-end Blanc.Lift.UniswapV2Pair
-
-namespace Blanc.Lift.UniswapV2Pair
-open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
-
--- Uniswap V2 Pair definition: Blanc.Exec.Frame.subtreeAt
-example (pair : Adr) (f : Exec.Frame)  :
-    Blanc.Exec.Frame.subtreeAt pair f =
-      ((Exec.committedFrames f.run).flatMap (Blanc.Exec.Frame.obsAt pair)) :=
-  rfl
-
-end Blanc.Lift.UniswapV2Pair
-
 
 
 
@@ -1781,53 +1689,6 @@ Burn/Swap physical-position and source-step records) are not unfolded here. -/
 -- Paper review 2 definition: swapOwnedRaw
 
 
-namespace Blanc.Lift.Token
-open Jaune Blanc Blanc.ExecutionTrace
-
-example : ∀ {B : Book},
-    (∀ {l l' : B.Ledger} {a : Sevm} {h : Adr}, B.Good l → B.step l a = some l' →
-      B.bal l' h < B.bal l h → a.caller = h ∨ 0 < B.allow l h a.caller) →
-    (∀ {l l' : B.Ledger} {a : Sevm} {h g : Adr}, B.Good l → B.step l a = some l' →
-      B.allow l h g < B.allow l' h g → a.caller = h) →
-    (∀ {l l' : B.Ledger} {a : Sevm} {h : Adr}, B.Good l → B.step l a = some l' →
-      a.caller = h → (B.op a).HolderSafe → B.bal l h ≤ B.bal l' h + (B.op a).debit h) →
-    (∀ {l l' : B.Ledger} {a : Sevm} {dst : Adr} {v : Nat}, B.Good l →
-      B.step l a = some l' → B.op a = .transfer dst v → dst ≠ a.caller →
-      B.bal l' a.caller + v = B.bal l a.caller) →
-    (∀ {l l' : B.Ledger} {a : Sevm} {h g : Adr}, B.Good l → B.step l a = some l' →
-      a.caller = h → (B.op a).HolderSafe → B.allow l' h g ≤ B.allow l h g) →
-    (∀ {l : B.Ledger} {h : Adr}, B.Good l → B.bal l h < 2 ^ 256) →
-    BookLaws B :=
-  @BookLaws.mk
-
-example : ∀ {T : Adr} {B : Book} {C : Core T B},
-    (∀ {cfg : ChainConfig} {checkpoint future : BlockChain}
-      (tr : ConfiguredHistoryTrace cfg checkpoint future), C.Hist tr →
-        ∀ G ∈ tr.settledFrames, G.sevm.currentTarget = T → G.sevm.isStatic = false →
-          ∀ c ∈ Exec.childFrames G.run, IsEntry T c → c.sevm.caller = T) →
-    SelfCaller C :=
-  @SelfCaller.mk
-
-example {B : Book} (laws : BookLaws B) {h : Adr} :
-    ∀ {as : List Sevm} {l l' : B.Ledger},
-      B.run l as = some l' →
-      (∀ n pre, n < as.length → B.run l (as.take n) = some pre → B.Good pre) →
-      (∀ g, B.allow l h g = 0) →
-      (∀ a ∈ as, a.caller = h → (B.op a).HolderSafe) →
-      B.bal l h ≤ B.bal l' h + ((as.filter fun a => decide (a.caller = h)).map
-        fun a => (B.op a).debit h).sum ∧
-      ∀ g, B.allow l' h g = 0 :=
-  laws.run_holder
-
-example {T : Adr} {B : Book} (C : Core T B) {cfg : ChainConfig}
-    {checkpoint future : BlockChain} (tr : ConfiguredHistoryTrace cfg checkpoint future)
-    (hist : C.Hist tr) {pre mid post : List Exec.Frame} {f g : Exec.Frame}
-    (split : tr.settledFrames = pre ++ f :: mid ++ g :: post) :
-    B.run (C.ledgerOf tr f.pre.state) (entryAsks T (f :: mid)) =
-      some (C.ledgerOf tr g.pre.state) :=
-  C.segment tr hist split
-
-end Blanc.Lift.Token
 
 
 
@@ -1838,94 +1699,10 @@ end Blanc.Lift.Token
 
 
 
--- usdc-weth9-pair-composition-v1: the USDC x WETH9 Pair joint invariant, share rows, liveness rows and checkpoint
 
--- usdc-weth9-pair-composition-v1: the two-token joint checkpoint by deployment and its checker
-
--- usdc-finite-checkpoint-v1: the support-free checkpoint, quiet premise and `_finite` headlines
--- usdc-weth9-pair-composition-v1: USDC is an instance of the writer-shadowed token core
--- usdc-weth9-pair-composition-v1: the USDC proxy frame, signature-book laws, history end and the definitions the headlines are stated through
 -- usdc-weth9-pair-composition-v1: the never-signer predicate (derived for the Pair by usdc_neverSigner_pair)
-namespace Blanc.Lift.Token
-open Jaune Blanc Blanc.ExecutionTrace
-
-example : ∀ {T : Adr} {S : BookS} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    {tr : ConfiguredHistoryTrace cfg checkpoint future} {p : Adr},
-    (∀ g ∈ tr.settledFrames, IsEntry T g → g.sevm.isStatic = false → S.signer g.sevm ≠ some p) →
-    NeverSigner T S tr p :=
-  @NeverSigner.mk
-
-end Blanc.Lift.Token
-
--- curve-3pool-stableswap-v1: Curve 3pool frame, history, liveness (with the end-to-end
--- concrete instances), Newton-loop, U3, amplification, composition and deployment headlines.
--- Each binder is named as in its source; the names need not be referenced.
 set_option linter.unusedVariables false
 
-namespace Blanc.StableSwapNewton
-
-example : ∀ {x : Fin 3 → Nat} {amp tol v : Nat} (h : getDChk x amp tol = some v) (hx : ∀ i, 0 < x i) (hamp : 1 ≤ amp),
-    aboveRoot x (amp * 3) (v + 1) :=
-  @Blanc.StableSwapNewton.getDChk_lower
-
-example : ¬ aboveRoot ceilW 600 (getDCeil ceilW 200 1 + 1) ∧
-    getDCeil ceilW 200 1 = 14615550493253435060542 ∧
-    floorRoot ceilW 600 = 14615550493253435060544 ∧
-    getD ceilW 200 1 = 14615550493253435060546 :=
-  @Blanc.StableSwapNewton.getDCeil_breaks_lower
-
-example : (∀ i, monoPre i ≤ monoPost i) ∧
-    getD monoPost 1 1 < getD monoPre 1 1 ∧ getD monoPost 1 2 < getD monoPre 1 2 :=
-  @Blanc.StableSwapNewton.getD_not_mono
-
-example : runsOut capW 6000 1 255 (sum3 capW) = true ∧
-    getD capW 2000 1 = (bodyD capW 6000)^[255] (sum3 capW) ∧
-    getD capW 2000 1 = 680031527231617479170632831 ∧
-    bodyD capW 6000 680031527231617479170632831 = 680031527231617479170632834 ∧
-    bodyD capW 6000 680031527231617479170632834 = 680031527231617479170632831 ∧
-    floorRoot capW 6000 + 2 = 680031527231617479170632831 :=
-  @Blanc.StableSwapNewton.getD_cap_cycle
-
-example : ∀ {amp : Nat} {i : Fin 3} {xp : Fin 3 → Nat} {D v : Nat} (h : getYDChk amp i xp D = some v),
-    rootOrSucc (cOf (xp (others i).1) (xp (others i).2) D (amp * 3))
-      (bOf (xp (others i).1) (xp (others i).2) D (amp * 3)) D v :=
-  @Blanc.StableSwapNewton.getYDChk_rootOrSucc
-
-example : ∀ {amp : Nat} {i j : Fin 3} {x : Nat} {xp : Fin 3 → Nat} {v : Nat} (h : getYChk amp i j x xp = some v),
-    rootOrSucc (cOf (withAt xp i x (others j).1) (withAt xp i x (others j).2)
-      (getD xp amp 1) (amp * 3)) (bOf (withAt xp i x (others j).1)
-      (withAt xp i x (others j).2) (getD xp amp 1) (amp * 3)) (getD xp amp 1) v :=
-  @Blanc.StableSwapNewton.getYChk_rootOrSucc
-
-example : ∀ {c b D v : Nat} (h : loopYChk c b D 1 255 D = some v) (hc : c ≤ D ^ 4),
-    rootOrSucc c b D v :=
-  @Blanc.StableSwapNewton.loopYChk_rootOrSucc
-
-end Blanc.StableSwapNewton
-
-namespace Blanc.Lift.Token.SupplyFacet
-open Jaune Blanc
-
-example : ∀ {B : Book} (F : SupplyFacet B),
-    ∀ {as : List Sevm} {l l' : B.Ledger}, B.run l as = some l' →
-      (∀ a ∈ as, a.caller = F.minter l → F.KeepsMinter a) →
-      F.minter l' = F.minter l ∧ F.supply l' + F.burned as = F.supply l + F.minted as :=
-  @Blanc.Lift.Token.SupplyFacet.run_supply
-
-end Blanc.Lift.Token.SupplyFacet
-
--- curve-3pool-stableswap-v1: the exact-gas liveness headlines (frame, message entry, history,
--- composed with 3Crv) and their premise-bundle witnesses, with the message grant `Msg.withGas`
--- and the word pin `RliWordsPin` they are stated through, pinned by unfolding.
-
-namespace Blanc.Lift
-open Jaune
-
-example (msg : Msg) (G : Nat) : msg.withGas G = {msg with gas := G} := by
-  unfold Jaune.Msg.withGas
-  rfl
-
-end Blanc.Lift
 
 namespace Blanc.Lift.WithdrawalRequest
 open Jaune ExecutionTrace ExecutionAccountingReplay Blanc.WithdrawalRequest
@@ -2340,75 +2117,6 @@ example : FeeGuaranteeRefuted :=
   fee_guarantee_refuted
 
 end Blanc.Lift.WithdrawalRequest.FeeCounterexample
-
-namespace Blanc.Lift.LidoCircuitBreakerDeployed
-open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
-open scoped BigOperators
-
--- Lido CircuitBreaker definition: LidoDeploymentTo.HashApart
-
--- Lido CircuitBreaker: lido_registry_consistent
-
--- Lido CircuitBreaker: lido_remove_repairs
-
--- Lido CircuitBreaker constructor: LidoDeploymentTo.mk
-
--- Lido CircuitBreaker constructor: Creation.DeploymentCut.mk
-
--- Lido CircuitBreaker: lido_deployment_finite_init
-
--- Lido CircuitBreaker: Live.lido_live_registryOn
-
--- Lido CircuitBreaker definition: canonicalAddress
-
--- Lido CircuitBreaker definition: solRegistryStorage
-
--- Lido CircuitBreaker definition: solKey
-
--- Lido CircuitBreaker statement: Blanc.SlotFootprint.checkApartOn_eq_true
-example {κ : Type} {slot : κ → B256} {observed : List κ} {foreign : List B256} :
-    Blanc.SlotFootprint.checkApartOn slot observed foreign = true ↔
-      ∀ w ∈ foreign, ∀ k ∈ observed, slot k ≠ w :=
-  Blanc.SlotFootprint.checkApartOn_eq_true
-
-end Blanc.Lift.LidoCircuitBreakerDeployed
-
-namespace Blanc.Lift
-open Jaune
-
--- Root messages definition: settledState (ok)
-example (d : Devm) :
-    settledState (.ok d) =
-      (match d.error with
-      | none => some d.state
-      | some _ => none) :=
-  rfl
-
--- Root messages definition: settledState (error)
-example (e : EvmError × State × AdrSet × Tra) : settledState (.error e) = none :=
-  rfl
-
--- Root messages definition: RootMsg.result (create)
-example (m : Fork → State → Msg) (fork : Fork) (W : State) :
-    (RootMsg.create m).result fork W = processCreateMessage (m fork W) :=
-  rfl
-
--- Root messages definition: RootMsg.result (call)
-example (m : Fork → State → Msg) (fork : Fork) (W : State) :
-    (RootMsg.call m).result fork W = processMessage (m fork W) :=
-  rfl
-
--- Root messages definition: runMessages (nil)
-example (fork : Fork) (W : State) : runMessages fork W [] = some W :=
-  rfl
-
--- Root messages definition: runMessages (cons)
-example (fork : Fork) (W : State) (m : RootMsg) (ms : List RootMsg) :
-    runMessages fork W (m :: ms) =
-      (settledState (m.result fork W)).bind fun W' => runMessages fork W' ms :=
-  rfl
-
-end Blanc.Lift
 
 namespace Blanc.Lift.WithdrawalRequest
 open Jaune ExecutionTrace
