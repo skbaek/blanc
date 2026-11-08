@@ -108,6 +108,7 @@ The shared finite separation checks retain their characterizations:
 
 - [EIP-7002 withdrawal requests](claim-map/withdrawal-request.md)
 - [EIP-8282 builder requests](claim-map/builder-request.md)
+- [EIP-7251 consolidation requests](claim-map/consolidation-request.md)
 
 ## 6. Summary matrix
 
