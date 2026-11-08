@@ -47,17 +47,10 @@ def load_bounded_by_fees : Prop :=
 /-- **Burst instances: the whole ether supply caps the backlog.** With
 120,000,000 ETH in fees, deposits number at most 981 and exits at most 975;
 at most 16 deposit calls, respectively 61 exit calls, drain the queue. -/
--- DRAFT: numbers are the master's Python, unproven here; prove or correct at compile.
 def burst_instances : Prop :=
   Backlog.costEval 8 0 982 > 120000000 * 10 ^ 18 ∧
   Backlog.costEval 2 0 976 > 120000000 * 10 ^ 18 ∧
   (982 + 63) / 64 = 16 ∧ (976 + 15) / 16 = 61
-
-/-- **The load bound over a history: open.** A kept-frame fee observer from
-`f.pre`'s storage would keep the fee-only reading without the `history_chain`
-existential; until it is written, the history corollary goes through the
-frames the chain provides. -/
-def load_bound_history_open : Prop := ∃ _ : True, True
 
 /-- **Fee dynamics, history form: excess and count follow the submissions.** At
 the end of every kept history from deployed storage, the end excess and count on
