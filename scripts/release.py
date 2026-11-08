@@ -1433,6 +1433,8 @@ def residual_references(root, dep):
         for number, line in enumerate(text.splitlines(), 1):
             if "Blanc" not in line and "scripts/" not in line:
                 continue
+            # A citation re-pointed at a release tag is not a residual reference.
+            line = re.sub(r"release/[A-Za-z0-9_.-]+:Blanc/[A-Za-z0-9_/']+\.lean", "", line)
             tokens = BLANC_TOKEN.findall(line) + re.findall(r"scripts/[A-Za-z0-9_./-]+", line)
             if any(dep.departing_str(t) for t in tokens):
                 hits.append((rel, number, line.strip()[:140]))
@@ -1557,16 +1559,18 @@ def cmd_release(root, keys, date, log, census_path, commit_arg, do_tag, do_depar
             if i2 - i1 == len(new):
                 count_lines.update((rel, i + 1) for i in range(i1, i2))
     failures += d1_check(root, head, record, dep, count_lines)
+    record["added"] = sorted(set(record["added"]) | set(dep.manifest_paths.values()))
     for index, key in enumerate(keys):
         manifest = dict(manifests[key])
         manifest["departure"] = record if index == 0 else {"in": dep.manifest_paths[keys[0]]}
         write(root, dep.manifest_paths[key], manifest_text(manifest))
     residual = residual_references(root, dep)
     print(f"residual references to departing modules, files or declarations: {len(residual)}")
-    for rel, number, line in residual[:40]:
-        print(f"  {rel}:{number}: {line}")
-    if len(residual) > 40:
-        print(f"  ... {len(residual) - 40} more")
+    by_file = {}
+    for rel, number, line in residual:
+        by_file.setdefault(rel, []).append((number, line))
+    for rel, hits in sorted(by_file.items(), key=lambda kv: -len(kv[1])):
+        print(f"  {rel}: {len(hits)} (first at line {hits[0][0]}: {hits[0][1][:100]})")
     for line in failures:
         print(f"DEPART — {line}")
     if failures:
