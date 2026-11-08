@@ -1101,6 +1101,27 @@ def falsifiers(auth: Authority, bundle: dict) -> list[tuple[str, str, str | None
                     return {**b, target: b[target] + f"\nSee {match.group(0)}.\n"}
         raise KeyError("no two uncoupled live families")
 
+    def foreign_citation_pair(a, b):
+        """As foreign_citation; when every two live families are coupled, the authority's
+        compositions coupling the first two are dropped so the second is uncoupled."""
+        try:
+            return a, foreign_citation(b)
+        except KeyError:
+            pass
+        live = [k for k in b if k != "shared" and b[k]]
+        if len(live) < 2:
+            raise KeyError("fewer than two live family files")
+        for target in live:
+            for other in (k for k in live if k != target):
+                match = CITE_RE.search(b[other])
+                while match and a.family_of_path(match.group(2)) != other:
+                    match = CITE_RE.search(b[other], match.end())
+                if match:
+                    clone = with_authority(compositions={
+                        m: f for m, f in a.compositions.items() if not {target, other} <= set(f)})
+                    return clone, {**b, target: b[target] + f"\nSee {match.group(0)}.\n"}
+        raise KeyError("no live family file cites its own family")
+
     def shared_family_citation(b):
         for key in (k for k in b if k != "shared" and b[k]):
             for match in CITE_RE.finditer(b[key]):
@@ -1145,7 +1166,7 @@ def falsifiers(auth: Authority, bundle: dict) -> list[tuple[str, str, str | None
          lambda a, b: (a, without(b, first_live_family()))),
         ("index omits a live key", "the index of Section 5", None, lambda a, b: (a, unindexed(b))),
         ("family file cites an uncoupled family", "cites another family", None,
-         lambda a, b: (a, foreign_citation(b))),
+         lambda a, b: foreign_citation_pair(a, b)),
         ("shared part cites a family", "the shared part cites another family", None,
          lambda a, b: (a, shared_family_citation(b))),
     ] + [(label, expected, key, mutate)

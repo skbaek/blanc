@@ -32,7 +32,8 @@ RETIRED_DIRECT_CODE = "Blanc.Weth10.xinst_spawn_direct"
 CANONICAL_OWNER_MODULE = "Blanc/CommonProofs/Messages.lean"
 
 # UNADOPTED PROPOSAL (pending WSL protected adoption): the consumer inventory
-# reanchors to the seven retained USDC files, and the two collision tuples
+# lists the retained direct-code consumers (scripts/release.py prunes the rows of
+# a departing family here and in the manifest), and the two collision tuples
 # plus six Jaune export commands below are new exact authority exceptions.
 # They are double-pinned here so a manifest-only edit cannot grow them.
 EXPECTED_REQUIRED_CONSUMERS = [
@@ -1839,7 +1840,19 @@ def main(argv: list[str]) -> int:
             return fail("canonical direct-code duplicate-owner control failed")
 
         missing_consumer_sources = dict(corpus_sources)
-        first_consumer = ROOT / str(required_consumers[0]["module"])
+        removal_consumers = required_consumers
+        if not required_consumers:
+            # No retained consumer (they left with a released family): plant one,
+            # register it, and remove its reference.
+            planted_path = temp_root / "PlantedRequiredConsumer.lean"
+            missing_consumer_sources[planted_path] = (
+                "import Blanc.CommonProofs.Messages\n"
+                f"#check {CANONICAL_DIRECT_CODE}\n"
+            )
+            removal_consumers = [{"module": str(planted_path), "references": 1}]
+            if consumer_errors(ownership, missing_consumer_sources, removal_consumers):
+                return fail("planted canonical consumer control is not clean before removal")
+        first_consumer = ROOT / str(removal_consumers[0]["module"])
         first_consumer_source = missing_consumer_sources[first_consumer]
         changed_consumer = first_consumer_source.replace(
             CANONICAL_DIRECT_CODE_LOCAL,
@@ -1850,7 +1863,7 @@ def main(argv: list[str]) -> int:
             return fail("canonical consumer-removal control could not mutate source")
         missing_consumer_sources[first_consumer] = changed_consumer
         if not consumer_errors(
-            ownership, missing_consumer_sources, required_consumers
+            ownership, missing_consumer_sources, removal_consumers
         ):
             return fail("canonical consumer-removal control failed")
 
