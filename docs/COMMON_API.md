@@ -8706,6 +8706,14 @@ differ between them, and those certificates have no call-family node, so `lift_s
 Under Amsterdam, all four request contracts' system paths are one instance family. `SysShape` and `SysPath`
 in `Blanc/Lift/RequestSystem/Path.lean` are a runtime's pushed words, excess arm and record body, with the
 whole frame from any storage (`frame_run`); its caller dispatch is `Blanc/Lift/RequestSystem/Dispatch.lean`.
+The path is fork-parametric: its reads and record bodies are fork-free, and its stores are a fork's
+`SysStores` (`Blanc/Lift/RequestSystem/Stores.lean`: `amsterdamStores`, whose readiness is the system
+reservoir, and `coveredStores`), so `frame_runOn`, `frameCost_leOn` (against `frameBoundOn`) and
+`framePostOn_state` serve both, and the Amsterdam statements are their instances. On the covered forks,
+`CoveredSysCall.spec` in `Blanc/Lift/RequestSystem/CoveredCall.lean` takes the same `SysPath` through the
+checked system call of a canonical system contract, with `SysOutput.coveredPost_output` for its return; the
+worked consumer is `Blanc/Lift/ConsolidationRequest/System.lean` (EIP-7251). `plainNext_toNat` reads the
+plain excess arm in naturals without wrap.
 `SysCall.spec` in `Blanc/Lift/RequestSystem/Call.lean` takes it through the checked system call, with
 `sysState` as the exact post state and a regular-gas bound (`RegularGasWithin`: regular gas, state gas
 excluded); `sysState_getCode` says no

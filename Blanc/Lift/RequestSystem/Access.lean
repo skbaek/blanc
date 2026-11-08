@@ -58,7 +58,7 @@ theorem framePost_access (hbal : s.benvStat.rules.bal.isSome = true) (G : Nat) :
   have book : Access s (k.drain s b).base (k.booked s b)
       (if rd s b 2 + k.count s b = rd s b 3 then [2, 3] else [2])
       (if rd s b 2 + k.count s b = rd s b 3 then [2, 3] else [2]) := by
-    unfold booked bookBase
+    unfold booked bookedOn bookBaseOn
     split
     · exact ((Access.sstore hbal _ _ 2 0).trans (Access.sstore hbal _ _ 3 0)).congr
         (fun _ => Iff.rfl) (fun _ => Iff.rfl)

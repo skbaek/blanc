@@ -47,11 +47,14 @@ namespace SysPath
 
 variable (k : SysPath)
 
+/-- The rule-relative bound on a frame's charge, at a bound `store` on one `SSTORE`'s charge. -/
+def frameBoundOn (alloc store : Nat) : Nat :=
+  k.capN * (23 + k.bodyFixed + k.slots * gasColdSload + gVerylow * k.writes) +
+    calculateMemoryGasCost alloc + 249 + 4 * gasColdSload + 4 * store
+
 /-- The rule-relative bound on a frame's charge. -/
 def frameBound (alloc : Nat) : Nat :=
-  k.capN * (23 + k.bodyFixed + k.slots * gasColdSload + gVerylow * k.writes) +
-    calculateMemoryGasCost alloc + 249 + 4 * gasColdSload +
-    4 * (gasColdSload + amsterdamStateGasRules.storageWrite)
+  k.frameBoundOn alloc (gasColdSload + amsterdamStateGasRules.storageWrite)
 
 variable {k}
 
@@ -116,13 +119,13 @@ theorem outLen_le (m : SysMemory k) (sevm : Sevm) (b : Devm) :
   have h0 : (0 : B256).toNat = 0 := rfl
   omega
 
-/-- Everything of a frame's charge but the excess update and the final stores. -/
-theorem prefix_le (m : SysMemory k) (sevm : Sevm) (b : Devm) :
+/-- Everything of a frame's charge but the excess update and the final stores, on a fork's stores. -/
+theorem prefix_leOn (m : SysMemory k) {sevm : Sevm} {w : SysStores sevm} (laws : w.Laws) (b : Devm) :
     chargedRetExt (k.drain sevm b).memory 0 (k.outLen sevm b) +
-        bookGas sevm (k.drain sevm b).base (rd sevm b 2) (k.count sevm b) (rd sevm b 3) +
+        bookGasOn w (k.drain sevm b).base (rd sevm b 2) (k.count sevm b) (rd sevm b 3) +
         (k.drain sevm b).charges + 23 + setupGas k.shape.cap.word sevm b + dispatchGas +
-        (113 + 2 * gasColdSload + 2 * (gasColdSload + amsterdamStateGasRules.storageWrite)) ≤
-      k.frameBound m.alloc := by
+        (113 + 2 * gasColdSload + 2 * w.writeMax) ≤
+      k.frameBoundOn m.alloc w.writeMax := by
   have hcap := count_le (k := k) sevm b
   obtain ⟨_, hfit, hcharges⟩ := fold_charges m (sevm := sevm) (h := rd sevm b 2) 0
     (k.count sevm b).toNat (setupBase sevm b) .empty (by omega) rfl (Nat.zero_le _)
@@ -144,14 +147,14 @@ theorem prefix_le (m : SysMemory k) (sevm : Sevm) (b : Devm) :
     omega
   have hmul := Nat.mul_le_mul_right
     (23 + k.bodyFixed + k.slots * gasColdSload + gVerylow * k.writes) hcap
-  have hBook : bookGas sevm (k.drain sevm b).base (rd sevm b 2) (k.count sevm b)
-      (rd sevm b 3) ≤ 46 + 2 * (gasColdSload + amsterdamStateGasRules.storageWrite) := by
-    unfold bookGas
+  have hBook : bookGasOn w (k.drain sevm b).base (rd sevm b 2) (k.count sevm b)
+      (rd sevm b 3) ≤ 46 + 2 * w.writeMax := by
+    unfold bookGasOn
     split
-    · have c1 := sstoreCostA_le A sevm (k.drain sevm b).base 2 0
-      have c2 := sstoreCostA_le A sevm (afterSstoreA A sevm (k.drain sevm b).base 2 0) 3 0
+    · have c1 := laws.cost_le (k.drain sevm b).base 2 0
+      have c2 := laws.cost_le (w.afterWrite (k.drain sevm b).base 2 0) 3 0
       omega
-    · have c1 := sstoreCostA_le A sevm (k.drain sevm b).base 2 (rd sevm b 2 + k.count sevm b)
+    · have c1 := laws.cost_le (k.drain sevm b).base 2 (rd sevm b 2 + k.count sevm b)
       omega
   have hSetup : setupGas k.shape.cap.word sevm b ≤ 46 + 2 * gasColdSload := by
     have c1 := sloadCost_le sevm b 3
@@ -159,30 +162,42 @@ theorem prefix_le (m : SysMemory k) (sevm : Sevm) (b : Devm) :
     unfold setupGas
     split <;> omega
   have hDispatch : dispatchGas = 21 := rfl
-  simp only [frameBound]
+  simp only [frameBoundOn]
   simp only [drain] at hcharges hMem hBook ⊢
+  omega
+
+/-- Everything of a frame's charge but the excess update and the final stores. -/
+theorem prefix_le (m : SysMemory k) (sevm : Sevm) (b : Devm) :
+    chargedRetExt (k.drain sevm b).memory 0 (k.outLen sevm b) +
+        bookGas sevm (k.drain sevm b).base (rd sevm b 2) (k.count sevm b) (rd sevm b 3) +
+        (k.drain sevm b).charges + 23 + setupGas k.shape.cap.word sevm b + dispatchGas +
+        (113 + 2 * gasColdSload + 2 * (gasColdSload + amsterdamStateGasRules.storageWrite)) ≤
+      k.frameBound m.alloc :=
+  prefix_leOn m (amsterdamStores_laws sevm) b
+
+/-- **The rule-relative gas bound**, on a fork's stores. -/
+theorem frameCost_leOn (m : SysMemory k) {sevm : Sevm} {w : SysStores sevm} (laws : w.Laws) (b : Devm) :
+    k.frameCostOn b w ≤ k.frameBoundOn m.alloc w.writeMax := by
+  have hp := prefix_leOn m laws b
+  have hFinal : finalGasOn w (k.excessReadOn b w) (k.excessStoredOn b w) ≤ 18 + 2 * w.writeMax := by
+    have c1 := laws.cost_le (k.excessReadOn b w) 0 (k.excessStoredOn b w)
+    have c2 := laws.cost_le (w.afterWrite (k.excessReadOn b w) 0 (k.excessStoredOn b w)) 1 0
+    simp only [finalGasOn]
+    omega
+  have hExcess : excessGas k.shape.fixed sevm (k.bookedOn b w) ≤ 95 + 2 * gasColdSload := by
+    have c1 := sloadCost_le sevm (k.bookedOn b w) 0
+    have c2 := sloadCost_le sevm (afterSloadA sevm (k.bookedOn b w) 0) 1
+    have c4 := k.shape.fixed_le ((k.bookedOn b w).getStorVal sevm.currentTarget 0)
+      ((k.bookedOn b w).getStorVal sevm.currentTarget 1)
+    simp only [excessGas]
+    omega
+  simp only [frameCostOn]
   omega
 
 /-- **The rule-relative gas bound.** -/
 theorem frameCost_le (m : SysMemory k) (sevm : Sevm) (b : Devm) :
-    k.frameCost sevm b ≤ k.frameBound m.alloc := by
-  have hp := prefix_le m sevm b
-  have hFinal : finalGas sevm (k.excessRead sevm b) (k.excessStored sevm b) ≤
-      18 + 2 * (gasColdSload + amsterdamStateGasRules.storageWrite) := by
-    have c1 := sstoreCostA_le A sevm (k.excessRead sevm b) 0 (k.excessStored sevm b)
-    have c2 := sstoreCostA_le A sevm
-      (afterSstoreA A sevm (k.excessRead sevm b) 0 (k.excessStored sevm b)) 1 0
-    simp only [finalGas]
-    omega
-  have hExcess : excessGas k.shape.fixed sevm (k.booked sevm b) ≤ 95 + 2 * gasColdSload := by
-    have c1 := sloadCost_le sevm (k.booked sevm b) 0
-    have c2 := sloadCost_le sevm (afterSloadA sevm (k.booked sevm b) 0) 1
-    have c4 := k.shape.fixed_le ((k.booked sevm b).getStorVal sevm.currentTarget 0)
-      ((k.booked sevm b).getStorVal sevm.currentTarget 1)
-    simp only [excessGas]
-    omega
-  simp only [frameCost]
-  omega
+    k.frameCost sevm b ≤ k.frameBound m.alloc :=
+  frameCost_leOn m (amsterdamStores_laws sevm) b
 
 /-! ## The envelope -/
 
@@ -277,12 +292,18 @@ theorem setupBase_state (sevm : Sevm) (b : Devm) : (setupBase sevm b).state = b.
 theorem drain_state (sevm : Sevm) (b : Devm) : (k.drain sevm b).base.state = b.state := by
   simp only [drain, fold_state, setupBase_state]
 
+theorem bookBaseOn_state {sevm : Sevm} {w : SysStores sevm} (laws : w.Laws) (q : Devm) (h c t : B256) :
+    (bookBaseOn w q h c t).state =
+      if h + c = t then (q.state.setStorVal sevm.currentTarget 2 0).setStorVal sevm.currentTarget 3 0
+      else q.state.setStorVal sevm.currentTarget 2 (h + c) := by
+  unfold bookBaseOn
+  split <;> simp only [laws.state]
+
 theorem bookBase_state (sevm : Sevm) (q : Devm) (h c t : B256) :
     (bookBase sevm q h c t).state =
       if h + c = t then (q.state.setStorVal sevm.currentTarget 2 0).setStorVal sevm.currentTarget 3 0
-      else q.state.setStorVal sevm.currentTarget 2 (h + c) := by
-  unfold bookBase
-  split <;> simp only [afterSstoreA_state]
+      else q.state.setStorVal sevm.currentTarget 2 (h + c) :=
+  bookBaseOn_state (amsterdamStores_laws sevm) q h c t
 
 theorem getStorVal_of_state {d : Devm} {σ : State} {a : Adr} (h : d.state = σ) (key : B256) :
     d.getStorVal a key = (σ.getStor a).get key := by
@@ -294,28 +315,38 @@ theorem state_get_ne (σ : State) (a : Adr) {key k' : B256} (v : B256) (h : key 
     ((σ.setStorVal a key v).getStor a).get k' = (σ.getStor a).get k' := by
   rw [State.getStor_setStorVal_self, Stor.get_set_ne _ h]
 
-theorem booked_get {sevm : Sevm} {b : Devm} {key : B256} (h2 : (2 : B256) ≠ key)
-    (h3 : (3 : B256) ≠ key) :
-    (k.booked sevm b).getStorVal sevm.currentTarget key = rd sevm b key := by
-  unfold booked
-  rw [getStorVal_of_state (bookBase_state sevm _ _ _ _), drain_state]
+theorem bookedOn_get {sevm : Sevm} {w : SysStores sevm} (laws : w.Laws) {b : Devm} {key : B256}
+    (h2 : (2 : B256) ≠ key) (h3 : (3 : B256) ≠ key) :
+    (k.bookedOn b w).getStorVal sevm.currentTarget key = rd sevm b key := by
+  unfold bookedOn
+  rw [getStorVal_of_state (bookBaseOn_state laws _ _ _ _), drain_state]
   have hrd : rd sevm b key = (b.state.getStor sevm.currentTarget).get key := rfl
   rw [hrd]
   split
   · rw [state_get_ne _ _ _ h3, state_get_ne _ _ _ h2]
   · rw [state_get_ne _ _ _ h2]
 
-/-- **The frame's post state.** -/
-theorem framePost_state (sevm : Sevm) (b : Devm) (G : Nat) :
-    (k.framePost sevm b G).state = sysState k.shape b.state sevm.currentTarget := by
-  show (finalBase sevm (k.excessRead sevm b) (k.excessStored sevm b)).state = _
-  simp only [finalBase, afterSstoreA_state, excessRead, afterSloadA_state, booked, bookBase_state,
+theorem booked_get {sevm : Sevm} {b : Devm} {key : B256} (h2 : (2 : B256) ≠ key)
+    (h3 : (3 : B256) ≠ key) :
+    (k.booked sevm b).getStorVal sevm.currentTarget key = rd sevm b key :=
+  bookedOn_get (amsterdamStores_laws sevm) h2 h3
+
+/-- **The frame's post state**, on a fork's stores. -/
+theorem framePostOn_state {sevm : Sevm} {w : SysStores sevm} (laws : w.Laws) (b : Devm) (G : Nat) :
+    (k.framePostOn b w G).state = sysState k.shape b.state sevm.currentTarget := by
+  show (finalBaseOn w (k.excessReadOn b w) (k.excessStoredOn b w)).state = _
+  simp only [finalBaseOn, laws.state, excessReadOn, afterSloadA_state, bookedOn, bookBaseOn_state laws,
     drain_state]
-  have e0 : k.excessStored sevm b = k.shape.next (rd sevm b 0) (rd sevm b 1) := by
-    simp only [excessStored]
-    rw [booked_get (by decide) (by decide), booked_get (by decide) (by decide)]
+  have e0 : k.excessStoredOn b w = k.shape.next (rd sevm b 0) (rd sevm b 1) := by
+    simp only [excessStoredOn]
+    rw [bookedOn_get laws (by decide) (by decide), bookedOn_get laws (by decide) (by decide)]
   rw [e0]
   rfl
+
+/-- **The frame's post state.** -/
+theorem framePost_state (sevm : Sevm) (b : Devm) (G : Nat) :
+    (k.framePost sevm b G).state = sysState k.shape b.state sevm.currentTarget :=
+  framePostOn_state (amsterdamStores_laws sevm) b G
 
 /-- A runtime that is no delegation: its length is not a designator's. -/
 theorem not_delegated_of_size {code : ByteArray} (h : code.size ≠ eoaDelegatedCodeLength) :
