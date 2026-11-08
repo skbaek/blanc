@@ -1068,10 +1068,50 @@ class Departure:
                 self.edit(rel, "".join(keep), f"{gone} line(s) removed")
 
     def claimcheck(self):
+        """The pins naming a departing declaration leave, and so do the pins naming a
+        declaration that only the departing families' claim-map files and checker parts
+        cite (their headlines and the definitions those are stated through: shared
+        declarations that exist for the family). A remaining pin naming a declaration
+        whose module the remaining imports no longer reach is a hand decision."""
         text = read(self.root, CLAIMCHECK)
-        result = edit_claimcheck(text, self.ctx["leaf_audit"], self.population, self.names,
-                                 set(self.dotted))
+        departing_texts, live_texts = [], []
+        for name in sorted(os.listdir(os.path.join(self.root, CLAIM_MAP_DIR))):
+            if name.endswith(".md"):
+                (departing_texts if name[:-3] in self.keys else live_texts).append(
+                    read(self.root, f"{CLAIM_MAP_DIR}/{name}"))
+        if os.path.isdir(os.path.join(self.root, CLAIM_MAP_CHECKS)):
+            for name in sorted(os.listdir(os.path.join(self.root, CLAIM_MAP_CHECKS))):
+                if name.endswith(".py"):
+                    (departing_texts if name[:-3] in self.keys else live_texts).append(
+                        read(self.root, f"{CLAIM_MAP_CHECKS}/{name}"))
+        live_texts.append(read(self.root, CLAIM_MAP))
+        family_only = family_only_citations(departing_texts, live_texts) & self.population
+        result = edit_claimcheck(text, self.ctx["leaf_audit"], self.population,
+                                 self.names | family_only, set(self.dotted))
         self.outstanding += [f"{CLAIMCHECK}: {p}" for p in result["problems"]]
+        module_imports = {}
+        for mod in self.found:
+            if "Blanc." + mod in self.dotted or mod in self.dotted:
+                continue
+            try:
+                module_imports["Blanc." + mod] = re.findall(r"(?m)^import\s+(Blanc\.\S+)",
+                                                           read(self.root, module_path(mod)))
+            except OSError:
+                continue
+        roots = re.findall(r"(?m)^import\s+(Blanc\.\S+)", result["text"])
+        reach = import_closure(module_imports, roots)
+        # Lexical resolution cannot see field notation (`tr.NoSenderAt`), so a name counts
+        # as reached when any declaration with its last component is in a reached module.
+        reached_last = {n.rsplit(".", 1)[-1] for n in self.population
+                        if self.module_for(n) in reach}
+        for line, names in sorted(lean_mentions(result["text"], self.ctx["leaf_audit"],
+                                                self.population).items()):
+            for name in sorted(names):
+                mod = self.module_for(name)
+                if mod and mod not in reach and name.rsplit(".", 1)[-1] not in reached_last:
+                    self.outstanding.append(f"{CLAIMCHECK}:{line}: a remaining pin names {name}, whose "
+                                            f"module {mod} the remaining imports no longer reach")
+                    break
         before = sum(1 for line in text.split("\n") if PIN_LINE.match(line))
         after = sum(1 for line in result["text"].split("\n") if PIN_LINE.match(line))
         self.pin_count = (before, after)
@@ -1535,6 +1575,30 @@ def family_only_files(texts, candidates, gone, departing_token, live_family_toke
         if named:
             out["blocked"][rel] = {"names": named, "users": live_users[rel]}
     return out
+
+
+CITED_NAME = re.compile(r"Blanc(?:\.[A-Za-z_][A-Za-z0-9_'!?]*)+")
+
+
+def family_only_citations(departing_texts, live_texts):
+    """Fully qualified names the departing families' claim-map files and checker parts
+    cite that no live claim-map surface (the shared map, a live family's file or
+    checker part) cites."""
+    gone = {n for t in departing_texts for n in CITED_NAME.findall(t)}
+    live = {n for t in live_texts for n in CITED_NAME.findall(t)}
+    return gone - live
+
+
+def import_closure(module_imports, roots):
+    """The modules `roots` reach through `module_imports` ({module: [imported]})."""
+    seen, stack = set(), list(roots)
+    while stack:
+        mod = stack.pop()
+        if mod in seen:
+            continue
+        seen.add(mod)
+        stack.extend(module_imports.get(mod, []))
+    return seen
 
 
 def frozen_retake_text(manifest_text, changed):
@@ -2305,7 +2369,7 @@ def cmd_restore(root, tag, build_label, census_path):
 
 
 FAMILY_CONTROLS = 14
-EDIT_CONTROLS = 15
+EDIT_CONTROLS = 17
 
 
 def edit_controls():
@@ -2385,6 +2449,14 @@ def edit_controls():
             len(frozen_retake_problems(manifest, json.dumps(other), {"scripts/a.py"})) == 2)
     control("editing a derived-field source or deleting a frozen file is reported",
             len(frozen_retake_text(manifest, {"Blanc/Common.lean": b"", "scripts/b.py": None})[2]) == 2)
+    control("a declaration only departing claim-map surfaces cite is family-only, one a live surface "
+            "also cites is not",
+            family_only_citations(["`Blanc.Fam.head` and `Blanc.Shared.def_for_fam`, `Blanc.Shared.both`"],
+                                  ["`Blanc.Shared.both`"]) == {"Blanc.Fam.head", "Blanc.Shared.def_for_fam"})
+    control("a module reached only through a departing import is outside the remaining closure",
+            import_closure({"Blanc.Live.A": ["Blanc.Shared.X"], "Blanc.Shared.X": [],
+                            "Blanc.Fam.B": ["Blanc.Shared.Y"]}, ["Blanc.Live.A"])
+            == {"Blanc.Live.A", "Blanc.Shared.X"})
     script = "import Blanc\nimport Blanc.Fam.A\nimport Blanc.Fam.B -- audit root\nimport Blanc.Live.C\n#check x\n"
     control("a script's departing imports go (with a trailing comment too), live ones stay",
             drop_departing_imports(script, dotted) == "import Blanc\nimport Blanc.Live.C\n#check x\n")
