@@ -101,8 +101,8 @@ Shared system-code support remains live: `Blanc.ExecutionTrace.ConfiguredHistory
 An offset-blind `SpawnFree` exclusion cannot be assumed for the canonical EIP-7002
 bytes: `Blanc.withdrawalRequestCode_not_spawnFree` (`Blanc/SystemContracts.lean:135`).
 The shared finite separation checks retain their characterizations:
-`Blanc.SlotFootprint.checkFaithfulOn_eq_true` (`Blanc/SlotFootprint.lean:138`) and
-`Blanc.SlotFootprint.checkApartOn_eq_true` (`Blanc/SlotFootprint.lean:150`).
+`Blanc.SlotFootprint.checkFaithfulOn_eq_true` (`Blanc/SlotFootprint.lean:71`) and
+`Blanc.SlotFootprint.checkApartOn_eq_true` (`Blanc/SlotFootprint.lean:83`).
 
 ## 5. Per contract
 
@@ -208,10 +208,10 @@ Names that the tables above write unqualified.
 | `ShaReady` | `Blanc.Lift.ShaReady` (`Blanc/Lift/ExactWalkCutOps.lean:66`) | the SHA-256 precompile premises of a frame's world: address 2 undelegated and warm, a precompile of the fork |
 | `HistFork` | `Blanc.HistFork` (`Blanc/HistoricalFork.lean:21`) | the historical extraction domain, Byzantium through BPO2, Amsterdam excluded |
 | `StateInv` | `Blanc.ContractSpecSem.StateInv` (`Blanc/LadderSem.lean:86`) | the state invariant of a semantic contract spec (the semantic contract spec's state invariant) |
-| `checkFaithfulOn` | `Blanc.SlotFootprint.checkFaithfulOn` (`Blanc/SlotFootprint.lean:133`) | decidable: each written key and each observed key with the same slot are the same key (a HASH-T instance on explicit lists) |
-| `checkApartOn` | `Blanc.SlotFootprint.checkApartOn` (`Blanc/SlotFootprint.lean:145`) | decidable: no observed key has a slot in the given raw-slot list |
+| `checkFaithfulOn` | `Blanc.SlotFootprint.checkFaithfulOn` (`Blanc/SlotFootprint.lean:66`) | decidable: each written key and each observed key with the same slot are the same key (a HASH-T instance on explicit lists) |
+| `checkApartOn` | `Blanc.SlotFootprint.checkApartOn` (`Blanc/SlotFootprint.lean:78`) | decidable: no observed key has a slot in the given raw-slot list |
 | `mapSlot` | `Blanc.Lift.mapSlot` (`Blanc/Lift/MapSlot.lean:19`) | the Solidity mapping slot `keccak(key ++ base)` |
-| `HashAvoidIn` | `Blanc.LockExclusion.LockSpec.HashAvoidIn` (`Blanc/LockExclusion.lean:853`) | every frame of the pool running the lock code avoids the lock slot with its executed hashes (HASH-T) |
+| `HashAvoidIn` | `Blanc.LockExclusion.LockSpec.HashAvoidIn` (`Blanc/LockExclusion.lean:844`) | every frame of the pool running the lock code avoids the lock slot with its executed hashes (HASH-T) |
 | `Book` | `Blanc.Lift.Token.Book` (`Blanc/Lift/Token/Core.lean:48`) | a token's pure book: an abstract ledger, the step of one entered frame's message, the decoded operation, balances, allowances and a well-formedness predicate; no storage layout |
 | `BookLaws` | `Blanc.Lift.Token.BookLaws` (`Blanc/Lift/Token/Core.lean:62`) | the laws of a book that the composition consumes |
 | `Core` | `Blanc.Lift.Token.Core` (`Blanc/Lift/Token/Core.lean:98`) | what a token's address answers along a configured history, under an instance-chosen trace-local premise |

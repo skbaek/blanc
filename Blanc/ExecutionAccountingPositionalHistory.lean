@@ -17,8 +17,6 @@ history rung is the ordinary one over this carrier, on any fork domain:
 * `PositionalLadder.frames` and `PositionalLadder.configuredHistory_at`, over the covered forks;
 * `wholeFramePositionalLadderIn`, over a domain `F` without state gas, hence
   `AccountingLadderAdmittedIn.midHistoryIn` at every settled frame of a mid history.
-
-Modelled on `Blanc.Lift.Curve3Crv.readyLadderH`, which observes every settled frame the same way.
 -/
 
 namespace Blanc

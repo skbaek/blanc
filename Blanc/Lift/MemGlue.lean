@@ -13,8 +13,7 @@ A callee crossed by `xa_node`/`xa_node_span` exports what it does to memory as
   survive;
 * `Mem.KeepsOff.refl`/`trans`/`mono`/`of_agreeOutside`: composing callee exports.
 
-It also holds the generic memory-read algebra of the 3pool's quiet walks (hoisted from
-`Blanc/Lift/Curve3Pool/Walk/Quiet.lean`).  Nothing here mentions a contract.
+It also holds a generic memory-read algebra for quiet walks.  Nothing here mentions a contract.
 -/
 
 namespace Blanc.Lift

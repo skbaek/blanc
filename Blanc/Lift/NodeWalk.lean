@@ -34,8 +34,7 @@ from a concrete machine, whatever its outcome:
   settle (`PrepFacts.settle_ok`, `.settle_error`) and resume (`resume_agree_ok_of`,
   `resume_agree_error_of`) facts.
 
-The chain and frame layer over these (`chain_trans`, `spawn_resume_ok`, `leaf_frame`, …) is
-`Blanc/Lift/NodeWalkFrames.lean`.  Nothing here is contract-specific.
+Nothing here is contract-specific.
 -/
 
 namespace Blanc.Lift.NodeWalk

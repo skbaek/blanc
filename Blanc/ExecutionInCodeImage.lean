@@ -12,8 +12,7 @@ import Blanc.ExecutionMidHistoryIn
 
 Analogues of `ConfiguredHistoryTrace.rawFrames_codeImage` and
 `rawFrames_codeImage_of_installed`
-(`Blanc/ExecutionRawFramesCodeImage.lean`), `settled_codeImage`
-(`Blanc/ExecutionSettledCodeImage.lean`), `settledFrames_contig` and
+(`Blanc/ExecutionRawFramesCodeImage.lean`), `settledFrames_contig` and
 `settledFrames_parent` (`Blanc/ExecutionTraceSettledForest.lean`) for the
 In-carrier (`StagedBodyTrace` / `ConfiguredBlockTraceIn` /
 `ConfiguredHistoryTraceIn`), using the In admission and preservation layer

@@ -89,7 +89,6 @@ Where each tactic is defined, what goal it expects, and when to use it. "Goal" i
 | `istep h` | `Blanc/Lift/InvWalkStep.lean` | a macro over one `ident`: `h` is a cut-run hypothesis; it peels the next node with `ric_dest` or `ric_next` and, for a straight-line node, inverts the instruction with `ri_stepX` and substitutes | the generic one-hypothesis step of an inversion walk |
 | `istep` (no argument) | `Blanc/Lift/VyperCallee.lean` | an `elab` with no argument that reads the hypothesis named `run` and leaves a new `run`: `ric_next`, then `ri_push`/`ri_dup`/`ri_swap`/`ri_sload`/`ri_keccak`/`ri_<op>` chosen from the node | Vyper callee walks (`imload`, `imstore'` and the rest of that file) |
 | `xstep` | `Blanc/Lift/VyperCallee.lean` | goal a `RunExact`/`RunExactCut` (possibly under `∃ M'`); reads the node, applies the matching `rxc_*` lemma | the forward counterpart of that `istep`; gas matched by `Nat` offsets |
-| `xs` (macro) | `Blanc/Lift/Curve3Pool/Walk/Kit.lean` | `xs pc n ri`: hypotheses `hcode`, `hfork`, walk state `h`; steps one non-spawning instruction by `ri` | Curve 3pool pool-frame walks; siblings `xs2`, `xm`, `xmo`, `xw`, `xjd`, `xjmp`, `xji`, `xdead`, `xrevert` |
 | `xs` (elab), `xrun` | `Blanc/Composition/UniswapV2PairUsdcWeth9LegsKit.lean` | goal `SFunc.RunExact …`; `xs` unfolds and takes one step chosen by the tree head; `xrun` repeats it as a loop | the Pair/USDC/WETH9 legs; with `xunfold`, `xbr`, `xcallM`, `xcallMT` for branches and internal calls |
 | `rpush`, `rpop`, `radd`, `rdup`, `rswap`, `rmask`, `rdest` | `Blanc/Lift/ExactWalkSolc.lean` | macros that `refine` the matching `rx_*` step of a solc `RunExact` walk | solc-compiled code, shared across contracts |
 | `xr e`, `xrc e` | `Blanc/Lift/RunEx.lean` | lift a fixed-outcome step `e` into `RunEx`/`RunExCut` | the step lemma has a fixed outcome and the goal is existential |
@@ -97,15 +96,10 @@ Where each tactic is defined, what goal it expects, and when to use it. "Goal" i
 | `acc_grow`, `acc_step pre`, `acc_walk pre` | `Blanc/ExecutionWarmth.lean` | the same shape for accessed-set growth (`acc_grow1`, `Devm.AccGrow.*`) | proving that warming and accessed-set-preserving updates only grow the accessed set |
 | `silent_structure` (`with tac`) | `Blanc/CommonProofs.lean` | walks a `Func.SilentIn` goal structurally: `And.intro` at each branch and `next`, the `Ninst`/`Linst` instance at each leaf; a tail call leaves `P k` open, closed by the optional `with tac` | a silence obligation over a whole function; used by the beacon deposit root loop and the WETH-backed PRORATA vault views |
 
-Other families are local to a kit (each is a separate vocabulary for the same idea: walk one lifted instruction and
-name the new state): `wsimp`/`wauto` (`Blanc/Lift/Curve3Pool/Walk/ExchangeLiveKit.lean`), `xppush`/`xpmempush`
-(`Blanc/Lift/Curve3Pool/Callee/Xp.lean`), `rstep`/`rdisp` (`Blanc/Lift/Usdc/RefineTransferNodes.lean`), `icallA`
-(`Blanc/Lift/Usdc/RefineSignedAuthChecks.lean`), `sx`/`sxx` (`Blanc/Composition/UsdcPair/SignedSites.lean`, `SignedPathsKit.lean`).
-Files with the most tactic declarations: `ExactWalkSolc` 23, `VyperCallee` 21, `CommonProofs` 16, `ReachSstoreLoops` 12,
-`Usdc/LibReject` 11, `Curve3Pool/Walk/Kit` 11. Search `macro "` and `elab "` before adding a new step tactic.
+Files with the most tactic declarations: `ExactWalkSolc` 23, `VyperCallee` 21, `CommonProofs` 16, `ReachSstoreLoops` 12.
+Search `macro "` and `elab "` before adding a new step tactic.
 
-**Two different tactics share the name `istep`**, and `xs` likewise exists twice (a macro with three arguments in the 3pool
-kit, an `elab` without arguments in the legs kit). The `istep` pair is not a namespace separation: `InvWalkStep` and
+**Two different tactics share the name `istep`**. The `istep` pair is not a namespace separation: `InvWalkStep` and
 `VyperCallee` are independent modules, but 598 modules import both closures, so both syntaxes are visible there; the
 macro takes one `ident` (`istep h`) and the `elab` takes none (a bare `istep`, reading the hypothesis named `run`), so the call
 form selects the tactic. When a step behaves unexpectedly, first check which of the two is in scope. `kernel_rfl` and its relatives all wrap the auxiliary lemma in
@@ -116,14 +110,14 @@ form selects the tactic. When a step behaves unexpectedly, first check which of 
 Macro hygiene renames the identifiers a macro introduces, so a tactic macro cannot refer to a hypothesis its caller named
 `h` or `run`. This tree uses two idioms:
 
-- **Hygienic (preferred):** the macro takes the names it needs as `ident` arguments, as `istep h` in `InvWalkStep.lean` and
-  `xji pf pt hw` in the 3pool kit do, and builds any generated name with `mkIdent` (`Blanc/Forward.lean`,
+- **Hygienic (preferred):** the macro takes the names it needs as `ident` arguments, as `istep h` in `InvWalkStep.lean` does, and
+  builds any generated name with `mkIdent` (`Blanc/Forward.lean`,
   `Blanc/Lift/ReturnDataBound.lean`, `Blanc/Lift/VyperCallee.lean`: `mkIdent \`run`, `mkIdent \`s1`, `mkIdent (\`Blanc.Lift ++ …)`).
   A caller renaming a hypothesis cannot break it.
 - **Name capture:** `set_option hygiene false in macro …` makes the macro see the caller's `h`, `run`, `hT`, `hcode`
   directly. It is short to write and is used as the walk-kit convention (99 occurrences in 30 files; most in
-  `VyperCallee`, `ReachSstoreLoops` and the 3pool `Walk/Kit.lean`). The cost: the macro silently depends on fixed hypothesis
+  `VyperCallee` and `ReachSstoreLoops`). The cost: the macro silently depends on fixed hypothesis
   names, a clash with a local named like one of them is hard to read, and the contract of the tactic lives only in its
-  docstring. State the names a capture macro reads in its docstring (the 3pool kit's header does).
+  docstring. State the names a capture macro reads in its docstring.
 
 Prefer `ident` arguments for a new macro unless it belongs to an existing kit that already fixes its hypothesis names.

@@ -31,8 +31,6 @@ well-formedness premise.
   `cur :: e :: a :: r :: rest` returns `e :: rest` with the same memory.
 * `payload_exit`: any payload-loop run reaches its exit tail with the same
   stack tail under kept memory.
-
-Worked use: `Blanc/Lift/Usdc/OldInitializerV1Callee.lean`.
 -/
 
 namespace Blanc.Lift.SolcStorageReturn

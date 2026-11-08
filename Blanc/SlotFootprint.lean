@@ -14,8 +14,7 @@ supplies it once, at its checkpoint, so every frame's touched keys are tracked f
 (`FreshKeys.of_universe`).
 
 Nothing here mentions a contract: the key type `κ`, its slot function and the fixed slots are
-parameters.  (WETH9's `Blanc/Lift/Weth9/Footprint.lean` is the first consumer.  Curve's
-`Blanc/Lift/Curve3Crv/Layout.lean` states the same notions for its own key type.)
+parameters.
 -/
 
 namespace Blanc.SlotFootprint

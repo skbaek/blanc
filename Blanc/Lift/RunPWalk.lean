@@ -19,9 +19,7 @@ kit for the other two run shapes.
 * the prefix-reach gotos `rr_branchTo`, `rr_jump`, the instruction inversions `ri_address`,
   `ri_dup_any` (a `DUP` of an unnamed word) and `St.self'` (every machine is its own walk state).
 
-Nothing here mentions a contract.  Worked uses: the deployed Lido circuit breaker's `pause`
-(`Blanc/Lift/LidoCircuitBreakerDeployed/Pause.lean`), the USDC proxy
-(`Blanc/Lift/Usdc/ProxyWalk.lean`, `ProxyHalt.lean`).
+Nothing here mentions a contract.
 -/
 
 namespace Blanc.Lift
