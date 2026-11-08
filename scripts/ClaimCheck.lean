@@ -12,6 +12,8 @@ import Blanc.Lift.WithdrawalRequest.HeadlineSystem
 import Blanc.Lift.WithdrawalRequest.HeadlineHistory
 import Blanc.Lift.WithdrawalRequest.FifoDrainControl
 import Blanc.Composition.WithdrawalRequestFeeHeadline
+import Blanc.Composition.ConsolidationRequestPublicHeadlines
+import Blanc.Composition.ConsolidationRequestPublicHistory
 -- `open private` below; no longer reached transitively under mathlib 4.35.
 import Batteries.Tactic.OpenPrivate
 
@@ -2186,3 +2188,290 @@ example {before after checkpoint future : BlockChain}
     sevm b data fork user length
 
 end Blanc.Lift.WithdrawalRequest
+
+/-! ## EIP-7251 consolidation requests (proposed pins, for the user's review)
+
+The featured C1-C5 headlines and the unfeatured C1b, each by its exact statement; the observers they
+are stated through, by unfolding; and their records and the `Succeeded` classification, by their
+exact constructors. -/
+
+namespace Blanc.Composition.ConsolidationRequestPublic
+open Jaune Blanc
+
+-- EIP-7251 definition: addr
+example : addr = consolidationRequestPredeployAddress :=
+  rfl
+
+-- EIP-7251 definition: code
+example : code = Blanc.consolidationRequestCode :=
+  rfl
+
+-- EIP-7251 definition: installed
+example (w : State) : installed w ↔ w.getCode addr = code :=
+  Iff.rfl
+
+-- EIP-7251 definition: word
+example (w : State) (k : B256) : word w k = (w.getStor addr).get k :=
+  rfl
+
+-- EIP-7251 definition: SpecFee
+example (excess : B256) : SpecFee excess = fakeExp 1 excess.toNat 17 :=
+  rfl
+
+-- EIP-7251 definition: quotedFee
+example (excess : B256) :
+    quotedFee excess =
+      ((Classical.choose (Blanc.WordFakeExponential.run_exists_unique excess 17 1 17 0).exists).2 /
+        (17 : B256)).toNat :=
+  rfl
+
+-- EIP-7251 definition: quotedIterations
+example (excess : B256) :
+    quotedIterations excess =
+      (Classical.choose (Blanc.WordFakeExponential.run_exists_unique excess 17 1 17 0).exists).1 :=
+  rfl
+
+-- EIP-7251 definition: queueRecord
+example (s : B256 → B256) (i : Nat) :
+    queueRecord s i =
+      (s (4 + 4 * i).toB256).toAdr.toBytes ++ (s (4 + 4 * i + 1).toB256).toBytes ++
+        (s (4 + 4 * i + 2).toB256).toBytes ++ (s (4 + 4 * i + 3).toB256).toBytes :=
+  rfl
+
+-- EIP-7251 definition: storedQueue
+example (s : B256 → B256) :
+    storedQueue s = (List.range ((s 3).toNat - (s 2).toNat)).map fun i => queueRecord s ((s 2).toNat + i) :=
+  rfl
+
+-- EIP-7251 definition: remainingQueue
+example (w : State) : remainingQueue w = storedQueue (w.getStor addr).get :=
+  rfl
+
+-- EIP-7251 definition: submissionRecord
+example (f : Exec.Frame) : submissionRecord f = f.sevm.caller.toBytes ++ f.sevm.data :=
+  rfl
+
+-- EIP-7251 definition: submissions
+example (blocks : List KeptBlock) :
+    submissions blocks =
+      ((blocks.flatMap (KeptBlock.keptAt addr)).filter
+        fun f => decide (f.sevm.caller ≠ systemAddress ∧ f.sevm.data.length = 96)).map submissionRecord :=
+  rfl
+
+-- EIP-7251 definition: records116
+example (bytes : Bytes) :
+    records116 bytes = (List.range ((bytes.length + 115) / 116)).map fun i => (bytes.drop (116 * i)).take 116 :=
+  rfl
+
+-- EIP-7251 definition: blockConsolidations
+example (b : KeptBlock) :
+    blockConsolidations b =
+      (b.output.requests.filterMap fun r => match r with | 2 :: tail => some tail | _ => none).flatten :=
+  rfl
+
+-- EIP-7251 definition: emissions
+example (blocks : List KeptBlock) :
+    emissions blocks = blocks.flatMap fun b => records116 (blockConsolidations b) :=
+  rfl
+
+-- EIP-7251 definition: Fifo
+example (blocks : List KeptBlock) (final : State) :
+    Fifo blocks final ↔ submissions blocks = emissions blocks ++ remainingQueue final :=
+  Iff.rfl
+
+-- EIP-7251 constructor: CheckpointStart.mk
+example (w : State) (code : installed w) (excess : word w 0 = B256.max) (count : word w 1 = 0)
+    (head : word w 2 = 0) (tail : word w 3 = 0)
+    (systemEmpty : w.getCode systemAddress = ByteArray.empty) :
+    CheckpointStart w :=
+  ⟨code, excess, count, head, tail, systemEmpty⟩
+
+-- EIP-7251 constructor: ConsolidationCheckpointObservation.mk
+example (checkpoint : BlockChain)
+    (tip : ∃ t, checkpoint.blocks.getLast? = some t ∧ t.header.number = 22431083 ∧
+      t.header.hash = 0x28fb2c1d988435955e569451c6ad772f7fb5e61cddd7463c7b60e933ed5ff237 ∧
+      t.header.stateRoot = 0xab350e0fe349aef68947ede26295f8946c34ce3af5e3ec76f4b26ddeef29c0e3)
+    (code : installed checkpoint.state) (excess : word checkpoint.state 0 = B256.max)
+    (count : word checkpoint.state 1 = 0) (head : word checkpoint.state 2 = 0)
+    (tail : word checkpoint.state 3 = 0)
+    (systemEmpty : checkpoint.state.getCode systemAddress = ByteArray.empty) :
+    ConsolidationCheckpointObservation checkpoint :=
+  ⟨tip, code, excess, count, head, tail, systemEmpty⟩
+
+-- EIP-7251 definition: SystemCallOk
+example (benv : Benv) :
+    SystemCallOk benv ↔
+      (∃ post out, processCheckedSystemTransaction benv consolidationRequestPredeployAddress [] =
+          .ok (post, out) ∧
+        systemTransactionGas - out.gasLeft ≤ 114177) :=
+  Iff.rfl
+
+-- EIP-7251: system_call_succeeds
+example {benv : Benv} (fork : CoveredFork benv.stat.fork)
+    (installed : benv.state.getCode consolidationRequestPredeployAddress =
+      Blanc.consolidationRequestCode) :
+    SystemCallOk benv :=
+  system_call_succeeds fork installed
+
+-- EIP-7251 definition: excessAfter
+example (e n : Nat) : excessAfter e n = (if e = 2 ^ 256 - 1 then 0 else e) + n - 1 :=
+  rfl
+
+-- EIP-7251 constructor: Bookkept.mk
+example (pre post : State) (out : Bytes)
+    (excess : (word post 0).toNat = excessAfter (word pre 0).toNat (word pre 1).toNat)
+    (count : word post 1 = 0)
+    (queue : remainingQueue post = (remainingQueue pre).drop 2)
+    (reset : (word pre 3).toNat - (word pre 2).toNat ≤ 2 → word post 2 = 0 ∧ word post 3 = 0)
+    (others : ∀ k : B256, 3 < k.toNat → word post k = word pre k)
+    (output : out = ((remainingQueue pre).take 2).flatten) :
+    Bookkept pre post out :=
+  ⟨excess, count, queue, reset, others, output⟩
+
+-- EIP-7251: system_call_bookkept
+example {benv : Benv} (fork : CoveredFork benv.stat.fork) (installed : installed benv.state)
+    (ordered : (word benv.state 2).toNat ≤ (word benv.state 3).toNat)
+    (room : (word benv.state 3).toNat < 2 ^ 253)
+    (noWrap : (if word benv.state 0 = B256.max then 0 else (word benv.state 0).toNat) +
+      (word benv.state 1).toNat < 2 ^ 256) :
+    ∃ post out, processCheckedSystemTransaction benv consolidationRequestPredeployAddress [] =
+        .ok (post, out) ∧
+      Bookkept benv.state post out.returnData :=
+  system_call_bookkept fork installed ordered room noWrap
+
+-- EIP-7251: fee_le_spec
+example (excess : B256) : quotedFee excess ≤ SpecFee excess :=
+  fee_le_spec excess
+
+-- EIP-7251: fee_eq_spec_of_le
+example {excess : B256} (le : excess.toNat ≤ 2892) : quotedFee excess = SpecFee excess :=
+  fee_eq_spec_of_le le
+
+-- EIP-7251: fee_lt_spec_2893
+example {excess : B256} (at2893 : excess.toNat = 2893) : quotedFee excess < SpecFee excess :=
+  fee_lt_spec_2893 at2893
+
+-- EIP-7251 constructor: FreshEntry.mk
+example (sevm : Sevm) (pre : Devm) (stack : pre.stack = []) (aligned : pre.memory.size % 32 = 0)
+    (wf : Mem.Wf pre.memory) (lengthBound : sevm.data.length < 2 ^ 256) :
+    FreshEntry sevm pre :=
+  ⟨stack, aligned, wf, lengthBound⟩
+
+-- EIP-7251 definition: submissionLog
+example (sevm : Sevm) : submissionLog sevm = ⟨addr, [], sevm.caller.toBytes ++ sevm.data⟩ :=
+  rfl
+
+-- EIP-7251 constructor: Succeeded.dequeue
+example : ∀ {sevm : Sevm} {pre post : Devm}, sevm.caller = systemAddress →
+    post.state = Lift.RequestSystem.sysState
+      Lift.SystemExecution.ConsolidationRequest.Amsterdam.sysShape pre.state addr →
+    ((pre.getStorVal addr 2).toNat ≤ (pre.getStorVal addr 3).toNat →
+      post.output = ((storedQueue (pre.getStor addr).get).take 2).flatten) →
+    Succeeded sevm pre post :=
+  @Succeeded.dequeue
+
+-- EIP-7251 constructor: Succeeded.submission
+example : ∀ {sevm : Sevm} {pre post : Devm}, sevm.caller ≠ systemAddress → sevm.data.length = 96 →
+    sevm.isStatic = false → pre.getStorVal addr 0 ≠ B256.max →
+    quotedFee (pre.getStorVal addr 0) ≤ sevm.value.toNat →
+    post.getStor addr = Lift.ConsolidationRequest.submittedStorage sevm (pre.getStor addr) →
+    (∀ a, a ≠ addr → post.getStor a = pre.getStor a) →
+    post.logs = pre.logs ++ [submissionLog sevm] → post.output = pre.output →
+    Succeeded sevm pre post :=
+  @Succeeded.submission
+
+-- EIP-7251 constructor: Succeeded.feeRead
+example : ∀ {sevm : Sevm} {pre post : Devm}, sevm.caller ≠ systemAddress → sevm.data = [] →
+    sevm.value = 0 → pre.getStorVal addr 0 ≠ B256.max →
+    post.output = (quotedFee (pre.getStorVal addr 0)).toB256.toBytes →
+    (∀ a, post.getStor a = pre.getStor a) → post.logs = pre.logs →
+    Succeeded sevm pre post :=
+  @Succeeded.feeRead
+
+-- EIP-7251: exec_succeeded
+example {sevm : Sevm} {pre post : Devm} (target : sevm.currentTarget = consolidationRequestPredeployAddress)
+    (hcode : sevm.code = Blanc.consolidationRequestCode) (fork : CoveredFork sevm.benvStat.fork)
+    (fresh : FreshEntry sevm pre) (exec : Exec 0 sevm pre (.ok post)) :
+    Succeeded sevm pre post :=
+  exec_succeeded target hcode fork fresh exec
+
+-- EIP-7251 definition: SubmissionQueued
+example (sevm : Sevm) (pre post : Devm) :
+    SubmissionQueued sevm pre post ↔
+      storedQueue (post.getStor addr).get =
+        storedQueue (pre.getStor addr).get ++ [sevm.caller.toBytes ++ sevm.data] :=
+  Iff.rfl
+
+-- EIP-7251: submission_queued
+example {sevm : Sevm} {pre post : Devm} (target : sevm.currentTarget = consolidationRequestPredeployAddress)
+    (hcode : sevm.code = Blanc.consolidationRequestCode) (fork : CoveredFork sevm.benvStat.fork)
+    (fresh : FreshEntry sevm pre) (user : sevm.caller ≠ systemAddress)
+    (length : sevm.data.length = 96)
+    (ordered : (pre.getStorVal addr 2).toNat ≤ (pre.getStorVal addr 3).toNat)
+    (room : (pre.getStorVal addr 3).toNat < 2 ^ 253)
+    (exec : Exec 0 sevm pre (.ok post)) :
+    SubmissionQueued sevm pre post :=
+  submission_queued target hcode fork fresh user length ordered room exec
+
+-- EIP-7251 definition: submissionReads
+example (sevm : Sevm) (b : Devm) :
+    submissionReads sevm b =
+      sloadCost sevm b 0 + sloadCost sevm (afterSload sevm b 0) 1 +
+        sloadCost sevm (Lift.ConsolidationRequest.countStore sevm (afterSload sevm b 0)) 3 :=
+  rfl
+
+-- EIP-7251 definition: submissionStores
+example (sevm : Sevm) (b : Devm) :
+    submissionStores sevm b =
+      sstoreCost sevm (afterSload sevm (afterSload sevm b 0) 1) 1
+          (1 + Lift.ConsolidationRequest.countWord sevm (afterSload sevm b 0)) +
+        Lift.ConsolidationRequest.recordWritesGas sevm (Lift.ConsolidationRequest.tailRead sevm
+          (afterSload sevm b 0)) (Lift.ConsolidationRequest.submissionKey
+          (Lift.ConsolidationRequest.tailWord sevm (afterSload sevm b 0))) +
+        Lift.ConsolidationRequest.sourceGas Mem.empty + Lift.ConsolidationRequest.copyGas
+          (Mem.empty.write 0 (Lift.ConsolidationRequest.sourceWord sevm).toBytes) +
+        Lift.ConsolidationRequest.log0Gas (Lift.ConsolidationRequest.copyMemory sevm Mem.empty) 116 +
+        sstoreCost sevm (Lift.ConsolidationRequest.logged sevm (afterSload sevm b 0) Mem.empty) 3
+          (1 + Lift.ConsolidationRequest.tailWord sevm (afterSload sevm b 0)) :=
+  rfl
+
+-- EIP-7251 definition: submissionCharge
+example (sevm : Sevm) (b : Devm) (iterations : Nat) :
+    submissionCharge sevm b iterations =
+      269 + 87 * iterations + submissionReads sevm b + submissionStores sevm b :=
+  rfl
+
+-- EIP-7251 definition: SubmissionLive
+example (sevm : Sevm) (b : Devm) :
+    SubmissionLive sevm b ↔
+      ∀ G, gCallStipend < G → ∃ post, Nonempty (Exec 0 sevm (Lift.St b [] Mem.empty
+        (G + submissionCharge sevm b (quotedIterations (b.getStorVal addr 0)))) (.ok post)) ∧
+          post.gasLeft = G :=
+  Iff.rfl
+
+-- EIP-7251: submission_live
+example {sevm : Sevm} {b : Devm} (target : sevm.currentTarget = consolidationRequestPredeployAddress)
+    (hcode : sevm.code = Blanc.consolidationRequestCode) (fork : CoveredFork sevm.benvStat.fork)
+    (user : sevm.caller ≠ systemAddress) (length : sevm.data.length = 96)
+    (dynamic : sevm.isStatic = false) (active : b.getStorVal addr 0 ≠ B256.max)
+    (paid : quotedFee (b.getStorVal addr 0) ≤ sevm.value.toNat) :
+    SubmissionLive sevm b :=
+  submission_live target hcode fork user length dynamic active paid
+
+-- EIP-7251: history_fifo
+example {cfg : ChainConfig} {checkpoint final : BlockChain} {blocks : List KeptBlock}
+    (history : KeptHistory cfg checkpoint blocks final) (covered : ∀ b ∈ blocks, CoveredFork b.fork)
+    (start : CheckpointStart checkpoint.state) (clean : HistoryClean blocks)
+    (cap : (submissions blocks).length ≤ 2 ^ 253) :
+    Fifo blocks final.state :=
+  history_fifo history covered start clean cap
+
+-- EIP-7251: history_fifo_mainnet
+example {checkpoint final : BlockChain} {blocks : List KeptBlock}
+    (history : KeptHistory mainnetChainConfig checkpoint blocks final)
+    (obs : ConsolidationCheckpointObservation checkpoint)
+    (clean : HistoryClean blocks) (cap : (submissions blocks).length ≤ 2 ^ 253) :
+    Fifo blocks final.state :=
+  history_fifo_mainnet history obs clean cap
+
+end Blanc.Composition.ConsolidationRequestPublic
