@@ -8756,8 +8756,8 @@ node by node (`dispatch_system_inv`, `setup_inv`, `header_inv`, `book_inv`, `fin
 for the plain arm), the loop by induction on the count (`SysPath.loop_inv`, over a runtime's `SysPath.BodyInv`), and
 the frame: `SysPath.frame_inv`/`SysPath.exec_frame_inv` (non-static, post state `sysState`, the return window over
 `SysPath.memFold`) with `SysOutput.frame_inv_output` (on well-formed memory that window is `drained`, whatever the
-memory held). A runtime supplies `BodyInv` for its record body and `ExcessInv` (`plain_excessInv` for the plain
-arm). Worked consumer: `Blanc/Lift/ConsolidationRequest/SystemFrame.lean` (EIP-7251 `exec_system_frame`).
+memory held). A runtime supplies `BodyInv` for its record body and `ExcessInv` (from `excess_inv` for the plain
+arm, as EIP-7251's `system_excessInv` does). Worked consumer: `Blanc/Lift/ConsolidationRequest/SystemFrame.lean` (EIP-7251 `exec_system_frame`).
 `Blanc/Lift/RequestSystem/Effects.lean` holds what a call touches and returns: `sysState_getElem_ne` and
 `sysState_getElem_congr` (every other account is unchanged; its own result depends only on its own account),
 `sysFold` with `run_sysFold` and `sysFold_getElem` (a fold of calls, by account), `SysPath.frame_exec` (the walk as

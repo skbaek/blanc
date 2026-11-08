@@ -15,7 +15,7 @@ as records.
   with no error, its post state is `sysState`, it spends at most 114,177 gas, and it returns the first
   `min(2, tail - head)` records, 116 bytes each.
 * `system_call_storage`: on storage holding the queue pointers and the excess and count as numbers, with
-  no word wrap, the storage update is the EIP's bookkeeping in naturals.
+  no word wrap in the excess, the storage update is the EIP's bookkeeping, read as numbers.
 
 **Build target.** Jaune pin `e8db2742`, built on `tests@v21.0.1`, EELS `1562e2f`.
 -/
@@ -122,7 +122,7 @@ theorem system_call_ok {benv : Benv} (fork : CoveredFork benv.stat.fork)
   let h := sysCall.spec fork installed
   ⟨_, h.1, rfl, h.2, sysOutput.coveredPost_output benv consolidationRequestPredeployAddress⟩
 
-/-! ## The bookkeeping in naturals -/
+/-! ## The bookkeeping, read as numbers -/
 
 /-- The excess the EIP stores after a call: the stored excess (the inhibitor `2^256 - 1` read as zero)
 plus the count, less the per-block target of one, floored at zero. -/
@@ -164,7 +164,9 @@ update, the call succeeds as `system_call_ok` says, and its post storage is the 
 `excessAfter e n` (`max(0, e + n - 1)`, the inhibitor read as zero), the count becomes 0, the first
 `taken (t - h) = min(2, t - h)` records leave (the head advances by that many, or both pointers reset when
 the queue empties), every other slot is unchanged, and the call returns exactly those records, the record at
-queue position `q` read from slots `4 + 4q` to `4 + 4q + 3`. -/
+queue position `q` read from the word keys `4 + 4q` to `4 + 4q + 3` modulo `2 ^ 256`. With `t ≥ 2 ^ 253` such a key
+can alias slots 0 to 3; the public `system_call_bookkept` takes the tail below `2 ^ 253` to read records as the
+queue. -/
 theorem system_call_storage {benv : Benv} (fork : CoveredFork benv.stat.fork)
     (installed : benv.state.getCode consolidationRequestPredeployAddress = consolidationRequestCode)
     {e n h t : Nat} (he : storOf benv.state consolidationRequestPredeployAddress 0 = e.toB256)

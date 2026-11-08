@@ -41,7 +41,8 @@ noncomputable def quotedFee (excess : B256) : Nat :=
 noncomputable def quotedIterations (excess : B256) : Nat :=
   (Classical.choose (Blanc.WordFakeExponential.run_exists_unique excess 17 1 17 0).exists).1
 
-/-- Queue entry `i`, read from slots `4 + 4i` to `4 + 4i + 3`: the source address, then the 96 submitted bytes. -/
+/-- Queue entry `i`, read from slots `4 + 4i` to `4 + 4i + 3`: the source address (the first word cut to its low 20
+bytes), then the 96 submitted bytes. -/
 def queueRecord (s : B256 → B256) (i : Nat) : Bytes :=
   (s (4 + 4 * i).toB256).toAdr.toBytes ++ (s (4 + 4 * i + 1).toB256).toBytes ++
     (s (4 + 4 * i + 2).toB256).toBytes ++ (s (4 + 4 * i + 3).toB256).toBytes
@@ -87,10 +88,10 @@ structure CheckpointStart (w : State) : Prop where
   /-- No code at SYSTEM_ADDRESS, so only the block's own call can dequeue. -/
   systemEmpty : w.getCode systemAddress = ByteArray.empty
 
-/-- Chain reads at the shared pre-Prague checkpoint 22,431,083, adopted by the user on 2026-11-08. Provenance: Plans
-`evidence/blanc-eip7251-consolidation-requests-v1/recon/` (three providers agree on the four words). The tip is
-`Lift.WithdrawalRequest.WithdrawalDeploymentObservation.checkpointTip`'s block, and `code` is that record's
-`consolidationAtP`. -/
+/-- An observation recorded at the pre-Prague block 22,431,083: the tip header and the account reads, as public
+JSON-RPC returns them (`eth_getBlockByNumber`, `eth_getCode`, `eth_getStorageAt`). Lean does not authenticate them
+against the state root. The tip is `Lift.WithdrawalRequest.WithdrawalDeploymentObservation.checkpointTip`'s block,
+and `code` is that record's `consolidationAtP`. -/
 structure ConsolidationCheckpointObservation (checkpoint : BlockChain) : Prop where
   /-- The checkpoint's last header: number 22431083, hash 0x28fb…f237, state root 0xab35…c0e3. -/
   tip : ∃ t, checkpoint.blocks.getLast? = some t ∧ t.header.number = 22431083 ∧
