@@ -742,7 +742,7 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
             digitless = {re.sub(r"\d+", "#", line) for line in after}
             for line in before[rel]:
                 if line not in after and re.sub(r"\d+", "#", line) not in digitless and not any(
-                        re.search(r"(?<![A-Za-z0-9_.'/])" + re.escape(t) + r"(?![A-Za-z0-9_'])", line)
+                        re.search(r"(?<![A-Za-z0-9_.'])" + re.escape(t) + r"(?![A-Za-z0-9_'])", line)
                         for t in removed_tokens | swept_tokens):
                     failures.append(f"{rel}: writer removed a line naming no removed module: {line[:100]}")
                     break
