@@ -1,10 +1,8 @@
 # Deployed-bytecode claim map
 
-What Blanc proves about bytecode that is already on Ethereum mainnet: the Curve
-3Crv LP token, the Curve 3pool StableSwap pool (with 3Crv as its LP token, Section
-5.11), the Vyper nonreentrancy pair (the fixed pool implementation "V+" and the
-vulnerable one "V−"), the EIP-7002 withdrawal-request predeploy, and USDC (its
-proxy, implementation and signature library, Section 5.10).
+What Blanc proves about bytecode that is already on Ethereum mainnet, one
+section per live contract family (Section 5). A released family is documented
+at its release tag, listed in `scripts/live-set.toml`.
 Every headline below names the theorem that carries it, the premises it needs,
 and what it does not say. This page is about the exogenous bytes themselves.
 
@@ -25,7 +23,7 @@ Lean, in the file the map cites, before it is relied on.
   qualified is defined in Section 9.
 - **Statement kinds.** *Safety* is a refinement or an invariant. *Live* is
   constructive: a successful `Exec` exists and its gas is exact. *Witness* is
-  an existence statement; a conditional witness lists its premises. *Deploy* is a modeled deployment (Section 7).
+  an existence statement; a conditional witness lists its premises. *Deploy* is a modeled deployment.
   Levels are *frame*, *message*, *transaction* and *history*.
 - **Configured history.** `ConfiguredHistoryTrace cfg checkpoint future`
   [`Blanc.ExecutionTrace.ConfiguredHistoryTrace` (`Blanc/ExecutionHistory.lean:116`)] is a retained replay of validated
@@ -140,7 +138,7 @@ then constructed), since the factory's bytecode is not lifted.
     (the committed invocation lists) say nothing of
     frames rolled back or under a rolled-back ancestor.
 
-13. **Liveness frames are fresh frames** (empty stack and memory) at a state. Transaction-level witnesses are only those explicitly stated in Sections 5.6 and 5.11, under their premises.
+13. **Liveness frames are fresh frames** (empty stack and memory) at a state. Transaction-level witnesses are only those a per-contract section states explicitly, under their premises.
 
 14. **`SystemCodeInstalled`.** The canonical system bytes come from a Jaune test fixture
     (Section 2). For EIP-7002 the 504-byte runtime is provider-corroborated: three separately operated RPC services
@@ -224,7 +222,7 @@ Names that the tables above write unqualified.
 | `mapSlot` | `Blanc.Lift.mapSlot` (`Blanc/Lift/MapSlot.lean:19`) | the Solidity mapping slot `keccak(key ++ base)` |
 | `HashAvoidIn` | `Blanc.LockExclusion.LockSpec.HashAvoidIn` (`Blanc/LockExclusion.lean:853`) | every frame of the pool running the lock code avoids the lock slot with its executed hashes (HASH-T) |
 | `Book` | `Blanc.Lift.Token.Book` (`Blanc/Lift/Token/Core.lean:48`) | a token's pure book: an abstract ledger, the step of one entered frame's message, the decoded operation, balances, allowances and a well-formedness predicate; no storage layout |
-| `BookLaws` | `Blanc.Lift.Token.BookLaws` (`Blanc/Lift/Token/Core.lean:62`) | the laws of a book that the composition consumes (Section 5.10) |
+| `BookLaws` | `Blanc.Lift.Token.BookLaws` (`Blanc/Lift/Token/Core.lean:62`) | the laws of a book that the composition consumes |
 | `Core` | `Blanc.Lift.Token.Core` (`Blanc/Lift/Token/Core.lean:98`) | what a token's address answers along a configured history, under an instance-chosen trace-local premise |
 | `IsEntry` | `Blanc.Lift.Token.IsEntry` (`Blanc/Lift/Token/Core.lean:85`) | a frame entered at the token: storage owner and code address are both the token |
 | `Erc20Abi` | `Blanc.Lift.Token.Erc20Abi` (`Blanc/Lift/Token/Abi.lean:17`) | the book reads the standard `transfer` and `balanceOf` selectors as those operations, for every calldata of at least 68 (`transfer`) or 36 (`balanceOf`) bytes and below 2^256 |
