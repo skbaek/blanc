@@ -54,9 +54,12 @@ restore): a Lean script importing departing and live modules loses its departing
 imports when its code names no departing declaration (AxiomCheck.lean's audit
 roots); a `lake build` line in a tracked shell script or workflow loses the
 departing modules it names (`edit_build_lines`); the PY_ROW_TABLES rows naming
-only departing modules leave (`edit_py_row_table`); a recipe whose canonical
-example departs leaves scripts/proof-recipes.toml whole together with its
-suggestion-harness markers (`split_departing_recipes`, `strip_recipe_harness`),
+only departing modules leave (`edit_py_row_table`); a recipe whose owner module
+departs leaves scripts/proof-recipes.toml whole together with its
+suggestion-harness markers (`split_departing_recipes`, `strip_recipe_harness`;
+a live-owned recipe whose canonical example departs, a harness trigger left
+declared by no active recipe, and a composition co-declaring a live family
+outside the release are OUTSTANDING),
 the generated recipe outputs being rewritten by the registered generator and
 checked against the registry rendering without those recipes; the family's
 claim-map checker part scripts/claim-map-families/<key>.py leaves whole with its
@@ -159,6 +162,14 @@ def load_layering(root):
 
 def module_path(mod):
     return "Blanc/" + mod.replace(".", "/") + ".lean"
+
+
+def composition_problems(compositions):
+    """A composition that also declares a live family outside the release cannot leave
+    with it (the live family would lose a module it composes): a hand decision."""
+    return [f"{LAYERING}: composition {mod} also declares live {', '.join(others)}; release "
+            f"those families together or split the composition first"
+            for mod, others in sorted(compositions.items()) if others]
 
 
 def departing(layering, keys):
@@ -682,6 +693,7 @@ class Departure:
         self.rows = {}             # path -> [[line, text], ...] verbatim HEAD rows
         self.notes = []            # (path, how) for the output
         self.outstanding = []      # hand decisions; --depart refuses while any remain
+        self.outstanding += composition_problems(compositions)
         self.extra = {k: {} for k in keys}
         self.family_live_users = {}
         self.expected_writes = {}      # writer-owned path -> the exact text its writer must write
@@ -762,10 +774,9 @@ class Departure:
                 self.deletes[rel] = self.key_for_text(" ".join(imports))
             elif rel != CLAIMCHECK and any(i in self.dotted for i in imports):
                 self.mixed_imports(rel)
-        for rel in tracked:
-            stem = os.path.splitext(rel)[0]
-            if stem in stems and rel not in self.deletes:
-                self.deletes[rel] = self.deletes[stem + ".lean"]
+        # Same-stem siblings are left to family_only_files: they depart with the script
+        # only when no live file still uses them.
+        self.lean_script_stems = stems
 
     def mixed_imports(self, rel):
         """A Lean script importing departing and live modules loses its departing imports
@@ -811,14 +822,19 @@ class Departure:
                           f"re-evaluated and compared)")
 
     def departing_recipes(self):
-        """A recipe whose canonical example departs leaves scripts/proof-recipes.toml whole;
-        its suggestion-harness markers (`-- EXPECT: id` and the `expect_recipe_offered` /
-        `expect_no_recipe_offered` lines naming it) go with it. Its trigger arm and the
-        harness's trigger-only cases stay: they are shared code. The generated outputs
-        are rewritten by the registered generator, and the rows it removes are computed
-        here exactly from the registry (`expected_writes`)."""
+        """A recipe whose owner module departs leaves scripts/proof-recipes.toml whole; its
+        suggestion-harness markers (`-- EXPECT: id` and the `expect_recipe_offered` /
+        `expect_no_recipe_offered` lines naming it) go with it, and a harness trigger left
+        declared by no remaining recipe is a hand decision (the harness's
+        proofRecipeRegisteredFor refuses such a trigger). A recipe owned by a live module
+        whose canonical example departs is a hand decision: re-point the example. The
+        generated outputs are rewritten by the registered generator, and the rows it
+        removes are computed here exactly from the registry (`expected_writes`)."""
         self.expected_writes = {}
-        kept, removed = split_departing_recipes(self.current(PROOF_RECIPES), set(self.paths))
+        kept, removed, repoint = split_departing_recipes(self.current(PROOF_RECIPES), set(self.paths))
+        self.outstanding += [f"{PROOF_RECIPES}: recipe {rid} is owned by live {owner} but its "
+                             f"canonical example {example} departs; re-point the canonical example"
+                             for rid, owner, example in repoint]
         self.removed_recipes = [rid for rid, _ in removed]
         if not removed:
             return
@@ -826,7 +842,8 @@ class Departure:
             self.extra[self.key_for_text(example)].setdefault("proof_recipes", []).append(rid)
         self.edit(PROOF_RECIPES, kept, f"{len(removed)} recipe(s) whose canonical example "
                   f"departs removed: {', '.join(self.removed_recipes)}")
-        new, problems = strip_recipe_harness(self.current(RECIPE_HARNESS), set(self.removed_recipes))
+        new, problems = strip_recipe_harness(self.current(RECIPE_HARNESS), set(self.removed_recipes),
+                                             recipe_triggers(kept))
         self.outstanding += [f"{RECIPE_HARNESS}: {p}" for p in problems]
         self.edit(RECIPE_HARNESS, new, f"suggestion-harness markers of {len(removed)} departing "
                   f"recipe(s) removed")
@@ -1585,24 +1602,39 @@ def edit_build_lines(text, dotted):
 
 
 def split_departing_recipes(text, departing_paths):
-    """-> (registry text without the recipes whose canonical example file departs,
-    [(recipe id, example file)] removed). A block runs from its `[[recipe]]` line to
-    the next one."""
-    keep, removed = [], []
+    """-> (registry text without the recipes whose owner module departs,
+    [(recipe id, owner module)] removed, [(recipe id, owner, example file)] of live-owned
+    recipes whose canonical example departs). A block runs from its `[[recipe]]` line
+    to the next one."""
+    keep, removed, repoint = [], [], []
     for block in re.split(r"(?m)^(?=\[\[recipe\]\]\n)", text):
         rid = re.search(r'(?m)^id = "([^"]+)"', block)
+        owner = re.search(r'(?m)^owner_module = "([^"]+)"', block)
         example = re.search(r'(?m)^canonical_example = "([^":]+):', block)
-        if block.startswith("[[recipe]]") and rid and example and example.group(1) in departing_paths:
-            removed.append((rid.group(1), example.group(1)))
+        if block.startswith("[[recipe]]") and rid and owner and owner.group(1) in departing_paths:
+            removed.append((rid.group(1), owner.group(1)))
             continue
+        if block.startswith("[[recipe]]") and rid and example and example.group(1) in departing_paths:
+            repoint.append((rid.group(1), owner.group(1) if owner else "?", example.group(1)))
         keep.append(block)
-    return "".join(keep), removed
+    return "".join(keep), removed, repoint
 
 
-def strip_recipe_harness(text, removed):
+def recipe_triggers(registry_text):
+    """The triggers the active recipes of a registry text declare."""
+    found = set()
+    for recipe in tomllib.loads(registry_text).get("recipe", []):
+        if recipe.get("status", "active") == "active":
+            found.update(recipe.get("triggers", []))
+    return found
+
+
+def strip_recipe_harness(text, removed, live_triggers=None):
     """-> (harness text, problems): the `-- EXPECT: id` markers and the
     `expect_recipe_offered`/`expect_no_recipe_offered` lines of the removed recipe
-    ids go; any other mention of a removed id is reported."""
+    ids go; any other mention of a removed id is reported, and so is (with
+    `live_triggers`) every trigger an `expect_recipe_trigger`/`expect_no_recipe_trigger`
+    line still names that no remaining active recipe declares."""
     kept = []
     for line in text.split("\n"):
         marker = re.match(r"^-- EXPECT: (\S+)\s*$", line)
@@ -1613,13 +1645,17 @@ def strip_recipe_harness(text, removed):
     new = "\n".join(kept)
     problems = [f"still names departing recipe {rid}; edit it by hand" for rid in sorted(removed)
                 if f'"{rid}"' in new or re.search(r"(?m)^-- EXPECT: " + re.escape(rid) + r"\s*$", new)]
+    if live_triggers is not None:
+        used = set(re.findall(r'expect_(?:no_)?recipe_trigger "([^"]+)"', new))
+        problems += [f"trigger {t} is still exercised but no remaining active recipe declares it; "
+                     f"edit the harness or the registry by hand" for t in sorted(used - set(live_triggers))]
     return new, problems
 
 
 def drop_departing_imports(text, dotted):
     """The script without its `import` lines of departing modules."""
     return "\n".join(l for l in text.split("\n")
-                     if not (re.match(r"^import\s+(\S+)\s*$", l)
+                     if not (re.match(r"^import\s+(\S+)\s*(?:--.*)?$", l)
                              and re.match(r"^import\s+(\S+)", l).group(1) in dotted))
 
 
@@ -2268,8 +2304,8 @@ def cmd_restore(root, tag, build_label, census_path):
     return 1 if conflicts else 0
 
 
-FAMILY_CONTROLS = 12
-EDIT_CONTROLS = 12
+FAMILY_CONTROLS = 14
+EDIT_CONTROLS = 15
 
 
 def edit_controls():
@@ -2302,16 +2338,31 @@ def edit_controls():
     control("a row naming departing and live entries is reported, nothing edited",
             edit_py_row_table(mixed, "ROWS", departing, blancish)[2] != []
             and edit_py_row_table(mixed, "ROWS", departing, blancish)[0] == mixed)
-    registry = ('schema = 1\n\n[[recipe]]\nid = "gone"\ncanonical_example = "Blanc/Fam/A.lean:x"\n\n'
-                '[[recipe]]\nid = "kept"\ncanonical_example = "Blanc/Live/C.lean:y"\n')
-    kept, removed = split_departing_recipes(registry, {"Blanc/Fam/A.lean"})
-    control("a recipe whose canonical example departs leaves the registry whole",
+    registry = ('schema = 1\n\n[[recipe]]\nid = "gone"\nstatus = "active"\ntriggers = ["t-gone"]\n'
+                'owner_module = "Blanc/Fam/A.lean"\ncanonical_example = "Blanc/Fam/A.lean:x"\n\n'
+                '[[recipe]]\nid = "shared"\nstatus = "active"\ntriggers = ["t"]\n'
+                'owner_module = "Blanc/Shared.lean"\ncanonical_example = "Blanc/Fam/A.lean:z"\n\n'
+                '[[recipe]]\nid = "kept"\nstatus = "active"\ntriggers = ["t2"]\n'
+                'owner_module = "Blanc/Live/C.lean"\ncanonical_example = "Blanc/Live/C.lean:y"\n')
+    kept, removed, repoint = split_departing_recipes(registry, {"Blanc/Fam/A.lean"})
+    control("a recipe whose owner module departs leaves the registry whole",
             removed == [("gone", "Blanc/Fam/A.lean")] and 'id = "gone"' not in kept
             and 'id = "kept"' in kept and kept.startswith("schema = 1\n"))
+    control("a shared-owned recipe whose canonical example departs stays and is reported",
+            'id = "shared"' in kept and repoint == [("shared", "Blanc/Shared.lean", "Blanc/Fam/A.lean")])
+    orphan = ('-- EXPECT: kept\nexample : True := by\n  expect_recipe_trigger "t2"\n'
+              '  expect_no_recipe_trigger "t-gone"\n  trivial\n')
+    control("a harness trigger no remaining active recipe declares is reported",
+            [p for p in strip_recipe_harness(orphan, {"gone"}, recipe_triggers(kept))[1]
+             if "t-gone" in p] != [] and
+            not [p for p in strip_recipe_harness(orphan, {"gone"}, recipe_triggers(kept))[1]
+                 if '"t2"' in p or " t2 " in p])
+    control("a composition co-declaring a live family outside the release is reported",
+            len(composition_problems({"Composition.X": ["live-fam"], "Composition.Y": []})) == 1)
     harness = ('-- EXPECT: gone\nexample : True := by\n  expect_recipe_trigger "t"\n'
                '  expect_recipe_offered "gone"\n  trivial\n-- EXPECT: kept\n'
                '  expect_no_recipe_offered "gone"\n')
-    new, problems = strip_recipe_harness(harness, {"gone"})
+    new, problems = strip_recipe_harness(harness, {"gone"}, {"t"})
     control("the departing recipe's harness markers go, its trigger case stays",
             not problems and '"gone"' not in new and "EXPECT: gone" not in new
             and 'expect_recipe_trigger "t"' in new and "-- EXPECT: kept" in new)
@@ -2334,8 +2385,8 @@ def edit_controls():
             len(frozen_retake_problems(manifest, json.dumps(other), {"scripts/a.py"})) == 2)
     control("editing a derived-field source or deleting a frozen file is reported",
             len(frozen_retake_text(manifest, {"Blanc/Common.lean": b"", "scripts/b.py": None})[2]) == 2)
-    script = "import Blanc\nimport Blanc.Fam.A\nimport Blanc.Live.C\n#check x\n"
-    control("a script's departing imports go, live ones stay",
+    script = "import Blanc\nimport Blanc.Fam.A\nimport Blanc.Fam.B -- audit root\nimport Blanc.Live.C\n#check x\n"
+    control("a script's departing imports go (with a trailing comment too), live ones stay",
             drop_departing_imports(script, dotted) == "import Blanc\nimport Blanc.Live.C\n#check x\n")
     return failures
 
@@ -2356,7 +2407,12 @@ def family_only_controls():
         # A family-only script a live gate runs, and the gate.
         "scripts/tool.py": "N = 'Blanc.Fam.thm'\n",
         "scripts/check.sh": "python3 scripts/tool.py\n",
-        ".github/workflows/ci.yml": "run: scripts/check.sh\n",
+        ".github/workflows/ci.yml": "run: scripts/check.sh\nrun: python3 scripts/famrun.py\n",
+        # Same-stem siblings of departing Lean scripts: one a live workflow runs, one unused.
+        "scripts/famrun.lean": "import Blanc.Fam.A\n",
+        "scripts/famrun.py": "LEAN = ROOT / 'famrun.lean'\n",
+        "scripts/famidle.lean": "import Blanc.Fam.A\n",
+        "scripts/famidle.py": "LEAN = ROOT / 'famidle.lean'\n",
         # Tools nothing names: one calls only the departing generator, one also a shared helper.
         "scripts/gen-trace.py": "import gen\n",
         "scripts/gen-report.py": "import fam_helper\nimport shared\n",
@@ -2374,8 +2430,9 @@ def family_only_controls():
         {"command": ["scripts/famgate.py"], "inputs": ["Blanc/Fam/A.lean"]},
     ]}
     texts["scripts/gate-registry.json"] = json.dumps(registry)
-    gone = {"Blanc/Fam/A.lean"}
-    candidates = {r for r in texts if r.startswith("scripts/") and r != "scripts/gate-registry.json"}
+    gone = {"Blanc/Fam/A.lean", "scripts/famrun.lean", "scripts/famidle.lean"}
+    candidates = {r for r in texts if r.startswith("scripts/") and r != "scripts/gate-registry.json"
+                  and r not in gone}
     fam = lambda t: t.startswith(("Blanc/Fam/", "Blanc.Fam."))
     live = lambda t: t.startswith(("Blanc/Live/", "Blanc.Live."))
     out = family_only_files(texts, candidates, gone, fam, live,
@@ -2405,6 +2462,10 @@ def family_only_controls():
             "scripts/gated.py" not in depart and "scripts/gated.py" in out["blocked"])
     control("a script only a removed registry row names departs", "scripts/famgate.py" in depart)
     control("a tool naming only departing files departs", "scripts/gen-trace.py" in depart)
+    control("a departing Lean script's sibling a live file runs stays and is reported",
+            "scripts/famrun.py" not in depart
+            and out["blocked"].get("scripts/famrun.py", {}).get("users") == [".github/workflows/ci.yml"])
+    control("a departing Lean script's unused sibling departs", "scripts/famidle.py" in depart)
     control("a tool also naming a shared file stays and keeps the family script it calls",
             "scripts/gen-report.py" not in depart and "scripts/fam_helper.py" not in depart
             and out["blocked"].get("scripts/fam_helper.py", {}).get("users") == ["scripts/gen-report.py"])
