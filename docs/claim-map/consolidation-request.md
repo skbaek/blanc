@@ -110,7 +110,7 @@ history form is stated.
     intermediates. The 87-byte fee windows differ exactly at index 41 (0x9a vs 0xf4, pc 0x43), so the departure
     sits at the same excess. C3c states it at the function level. For EIP-7002 a synthetic history
     that reaches the departure is proved (see the EIP-7002 file, Section 7 item 16); for these bytes
-    no such history is proved, and reaching excess 2893 needs about 2,894 submissions in one block.
+    no such history is proved, and a witness reaching excess 2893 within one block would need about 2,894 submissions.
     The divergence is between the bytes and the EIP's pseudocode, not a practical attack.
 
 60. **The mainnet root is an observation, not a deployment.** C4 at mainnet is rooted at seven
