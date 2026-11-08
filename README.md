@@ -715,9 +715,9 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 2. **the axiom audit** below, which is stricter than Jaune's own gates: one
    from-scratch walk over every constant of the library fails on any axiom
    outside `propext`, `Classical.choice` and `Quot.sound`, and the leaf search
-   finds the 2334 leaf results — theorems no other
+   finds the leaf results — theorems no other
    theorem uses — that this one walk covers.
-   Run `scripts/check.sh --no-build`; its `2334 leaf results` summary belongs to
+   Run `scripts/check.sh --no-build`; its leaf-results summary belongs to
    the source identity printed by `git rev-parse HEAD`;
 3. **Blanc's own source**, guarded by
    [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
@@ -725,7 +725,7 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
    fail-closed checks `sorry`, bespoke `axiom`, `opaque`, `@[extern]`,
    `implemented_by`, `native_decide`, object-level `partial def`, and
    `dbg_trace`. Its current occurrences are exact reviewed rows
-   (`1616` on the paper-v2 tree; the gate is the authority). Unimported Lean helpers and generators are
+   (the gate is the authority). Unimported Lean helpers and generators are
    outside this library-root gate; importing one immediately brings it into
    scope. A non-terminating or chatty tactic can fail to produce a proof, but
    any proof it does produce is still checked by the kernel, so none of these
@@ -743,7 +743,7 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 CI builds the library and runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)): one
 union walk over every constant of the library, then a leaf search that finds
-the **2334** leaf results — theorems no other theorem
+the leaf results — theorems no other theorem
 uses, each covered by that walk. The leaf search is the authority on
 membership and its number is the generated
 [`scripts/leaf-count.json`](scripts/leaf-count.json), never edited by hand; run

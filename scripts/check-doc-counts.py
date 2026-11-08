@@ -155,17 +155,6 @@ def count_script_population(root: pathlib.Path, rel: str, function: str) -> int:
 # update its pattern here; deleting a pattern means a public surface stopped
 # stating the claim, which is a decision, not a cleanup.
 
-# The claim-statement transcript wording, shared by the two site surfaces that
-# reproduce `scripts/check-claims.sh`'s verdict line. TRANSCRIPTS below pins the
-# whole line against the gate's own format string; this pattern pins the number.
-CLAIM_TRANSCRIPT = re.compile(r"OK — claim statements: (\d{2,5}) definitions/statements and exact")
-
-# A count of a thousand or more is printed with a thousands separator in site
-# prose ("1,060") and without one in gate transcripts ("1060"). Consumer
-# patterns capture either spelling; captured values are compared after the
-# separators are removed, and the per-surface census counts both spellings.
-GROUPED = r"(\d{1,3}(?:,\d{3})+|\d{2,5})"
-
 LAYERING_MODULE_CELL = re.compile(
     r"\| `scripts/check-layering\.sh` \| [^\n]* \| "
     r"\d{1,5} contracts,\s*(\d{1,5}) modules,"
@@ -194,36 +183,17 @@ CLAIMS = [
             # when the per-theorem audit rows were replaced by that one walk.)
             lambda root: read_json_int(root, "scripts/leaf-count.json", "leaves"),
         ),
+        # Public pages quote no corpus count (user decision D2, 2026-11-08:
+        # the live corpus is a whitelist and its counts change with every
+        # release). Their census is zero, so a count put back on a public page
+        # fails here; GATES.md keeps the count for the gates.
         "consumers": [
-            (
-                "README.md",
-                [
-                    re.compile(r"the\s+(\d{2,5})\s+leaf\s+results"),
-                    re.compile(r"`(\d{2,5}) leaf results`\s+summary"),
-                    re.compile(r"\*\*(\d{2,5})\*\*\s+leaf\s+results"),
-                ],
-            ),
             (
                 "scripts/GATES.md",
                 [re.compile(r"\|\s*(\d{2,5})\s+leaves;")],
             ),
-            (
-                "docs/index.html",
-                [
-                    re.compile(r"axiom audit: one union walk over Blanc reaches only the standard axioms; (\d{2,5}) leaf results"),
-                    # The trust tile. The trailing label is part of the pattern on
-                    # purpose: the sibling tile beside it has identical markup
-                    # carrying the claim-pin count, and a pattern keyed on markup
-                    # alone matches it and reports a spurious disagreement.
-                    re.compile(r'<span class="n num">' + GROUPED + r'</span><span class="l">leaf results'),
-                ],
-            ),
-            (
-                "docs/method.html",
-                [re.compile(r"finds the library’s " + GROUPED + r" leaf theorems")],
-            ),
         ],
-        "census": {"README.md": 3, "scripts/GATES.md": 1, "docs/index.html": 2, "docs/method.html": 1},
+        "census": {"README.md": 0, "scripts/GATES.md": 1, "docs/index.html": 0, "docs/method.html": 0},
         "foreign": [
             "jaune: docs/index.html (3 quotations of the former audited-theorem "
             "count, spelled with a thousands separator, e.g. 1,396; not yet "
@@ -261,24 +231,13 @@ CLAIMS = [
                 "scripts/GATES.md",
                 [re.compile(r"exactly (\d{2,5}) definitions/statements and constructors")],
             ),
-            (
-                "docs/index.html",
-                [
-                    # The trust tile, keyed on its own label like the leaf tile.
-                    re.compile(r'<span class="n num">(\d{2,5})</span><span class="l">statements pinned exactly'),
-                    CLAIM_TRANSCRIPT,
-                ],
-            ),
-            (
-                "docs/method.html",
-                [re.compile(r"statement-pin gate restates (\d{2,5}) statements")],
-            ),
         ],
+        # Public pages quote no corpus count (D2); see the leaf count above.
         "census": {
             "scripts/check-claims.sh": 2,
             "scripts/GATES.md": 1,
-            "docs/index.html": 2,
-            "docs/method.html": 1,
+            "docs/index.html": 0,
+            "docs/method.html": 0,
         },
         "foreign": [],
     },
@@ -401,41 +360,10 @@ CLAIMS = [
 # axiom-audit line qualifies: its OK wording prints only when both halves equal
 # the leaf count. The site publishes no other gate transcript.
 
+# None today: the two transcripts docs/index.html carried quoted the leaf and
+# claim-pin counts, which public pages no longer state (D2). The machinery stays
+# for any count-free transcript a page publishes later.
 TRANSCRIPTS = [
-    {
-        "name": "scripts/check-claims.sh verdict line",
-        "script": "scripts/check-claims.sh",
-        # The gate's single OK line. `$claim_count` is the claim-pin count.
-        "format": re.compile(r'^echo "(OK — claim statements: .*)"\s*$', re.M),
-        "substitutions": {"$claim_count": "claim-pin count"},
-        "surfaces": [
-            (
-                "docs/index.html",
-                re.compile(
-                    r'scripts/check-claims\.sh</span></span><span class="line"><span class="ok">(.*?)</span>',
-                    re.S,
-                ),
-            ),
-        ],
-    },
-    {
-        "name": "scripts/check.sh axiom-audit line",
-        "script": "scripts/check.sh",
-        # check.sh prints its OK line only after the leaf search has reported
-        # exactly one positive count that equals scripts/leaf-count.json, so the
-        # figure is the leaf count this gate already produces.
-        "format": re.compile(r'^echo "(OK — axiom audit: .*)"\s*$', re.M),
-        "substitutions": {"$NLEAVES": "leaf count"},
-        "surfaces": [
-            (
-                "docs/index.html",
-                re.compile(
-                    r'scripts/check\.sh</span></span><span class="line"><span class="ok">(.*?)</span>',
-                    re.S,
-                ),
-            ),
-        ],
-    },
 ]
 
 
@@ -761,7 +689,7 @@ def check_claims(root: pathlib.Path, failures: list) -> tuple:
             if not path.is_file():
                 continue
             census_pattern = claim.get("census_patterns", {}).get(rel, pat)
-            if name == "leaf count" and rel == "docs/index.html":
+            if name == "leaf count" and rel == "docs/index.html" and want:
                 try:
                     found = leaf_index_partition(
                         path.read_text(encoding="utf-8"), expected, want, leaf_index_spans
@@ -769,6 +697,12 @@ def check_claims(root: pathlib.Path, failures: list) -> tuple:
                 except ValueError as exc:
                     failures.append(f"{rel}: leaf/date census refused — {exc}")
                     continue
+            elif name == "leaf count" and rel == "docs/index.html":
+                # No registered quotation: every standalone occurrence counts,
+                # except the USDC deployment year the page states as a date.
+                text = path.read_text(encoding="utf-8")
+                date = usdc_deployment_year_span(text)
+                found = sum(1 for m in pat.finditer(text) if m.span() != date)
             else:
                 found = len(census_pattern.findall(path.read_text(encoding="utf-8")))
             if found != want:
