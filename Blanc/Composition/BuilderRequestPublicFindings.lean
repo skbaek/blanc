@@ -9,6 +9,7 @@ import Blanc.Lift.BuilderRequest.Exit.Latch
 import Blanc.Lift.BuilderRequest.Balances
 import Blanc.Lift.BuilderRequest.Progress
 import Blanc.Lift.BuilderRequest.Accepts
+import Blanc.Lift.BuilderRequest.SystemFrame
 
 /-!
 # Builder request contracts: public findings
@@ -180,17 +181,17 @@ def quote_against_charge : Prop :=
     f.sevm.data.length = 48 →
     ChainLink.naturalFee Exit.contract f ≤ f.sevm.value.toNat)
 
-/-- **Output lengths, per-call form.** Each builder's system call returns
-`returnData` whose length is a multiple of the record size, at most cap records,
-with no representation premise. -/
+/-- **Output lengths, per-call form.** Each builder's system call, with the empty
+calldata the request phase passes, returns `returnData` whose length is a multiple
+of the record size, at most cap records, with no representation premise. -/
 def output_lengths_capped : Prop :=
-  (∀ (benv : Benv) (data : Bytes) (post : State) (out : MsgCallOutput),
+  (∀ (benv : Benv) (post : State) (out : MsgCallOutput),
     benv.stat.fork = .amsterdam → runsBuilderCode benv.state depositAddr Deposit.code →
-    callIsOk benv depositAddr data post out →
+    callIsOk benv depositAddr [] post out →
     out.returnData.length % 184 = 0 ∧ out.returnData.length ≤ 64 * 184) ∧
-  (∀ (benv : Benv) (data : Bytes) (post : State) (out : MsgCallOutput),
+  (∀ (benv : Benv) (post : State) (out : MsgCallOutput),
     benv.stat.fork = .amsterdam → runsBuilderCode benv.state exitAddr Exit.code →
-    callIsOk benv exitAddr data post out →
+    callIsOk benv exitAddr [] post out →
     out.returnData.length % 68 = 0 ∧ out.returnData.length ≤ 16 * 68)
 
 /-- One contract's surplus: a checked system call moves no balance. -/
@@ -206,21 +207,22 @@ raises the contract's balance by exactly the full value it carried. -/
 def surplus_locked : Prop :=
   callKeepsBalances depositAddr Deposit.code ∧ callKeepsBalances exitAddr Exit.code
 
-/-- One contract's system call leaves another account's storage untouched. -/
+/-- One contract's system call, with empty calldata, leaves another account's storage untouched. -/
 def callLocalTo (a other : Adr) (code : ByteArray) : Prop :=
-  ∀ (benv : Benv) (data : Bytes) (post : State) (out : MsgCallOutput),
+  ∀ (benv : Benv) (post : State) (out : MsgCallOutput),
     benv.stat.fork = .amsterdam → runsBuilderCode benv.state a code →
-    callIsOk benv a data post out → post.getStor other = benv.state.getStor other
+    callIsOk benv a [] post out → post.getStor other = benv.state.getStor other
 
-/-- One contract's system call leaves every code untouched. -/
+/-- One contract's system call, with empty calldata, leaves every code untouched. -/
 def callKeepsCode (a : Adr) (code : ByteArray) : Prop :=
-  ∀ (benv : Benv) (data : Bytes) (post : State) (out : MsgCallOutput),
+  ∀ (benv : Benv) (post : State) (out : MsgCallOutput),
     benv.stat.fork = .amsterdam → runsBuilderCode benv.state a code →
-    callIsOk benv a data post out → ∀ x : Adr, post.getCode x = benv.state.getCode x
+    callIsOk benv a [] post out → ∀ x : Adr, post.getCode x = benv.state.getCode x
 
-/-- **Non-interference, per-call form.** A builder's system call changes no
-storage but its own contract's, and leaves every code untouched. The fold's
-order-independence is proved at the unit layer, not stated here. -/
+/-- **Non-interference, per-call form.** A builder's system call, with the empty
+calldata the request phase passes, changes no storage but its own contract's, and
+leaves every code untouched. The fold's order-independence is proved at the unit
+layer, not stated here. -/
 def calls_do_not_interfere : Prop :=
   callLocalTo depositAddr exitAddr Deposit.code ∧ callLocalTo exitAddr depositAddr Exit.code ∧
   callKeepsCode depositAddr Deposit.code ∧ callKeepsCode exitAddr Exit.code
@@ -342,5 +344,50 @@ theorem quote_bridge : quote_against_charge := by
       f.sevm.value.toNat
     rw [Exit.target_toNat]
     exact h
+
+/-- Output lengths, from each builder's output-length law. -/
+theorem output_lengths_bridge : output_lengths_capped := by
+  constructor
+  · intro benv post out hfork hinst hrun
+    obtain ⟨post', out', n, hrun', hlen, hn, -⟩ := Deposit.output_length hfork hinst
+    have hrunE : processCheckedSystemTransaction benv depositAddr [] = .ok (post, out) := hrun
+    rw [hrunE, Except.ok.injEq, Prod.mk.injEq] at hrun'
+    obtain ⟨rfl, rfl⟩ := hrun'
+    omega
+  · intro benv post out hfork hinst hrun
+    obtain ⟨post', out', n, hrun', hlen, hn, -⟩ := Exit.output_length hfork hinst
+    have hrunE : processCheckedSystemTransaction benv exitAddr [] = .ok (post, out) := hrun
+    rw [hrunE, Except.ok.injEq, Prod.mk.injEq] at hrun'
+    obtain ⟨rfl, rfl⟩ := hrun'
+    omega
+
+/-- Non-interference, from each builder's exact system-call state. -/
+theorem interference_bridge : calls_do_not_interfere := by
+  have hne : depositAddr ≠ exitAddr := by decide
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · intro benv post out hfork hinst hrun
+    obtain ⟨out', hrun', -⟩ := Deposit.system_call_state hfork hinst
+    have hrunE : processCheckedSystemTransaction benv depositAddr [] = .ok (post, out) := hrun
+    rw [hrunE, Except.ok.injEq, Prod.mk.injEq] at hrun'
+    rw [hrun'.1]
+    exact RequestSystem.sysState_getStor_other _ _ hne
+  · intro benv post out hfork hinst hrun
+    obtain ⟨out', hrun', -⟩ := Exit.system_call_state hfork hinst
+    have hrunE : processCheckedSystemTransaction benv exitAddr [] = .ok (post, out) := hrun
+    rw [hrunE, Except.ok.injEq, Prod.mk.injEq] at hrun'
+    rw [hrun'.1]
+    exact RequestSystem.sysState_getStor_other _ _ (Ne.symm hne)
+  · intro benv post out hfork hinst hrun x
+    obtain ⟨out', hrun', -⟩ := Deposit.system_call_state hfork hinst
+    have hrunE : processCheckedSystemTransaction benv depositAddr [] = .ok (post, out) := hrun
+    rw [hrunE, Except.ok.injEq, Prod.mk.injEq] at hrun'
+    rw [hrun'.1]
+    exact RequestSystem.sysState_getCode _ _ _ _
+  · intro benv post out hfork hinst hrun x
+    obtain ⟨out', hrun', -⟩ := Exit.system_call_state hfork hinst
+    have hrunE : processCheckedSystemTransaction benv exitAddr [] = .ok (post, out) := hrun
+    rw [hrunE, Except.ok.injEq, Prod.mk.injEq] at hrun'
+    rw [hrun'.1]
+    exact RequestSystem.sysState_getCode _ _ _ _
 
 end Blanc.Composition.BuilderRequestPublic
