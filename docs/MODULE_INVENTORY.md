@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-630 shared modules, 603 with a module summary.
+631 shared modules, 604 with a module summary.
 
 ## `Blanc/`
 
@@ -622,6 +622,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 |---|---|---|
 | [`Chain.lean`](../Blanc/Lift/RequestQueue/Chain.lean) | **Exact delivery over a given sequence of request-contract frames.** A `Queue` is a request contract's layout: its record type, the slots per record and the word each keeps, a record's returned bytes, and the cap per drain. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Drain.lean`](../Blanc/Lift/RequestQueue/Drain.lean) | **What a request system call leaves on a represented queue, for any excess arm.** The system path of the EIP-7002, EIP-7251 and EIP-8282 request contracts drains the queue the same way and differs only in the excess it stores (`SysShape.next`). | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+| [`Link.lean`](../Blanc/Lift/RequestQueue/Link.lean) | **From a chain's history to a request queue's steps, on the covered forks.** `RequestQueue.Chain` takes a list of steps at a request contract as its input. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Model.lean`](../Blanc/Lift/RequestQueue/Model.lean) | **The request queue model over a list of effects.** What one frame at a request contract does to its queue, in unbounded naturals: it pushes one record, keeps the queue, or drains it, with the excess it stores given as a function of the excess and count it reads. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 
 ## `Blanc/Lift/RequestSystem/`
