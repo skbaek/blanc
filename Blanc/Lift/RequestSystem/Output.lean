@@ -24,6 +24,12 @@ theorem readsBase_getStorVal (sevm : Sevm) (d : Devm) (keys : List B256) (a : Ad
 theorem chargedRetPost_output (b : Devm) (S : List B256) (M : Mem) (G : Nat) (i sz : B256) :
     (chargedRetPost b S M G i sz).output = (M.read i.toNat sz.toNat).1 := rfl
 
+theorem chargedRetPost_error (b : Devm) (S : List B256) (M : Mem) (G : Nat) (i sz : B256) :
+    (chargedRetPost b S M G i sz).error = b.error := rfl
+
+theorem chargedRetPost_refundCounter (b : Devm) (S : List B256) (M : Mem) (G : Nat) (i sz : B256) :
+    (chargedRetPost b S M G i sz).refundCounter = b.refundCounter := rfl
+
 /-- A runtime's records extend the return window one at a time. -/
 structure SysOutput (k : SysPath) (m : SysMemory k) where
   /-- One record's returned bytes, from the storage read. -/
@@ -84,9 +90,9 @@ theorem outLen_toNat (sevm : Sevm) (b : Devm) :
   rw [B256.toNat_mul, m.len_word]
   exact Nat.mod_eq_of_lt (by have := m.len_le; have := m.alloc_lt; omega)
 
-/-- **What the frame returns, from any storage.** -/
-theorem framePost_output (sevm : Sevm) (b : Devm) (G : Nat) :
-    (k.framePost sevm b G).output =
+/-- **What the frame returns, from any storage**, on any fork's stores. -/
+theorem framePostOn_output {sevm : Sevm} (w : SysStores sevm) (b : Devm) (G : Nat) :
+    (k.framePostOn b w G).output =
       o.drained (SysPath.rd sevm b) (SysPath.rd sevm b 2) (k.count sevm b).toNat := by
   have hrd : (setupBase sevm b).getStorVal sevm.currentTarget = SysPath.rd sevm b := by
     funext key
@@ -101,6 +107,12 @@ theorem framePost_output (sevm : Sevm) (b : Devm) (G : Nat) :
     (k.fold sevm (SysPath.rd sevm b 2) 0 (k.count sevm b).toNat (setupBase sevm b) .empty).memory
     from rfl, hr.read, outLen_toNat (m := m), show (0 : B256).toNat = 0 from rfl]
   simpa only [Nat.zero_add] using hs
+
+/-- **What the frame returns, from any storage.** -/
+theorem framePost_output (sevm : Sevm) (b : Devm) (G : Nat) :
+    (k.framePost sevm b G).output =
+      o.drained (SysPath.rd sevm b) (SysPath.rd sevm b 2) (k.count sevm b).toNat :=
+  o.framePostOn_output (amsterdamStores sevm) b G
 
 end SysOutput
 

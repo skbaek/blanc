@@ -1467,6 +1467,13 @@ SHARED += ["Lift.RequestSystem.Dispatch", "Lift.RequestSystem.Path", "Lift.Reque
            "Lift.RequestSystem.Output", "Lift.RequestSystem.BodySegs", "Lift.RequestSystem.Access",
            "Lift.RequestSystem.PlainExcess", "Lift.SystemExecution.ConsolidationRequest.AmsterdamSystem",
            "Lift.RequestSystem.Effects"]
+# The same system path on the covered forks (blanc-eip7251-consolidation-requests-v1 U2): a fork's stores
+# (`SysStores`, with its Amsterdam and covered instances) and the covered forks' system-call envelope.
+SHARED += ["Lift.RequestSystem.Stores", "Lift.RequestSystem.CoveredCall"]
+# EIP-7251 consolidation requests (blanc-eip7251-consolidation-requests-v1): the covered-fork system call.
+# It imports only shared modules; the lifted runtime and its fork-free system path are the shared
+# `Lift.SystemExecution.ConsolidationRequest.*` modules registered above.
+CONTRACTS.setdefault("consolidation-request", []).extend(["Lift.ConsolidationRequest.System"])
 CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Code", "Lift.BuilderRequest.Deposit.Cert",
     "Lift.BuilderRequest.Deposit.Check", "Lift.BuilderRequest.Deposit.Jumps",

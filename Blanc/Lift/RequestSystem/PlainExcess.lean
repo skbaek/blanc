@@ -80,6 +80,44 @@ theorem plainFixed_le (target e n : B256) : plainFixed target e n ≤ 95 := by
   simp only [plainFixed]
   split <;> split <;> decide
 
+/-- **The stored excess in naturals**, without word wrap: the excess read (the inhibitor `2^256 - 1` as
+zero) plus the count, less the target, floored at zero. -/
+theorem plainNext_toNat (target : B256) {e n : Nat} (he : e < 2 ^ 256)
+    (hsum : (if e = 2 ^ 256 - 1 then 0 else e) + n < 2 ^ 256) :
+    (plainNext target e.toB256 n.toB256).toNat =
+      (if e = 2 ^ 256 - 1 then 0 else e) + n - target.toNat := by
+  have hmaxNat : B256.max.toNat = 2 ^ 256 - 1 := by decide
+  have hbase : plainBase e.toB256 = (if e = 2 ^ 256 - 1 then 0 else e).toB256 := by
+    unfold plainBase
+    by_cases hm : e = 2 ^ 256 - 1
+    · have heq : B256.max = e.toB256 := by
+        apply B256.toNat_inj
+        rw [hmaxNat, B256.toNat_toB256_of_lt he, hm]
+      rw [ite_eq_left heq, ite_eq_left hm]
+      rfl
+    · have hne : B256.max ≠ e.toB256 := fun h => by
+        have := congrArg B256.toNat h
+        rw [hmaxNat, B256.toNat_toB256_of_lt he] at this
+        exact hm this.symm
+      rw [ite_eq_right hne, ite_eq_right hm]
+  generalize hE : (if e = 2 ^ 256 - 1 then 0 else e) = E at hbase hsum ⊢
+  have hadd : n.toB256 + E.toB256 = (E + n).toB256 := by
+    rw [Nat.toB256_add_toB256, Nat.add_comm]
+  have hv := B256.toNat_toB256_of_lt hsum
+  unfold plainNext
+  rw [hbase, hadd]
+  by_cases hgt : (E + n).toB256 > target
+  · have hlt := B256.lt_iff_toNat_lt_toNat.mp hgt
+    rw [hv] at hlt
+    rw [ite_eq_left hgt, B256.toNat_sub, hv]
+    change (2 ^ 256 + (E + n) - target.toNat) % 2 ^ 256 = _
+    have := B256.toNat_lt target
+    omega
+  · have hle : ¬ target.toNat < E + n := fun hlt =>
+      hgt (B256.lt_iff_toNat_lt_toNat.mpr (by rw [hv]; exact hlt))
+    rw [ite_eq_right hgt, show (0 : B256).toNat = 0 from rfl]
+    omega
+
 section Walks
 
 variable (p : PlainWords) {fs : List SFunc} {sevm : Sevm}
