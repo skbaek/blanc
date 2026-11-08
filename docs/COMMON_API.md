@@ -3170,6 +3170,9 @@ a bare set-membership goal does not identify this execution-specific route.
   `Exec.descendantFrames_caller_excluded_neutral`.
   [`Blanc/ExecutionKeptTop.lean`](../Blanc/ExecutionKeptTop.lean): `MessageRoots`, both lanes of `processMessageCall`.
   [`Blanc/ExecutionKeptChain.lean`](../Blanc/ExecutionKeptChain.lean): `TransactionRoots`, `BodyRoots`, `KeptHistory`.
+  The per-block SYSTEM_ADDRESS premises a request-contract history theorem takes (no sender, no authority, no
+  creation there) are one structure, [`Blanc/ExecutionKeptClean.lean`](../Blanc/ExecutionKeptClean.lean):
+  `HistoryClean`, stated by the EIP-8282 builder and EIP-7251 public history headlines.
   For the balance at one account across a committed run of a frame elsewhere, kept frames only, under any rule
   record: [`Blanc/ExecutionKeptValue.lean`](../Blanc/ExecutionKeptValue.lean): `Exec.kept_bal_ge_keptPaid` (at least
   the balance plus every kept frame's value, `Exec.keptPaid`), `Exec.kept_bal_neverFalls`; the spawn balance facts
@@ -8747,6 +8750,14 @@ statements over a given list of frames (`Contract`, `Frame`, `Chain`, the queue 
 `Blanc/Lift/BuilderRequest/Delivery.lean`, family-local, and are instances of the shared `RequestQueue` model and
 chain above (`step_effect`, `Frame.toStep`); word and natural request fee at fraction 17, through excess
 2892 and not at 2893, are `Blanc/RequestFeeWordDomain.lean`. The fee loop's run, length (at most 462, tight at 2892) and value on that domain, its linear bound above, are `Blanc/RequestFeeWordBound.lean`.
+The converse, every *successful* system-arm run from any storage, memory, calldata and gas on a covered
+fork, is [`Blanc/Lift/RequestSystem/PathInv.lean`](../Blanc/Lift/RequestSystem/PathInv.lean): the trees inverted
+node by node (`dispatch_system_inv`, `setup_inv`, `header_inv`, `book_inv`, `final_inv`, and `over_inv`/`excess_inv`
+for the plain arm), the loop by induction on the count (`SysPath.loop_inv`, over a runtime's `SysPath.BodyInv`), and
+the frame: `SysPath.frame_inv`/`SysPath.exec_frame_inv` (non-static, post state `sysState`, the return window over
+`SysPath.memFold`) with `SysOutput.frame_inv_output` (on well-formed memory that window is `drained`, whatever the
+memory held). A runtime supplies `BodyInv` for its record body and `ExcessInv` (`plain_excessInv` for the plain
+arm). Worked consumer: `Blanc/Lift/ConsolidationRequest/SystemFrame.lean` (EIP-7251 `exec_system_frame`).
 `Blanc/Lift/RequestSystem/Effects.lean` holds what a call touches and returns: `sysState_getElem_ne` and
 `sysState_getElem_congr` (every other account is unchanged; its own result depends only on its own account),
 `sysFold` with `run_sysFold` and `sysFold_getElem` (a fold of calls, by account), `SysPath.frame_exec` (the walk as

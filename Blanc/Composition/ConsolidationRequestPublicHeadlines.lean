@@ -1,5 +1,6 @@
 import Blanc.Composition.ConsolidationRequestPublicObservers
 import Blanc.Lift.ConsolidationRequest.System
+import Blanc.Lift.ConsolidationRequest.SystemFrame
 import Blanc.Lift.ConsolidationRequest.Fee
 import Blanc.Lift.ConsolidationRequest.Frames
 import Blanc.Lift.ConsolidationRequest.Submission
@@ -9,15 +10,18 @@ import Blanc.Lift.RequestSystem.Dispatch
 import Blanc.Lift.RequestQueue.Model
 
 /-!
-# EIP-7251 public headlines C1, C3, C5
+# EIP-7251 public headlines C1, C2, C3, C5
 
-Featured C1 (system call), C3 (fee against the EIP) and C5 (submission queued
+Featured C1 (system call), C2 (what succeeds), C3 (fee against the EIP) and C5 (submission queued
 and live), over the observers in `ConsolidationRequestPublicObservers`. Each
 headline is a thin wrapper over the proved unit theorems in
 `Lift/ConsolidationRequest/`; every definition and theorem has a one-sentence
-docstring. C1b's `Bookkept` observer is stated here, but its headline theorem
-is not: as frozen it needs a tail bound the packet does not state, so it is
-reported unresolved instead of proved.
+docstring. C1b (`system_call_bookkept`, ordinary, unfeatured) carries the
+tail bound `2 ^ 253` the drafted packet lacked: without it a record key wraps
+onto slots 0 to 3. C2 (`exec_succeeded`) classifies every successful fresh
+frame; its dequeue arm reads the output as queue entries only with head ≤ tail
+(the user's decision of 2026-11-08), since the bytes subtract the pointers in
+words.
 -/
 
 namespace Blanc.Composition.ConsolidationRequestPublic
@@ -57,6 +61,96 @@ structure Bookkept (pre post : State) (out : Bytes) : Prop where
   /-- The call returns exactly the entries that left, 116 bytes each. -/
   output : out = ((remainingQueue pre).take 2).flatten
 
+/-- One returned record, read from queue position `h + i`, is the stored queue's entry there. -/
+theorem recordBytes_queueRecord (s : B256 → B256) (h i : Nat) :
+    Lift.ConsolidationRequest.recordBytes s h.toB256 i.toB256 = queueRecord s (h + i) := by
+  have ha : ∀ x : B256, (x <<< 96).toBytes.sliceD 0 20 0 = x.toAdr.toBytes := fun x => by
+    unfold List.sliceD
+    rw [List.drop_zero, List.takeD_eq_take _ (by rw [B256.length_toBytes]; omega),
+      WordByteCodecs.shift96_take20_toAdr_bytes]
+  have hk : ∀ r : Nat, r.toB256 + (4 + 4 * (h + i)).toB256 = (4 + 4 * (h + i) + r).toB256 := fun r => by
+    rw [Nat.toB256_add_toB256, Nat.add_comm]
+  unfold Lift.ConsolidationRequest.recordBytes queueRecord
+  rw [Lift.ConsolidationRequest.recordKey_toB256, ha, show (1 : B256) = Nat.toB256 1 by decide,
+    show (2 : B256) = Nat.toB256 2 by decide, show (3 : B256) = Nat.toB256 3 by decide, hk, hk, hk]
+
+/-- The first two entries of the stored queue, read as the records a call returns from queue position `h`. -/
+theorem take_two_eq (s : B256 → B256) {h t : Nat} (h2 : s 2 = h.toB256) (h3 : s 3 = t.toB256) (ordered : h ≤ t)
+    (t_lt : t < 2 ^ 256) :
+    ((storedQueue s).take 2).flatten = (List.range (Lift.ConsolidationRequest.taken (t - h))).flatMap
+      fun i => Lift.ConsolidationRequest.recordBytes s h.toB256 i.toB256 := by
+  unfold storedQueue Lift.ConsolidationRequest.taken
+  rw [h2, h3, B256.toNat_toB256_of_lt (by omega), B256.toNat_toB256_of_lt t_lt, ← List.map_take, List.take_range,
+    ← List.flatMap_def]
+  exact List.flatMap_congr fun i _ => (recordBytes_queueRecord s h i).symm
+
+/-- **C1b. Bookkeeping.** On a covered fork with the canonical code installed, head ≤ tail with the tail below
+`2 ^ 253` (four slots per record: no record key wraps onto slots 0 to 3), and no word wrap in `excess + count`, the
+call does the EIP's bookkeeping. -/
+theorem system_call_bookkept {benv : Benv} (fork : CoveredFork benv.stat.fork) (installed : installed benv.state)
+    (ordered : (word benv.state 2).toNat ≤ (word benv.state 3).toNat)
+    (room : (word benv.state 3).toNat < 2 ^ 253)
+    (noWrap : (if word benv.state 0 = B256.max then 0 else (word benv.state 0).toNat) +
+      (word benv.state 1).toNat < 2 ^ 256) :
+    ∃ post out, processCheckedSystemTransaction benv addr [] = .ok (post, out) ∧
+      Bookkept benv.state post out.returnData := by
+  generalize he : (word benv.state 0).toNat = e at noWrap
+  generalize hn : (word benv.state 1).toNat = n at noWrap
+  generalize hh : (word benv.state 2).toNat = h at ordered
+  generalize ht : (word benv.state 3).toNat = t at ordered room
+  have hmax : (B256.max).toNat = 2 ^ 256 - 1 := by decide
+  have noWrap' : (if e = 2 ^ 256 - 1 then 0 else e) + n < 2 ^ 256 := by
+    by_cases hm : word benv.state 0 = B256.max
+    · rw [ite_eq_left hm] at noWrap
+      rw [ite_eq_left (by rw [← he, hm, hmax])]
+      exact noWrap
+    · rw [ite_eq_right hm] at noWrap
+      rw [ite_eq_right fun (heq : e = 2 ^ 256 - 1) => hm (B256.toNat_inj _ _ (by rw [he, heq, hmax]))]
+      exact noWrap
+  obtain ⟨σ, out, hcall, -, -, h0, h1, h2, h3, hothers, hret⟩ :=
+    Lift.ConsolidationRequest.system_call_storage fork installed (e := e) (n := n) (h := h) (t := t)
+      (by rw [← he]; exact (toB256_toNat _).symm) (by rw [← hn]; exact (toB256_toNat _).symm)
+      (by rw [← hh]; exact (toB256_toNat _).symm) (by rw [← ht]; exact (toB256_toNat _).symm)
+      (by rw [← he]; exact B256.toNat_lt _) ordered (by omega) noWrap'
+  have rd2 : word benv.state 2 = h.toB256 := by rw [← hh, toB256_toNat]
+  have rd3 : word benv.state 3 = t.toB256 := by rw [← ht, toB256_toNat]
+  refine ⟨σ, out, hcall, ⟨?_, h1, ?_, ?_, hothers, ?_⟩⟩
+  · show (Lift.RequestSystem.storOf σ addr 0).toNat = _
+    rw [h0, he, hn, B256.toNat_toB256_of_lt (by unfold Lift.ConsolidationRequest.excessAfter; omega)]
+    rfl
+  · have keep : ∀ k, k < t → queueRecord (Lift.RequestSystem.storOf σ addr) k =
+        queueRecord (Lift.RequestSystem.storOf benv.state addr) k := by
+      intro k hk
+      have hr : ∀ r, r < 4 → Lift.RequestSystem.storOf σ addr (4 + 4 * k + r).toB256 =
+          Lift.RequestSystem.storOf benv.state addr (4 + 4 * k + r).toB256 := fun r hr =>
+        hothers _ (by rw [B256.toNat_toB256_of_lt (by omega)]; omega)
+      unfold queueRecord
+      rw [show 4 + 4 * k = 4 + 4 * k + 0 from rfl, hr 0 (by omega), hr 1 (by omega), hr 2 (by omega),
+        hr 3 (by omega)]
+    show storedQueue (Lift.RequestSystem.storOf σ addr) = (storedQueue (Lift.RequestSystem.storOf benv.state addr)).drop 2
+    unfold storedQueue
+    rw [h2, h3]
+    show _ = ((List.range ((word benv.state 3).toNat - (word benv.state 2).toNat)).map _).drop 2
+    rw [hh, ht]
+    by_cases le : t - h ≤ 2
+    · rw [ite_eq_left le, ite_eq_left le, show (Nat.toB256 0).toNat = 0 from rfl, Nat.sub_self, List.range_zero,
+        List.map_nil, List.drop_eq_nil_of_le (by rw [List.length_map, List.length_range]; omega)]
+    · rw [ite_eq_right le, ite_eq_right le, B256.toNat_toB256_of_lt (by omega), B256.toNat_toB256_of_lt (by omega)]
+      apply List.ext_getElem
+      · simp only [List.length_map, List.length_range, List.length_drop]
+        omega
+      · intro j h1' h2'
+        simp only [List.getElem_map, List.getElem_range, List.getElem_drop]
+        have hh' : (Lift.RequestSystem.storOf benv.state addr 2).toNat = h := hh
+        rw [keep _ (by simp only [List.length_map, List.length_range] at h1'; omega), hh']
+        exact congrArg _ (by omega)
+  · intro le
+    rw [hh, ht] at le
+    exact ⟨h2.trans (by rw [ite_eq_left le]; rfl), h3.trans (by rw [ite_eq_left le]; rfl)⟩
+  · rw [hret]
+    exact (take_two_eq _ (by rw [← hh, toB256_toNat]; rfl) (by rw [← ht, toB256_toNat]; rfl) ordered
+      (by omega)).symm
+
 /-! ## C3: the fee against the EIP -/
 
 /-- **C3a. Fee bound.** The fee the bytes quote never exceeds the EIP's `fake_exponential(1, excess, 17)`. -/
@@ -88,7 +182,7 @@ theorem fee_window_bytes_eq : ∀ (i : Nat), i < 87 →
       ((Blanc.withdrawalRequestCode.toList.drop 26).take 87)[i]? = some 0xf4) := by
   decide +kernel
 
-/-! ## C5: a submission works -/
+/-! ## C2: what succeeds -/
 
 /-- A fresh entry: empty stack, word-aligned well-formed memory, calldata a word can measure. -/
 structure FreshEntry (sevm : Sevm) (pre : Devm) : Prop where
@@ -100,6 +194,89 @@ structure FreshEntry (sevm : Sevm) (pre : Devm) : Prop where
   wf : Mem.Wf pre.memory
   /-- Calldata fits in a word. -/
   lengthBound : sevm.data.length < 2 ^ 256
+
+/-- The one log a submission emits: topicless, its 116 record bytes. -/
+def submissionLog (sevm : Sevm) : Log := ⟨addr, [], sevm.caller.toBytes ++ sevm.data⟩
+
+/-- Every successful fresh frame at EIP-7251 is one of these three, with its exact storage, log and return bytes. -/
+inductive Succeeded (sevm : Sevm) (pre post : Devm) : Prop
+  /-- **Dequeue.** The system caller: storage updated as the system call defines; with head ≤ tail, the first two
+  queued entries returned. -/
+  | dequeue (caller : sevm.caller = systemAddress)
+      (storage : post.state = Lift.RequestSystem.sysState
+        Lift.SystemExecution.ConsolidationRequest.Amsterdam.sysShape pre.state addr)
+      (output : (pre.getStorVal addr 2).toNat ≤ (pre.getStorVal addr 3).toNat →
+        post.output = ((storedQueue (pre.getStor addr).get).take 2).flatten)
+  /-- **Submission.** 96 bytes from a user in a non-static frame, slot 0 off the inhibitor, value at least the quoted
+  fee: the record is stored at the tail and logged; no other storage changes; nothing is returned. -/
+  | submission (caller : sevm.caller ≠ systemAddress) (length : sevm.data.length = 96)
+      (dynamic : sevm.isStatic = false) (active : pre.getStorVal addr 0 ≠ B256.max)
+      (paid : quotedFee (pre.getStorVal addr 0) ≤ sevm.value.toNat)
+      (storage : post.getStor addr = Lift.ConsolidationRequest.submittedStorage sevm (pre.getStor addr))
+      (others : ∀ a, a ≠ addr → post.getStor a = pre.getStor a)
+      (logs : post.logs = pre.logs ++ [submissionLog sevm]) (output : post.output = pre.output)
+  /-- **Fee read.** Empty calldata and no value from a user, slot 0 off the inhibitor: returns the quoted fee as one
+  word and changes nothing. -/
+  | feeRead (caller : sevm.caller ≠ systemAddress) (empty : sevm.data = []) (value : sevm.value = 0)
+      (active : pre.getStorVal addr 0 ≠ B256.max)
+      (output : post.output = (quotedFee (pre.getStorVal addr 0)).toB256.toBytes)
+      (storage : ∀ a, post.getStor a = pre.getStor a) (logs : post.logs = pre.logs)
+
+/-- The fee loop's unique run is the run a frame took. -/
+private theorem quote_choose {e : B256} {n : Nat} {w : B256} (run : WordFakeExponential.Run e 17 1 17 0 n w) :
+    Classical.choose (Blanc.WordFakeExponential.run_exists_unique e 17 1 17 0).exists = (n, w) :=
+  (Blanc.WordFakeExponential.run_exists_unique e 17 1 17 0).unique
+    (Classical.choose_spec (Blanc.WordFakeExponential.run_exists_unique e 17 1 17 0).exists) run
+
+/-- The quoted fee is the quotient a frame's fee loop left. -/
+theorem quotedFee_of_run {e : B256} {n : Nat} {w : B256} (run : WordFakeExponential.Run e 17 1 17 0 n w) :
+    quotedFee e = (w / (17 : B256)).toNat := by
+  unfold quotedFee
+  rw [quote_choose run]
+
+/-- **What the call returns, as queue entries.** With head ≤ tail, the drained records are the first two
+entries of the stored queue (fewer if the queue is shorter). -/
+theorem drained_eq_queue (s : B256 → B256) (ordered : (s 2).toNat ≤ (s 3).toNat) :
+    Lift.ConsolidationRequest.drained s = ((storedQueue s).take 2).flatten := by
+  have h2 : s 2 = (s 2).toNat.toB256 := (toB256_toNat _).symm
+  have h3 : s 3 = (s 3).toNat.toB256 := (toB256_toNat _).symm
+  have hc : Lift.RequestSystem.drainCount Lift.SystemExecution.ConsolidationRequest.Amsterdam.sysShape.cap.word
+      (s 2) (s 3) = (Lift.ConsolidationRequest.taken ((s 3).toNat - (s 2).toNat)).toB256 := by
+    have := Lift.ConsolidationRequest.drainCount_nat (h := (s 2).toNat) (t := (s 3).toNat) ordered
+      (B256.toNat_lt _)
+    rwa [toB256_toNat, toB256_toNat] at this
+  rw [take_two_eq s h2 h3 ordered (B256.toNat_lt _)]
+  unfold Lift.ConsolidationRequest.drained Lift.RequestSystem.SysOutput.drained
+  rw [hc, B256.toNat_toB256_of_lt (by unfold Lift.ConsolidationRequest.taken; omega), ← h2]
+  rfl
+
+/-- **C2. What succeeds at EIP-7251.** On a covered fork, every successful fresh frame at the predeploy running its
+code is a dequeue, a submission or a fee read, with the stated effect; so no other entry succeeds. -/
+theorem exec_succeeded {sevm : Sevm} {pre post : Devm} (target : sevm.currentTarget = addr)
+    (hcode : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork) (fresh : FreshEntry sevm pre)
+    (exec : Exec 0 sevm pre (.ok post)) :
+    Succeeded sevm pre post := by
+  by_cases caller : sevm.caller = systemAddress
+  · obtain ⟨-, hstate, hout⟩ :=
+      Lift.ConsolidationRequest.exec_system_frame hcode fork fresh.stack fresh.wf caller exec
+    refine .dequeue caller (by rw [hstate, target]) fun ordered => ?_
+    rw [hout, target]
+    exact drained_eq_queue _ ordered
+  · rcases Lift.ConsolidationRequest.exec_user_frame hcode fork fresh.stack fresh.aligned fresh.wf
+      fresh.lengthBound caller exec with ⟨i, w, law⟩ | ⟨i, w, empty, read⟩
+    · have quote := law.quote
+      rw [target] at quote
+      refine .submission caller law.length law.dynamic (by rw [← target]; exact law.active)
+        (by rw [quotedFee_of_run quote]; exact law.covered) (by rw [← target]; exact law.storage)
+        (fun a ha => law.otherStorage a (by rw [target]; exact ha))
+        (by rw [law.logs, target]; rfl) law.output
+    · have quote := read.quote
+      rw [target] at quote
+      refine .feeRead caller empty read.value (by rw [← target]; exact read.active) ?_ read.storage read.logs
+      rw [quotedFee_of_run quote, toB256_toNat]
+      exact read.output
+
+/-! ## C5: a submission works -/
 
 /-- A successful 96-byte user submission appends exactly its record to the stored queue. -/
 def SubmissionQueued (sevm : Sevm) (pre post : Devm) : Prop :=

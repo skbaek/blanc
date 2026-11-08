@@ -1488,6 +1488,11 @@ CONTRACTS.setdefault("consolidation-request", []).extend(["Lift.ConsolidationReq
 # history's frames at a canonical request contract as a chain of steps; the EIP-7251 instance and its history.
 SHARED += ["Lift.RequestQueue.Link"]
 CONTRACTS.setdefault("consolidation-request", []).extend(["Lift.ConsolidationRequest.Chain"])
+# The system path inverted (blanc-eip7251-consolidation-requests-v1 U5c): every successful system-arm run of a
+# request runtime ends in `sysState` and returns the drained records; the EIP-7251 record body's inversion.
+# `HistoryClean`, the per-block SYSTEM_ADDRESS premises, hoisted from the builder family's public observers.
+SHARED += ["Lift.RequestSystem.PathInv", "ExecutionKeptClean"]
+CONTRACTS.setdefault("consolidation-request", []).extend(["Lift.ConsolidationRequest.SystemFrame"])
 CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Code", "Lift.BuilderRequest.Deposit.Cert",
     "Lift.BuilderRequest.Deposit.Check", "Lift.BuilderRequest.Deposit.Jumps",
@@ -1563,7 +1568,7 @@ COMPOSITION = {
     "Composition.WithdrawalRequestDrainControl": ('withdrawal-request',),
     "Composition.ConsolidationRequestPublicObservers": ('consolidation-request',),
     "Composition.ConsolidationRequestPublicHeadlines": ('consolidation-request',),
-    "Composition.ConsolidationRequestPublicHistory": ('consolidation-request', 'builder-request', 'withdrawal-request'),
+    "Composition.ConsolidationRequestPublicHistory": ('consolidation-request',),
     "Composition.Curve3Pool3CrvCheckpoint": ('curve-3pool', 'curve-3crv'),
     "Composition.Curve3CrvTokenCore": ('curve-3crv',),
     "Composition.Curve3CrvPositional": ('curve-3crv',),

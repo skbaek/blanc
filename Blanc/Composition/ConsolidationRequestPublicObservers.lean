@@ -1,14 +1,16 @@
 import Blanc.SystemContracts
 import Blanc.WordFakeExponential
+import Blanc.ExecutionKeptChain
 
 /-!
 # EIP-7251 public observers
 
-Short observers reading a `State` directly: the predeploy address and code,
-one storage slot, the EIP fee and the quoted fee, and the queue as stored.
-Nothing here mentions the delivery model; the correspondence to the model is
-proved in `ConsolidationRequestPublicHeadlines`. History observers
-(`submissions`, `records116`, checkpoints) live in a later unit, not here.
+Short observers reading a `State`, a frame or a kept history directly: the
+predeploy address and code, one storage slot, the EIP fee and the quoted fee,
+the queue as stored, the submissions a history commits and the records its
+blocks publish, and the root the history starts from. Nothing here mentions
+the delivery model; the correspondence to the model is proved in
+`ConsolidationRequestPublicHeadlines` and `ConsolidationRequestPublicHistory`.
 -/
 
 namespace Blanc.Composition.ConsolidationRequestPublic
@@ -51,7 +53,64 @@ def storedQueue (s : B256 → B256) : List Bytes :=
 /-- The queue still stored in world `w`. -/
 def remainingQueue (w : State) : List Bytes := storedQueue (w.getStor addr).get
 
-/-- A submission's record: the caller's 20 bytes, then its 96 calldata bytes. -/
+/-- A submission's record: the caller's 20 bytes, then its 96 calldata bytes (source pubkey, target pubkey). -/
 def submissionRecord (f : Exec.Frame) : Bytes := f.sevm.caller.toBytes ++ f.sevm.data
+
+/-- The records of the kept 96-byte user calls at the predeploy, in history order. -/
+noncomputable def submissions (blocks : List KeptBlock) : List Bytes :=
+  ((blocks.flatMap (KeptBlock.keptAt addr)).filter
+    fun f => decide (f.sevm.caller ≠ systemAddress ∧ f.sevm.data.length = 96)).map submissionRecord
+
+/-- Split request bytes into 116-byte records; a short tail is kept, never dropped, so equality detects it. -/
+def records116 (bytes : Bytes) : List Bytes :=
+  (List.range ((bytes.length + 115) / 116)).map fun i => (bytes.drop (116 * i)).take 116
+
+/-- The type-2 (consolidation) payloads of one block's actual request list, in order. -/
+def blockConsolidations (b : KeptBlock) : Bytes :=
+  (b.output.requests.filterMap fun r => match r with | 2 :: tail => some tail | _ => none).flatten
+
+/-- The consolidation records the history's blocks published, in order. -/
+def emissions (blocks : List KeptBlock) : List Bytes := blocks.flatMap fun b => records116 (blockConsolidations b)
+
+/-- The predeploy at the root: canonical code, the deployed words, no code at SYSTEM_ADDRESS. -/
+structure CheckpointStart (w : State) : Prop where
+  /-- The canonical runtime is installed. -/
+  code : installed w
+  /-- Slot 0 holds the inhibitor: no user call has succeeded yet. -/
+  excess : word w 0 = B256.max
+  /-- No submission is counted. -/
+  count : word w 1 = 0
+  /-- The queue head is 0. -/
+  head : word w 2 = 0
+  /-- The queue tail is 0: the queue is empty. -/
+  tail : word w 3 = 0
+  /-- No code at SYSTEM_ADDRESS, so only the block's own call can dequeue. -/
+  systemEmpty : w.getCode systemAddress = ByteArray.empty
+
+/-- Chain reads at the shared pre-Prague checkpoint 22,431,083, adopted by the user on 2026-11-08. Provenance: Plans
+`evidence/blanc-eip7251-consolidation-requests-v1/recon/` (three providers agree on the four words). The tip is
+`Lift.WithdrawalRequest.WithdrawalDeploymentObservation.checkpointTip`'s block, and `code` is that record's
+`consolidationAtP`. -/
+structure ConsolidationCheckpointObservation (checkpoint : BlockChain) : Prop where
+  /-- The checkpoint's last header: number 22431083, hash 0x28fb…f237, state root 0xab35…c0e3. -/
+  tip : ∃ t, checkpoint.blocks.getLast? = some t ∧ t.header.number = 22431083 ∧
+    t.header.hash = 0x28fb2c1d988435955e569451c6ad772f7fb5e61cddd7463c7b60e933ed5ff237 ∧
+    t.header.stateRoot = 0xab350e0fe349aef68947ede26295f8946c34ce3af5e3ec76f4b26ddeef29c0e3
+  /-- `eth_getCode(0x…7251)`: the canonical bytes. -/
+  code : installed checkpoint.state
+  /-- `eth_getStorageAt` slot 0: the inhibitor. -/
+  excess : word checkpoint.state 0 = B256.max
+  /-- `eth_getStorageAt` slot 1: 0. -/
+  count : word checkpoint.state 1 = 0
+  /-- `eth_getStorageAt` slot 2: 0. -/
+  head : word checkpoint.state 2 = 0
+  /-- `eth_getStorageAt` slot 3: 0. -/
+  tail : word checkpoint.state 3 = 0
+  /-- `eth_getCode(0xff…fe)` is empty. -/
+  systemEmpty : checkpoint.state.getCode systemAddress = ByteArray.empty
+
+/-- Every committed submission is, in order, a record the blocks published or an entry still in the final queue. -/
+def Fifo (blocks : List KeptBlock) (final : State) : Prop :=
+  submissions blocks = emissions blocks ++ remainingQueue final
 
 end Blanc.Composition.ConsolidationRequestPublic
