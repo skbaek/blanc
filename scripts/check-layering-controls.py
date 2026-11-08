@@ -194,7 +194,7 @@ def category_agnostic_imports() -> None:
 # Production-tree probes use two actual featured sibling families. The Weth/Fmint
 # names in the independent synthetic family/parser fixtures below remain data.
 PRODUCTION_CONTRACT_FIXTURES = (
-    ("curve-3crv", "Lift.Curve3Crv.Prog", "Blanc/Lift/Curve3Crv/Prog.lean"),
+    ("builder-request", "Lift.BuilderRequest.Deposit.Code", "Blanc/Lift/BuilderRequest/Deposit/Code.lean"),
     ("withdrawal-request", "Lift.WithdrawalRequest.Prog", "Blanc/Lift/WithdrawalRequest/Prog.lean"),
 )
 

@@ -900,7 +900,8 @@ def main() -> int:
         print(f"fp_annot rejected: {e}", file=sys.stderr)
 
     namespace = args.namespace or (row["namespace"] + "Fp")
-    out = args.ann_out or str(ROOT / "Blanc/Lift/Usdc/ImplFp/Ann.lean")
+    # The Ann module lives at the namespace's path, as the check modules below do.
+    out = args.ann_out or str(ROOT / (namespace.replace(".", "/") + "/Ann.lean"))
     text = emit_ann(checker, namespace, errors)
     Path(out).parent.mkdir(parents=True, exist_ok=True)
     Path(out).write_text(text)

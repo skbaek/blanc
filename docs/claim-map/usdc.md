@@ -1638,3 +1638,9 @@ In `RetainedAllowanceWrites`, the `_of_rootFrames` variants of
 `settledRoot_allowance_zero_from_installations` use owner exclusion only on
 `Exec.committedFrames R.run`; the latter two also use root-local governance
 and caller exclusion. Existing full-history APIs remain compatibility wrappers.
+
+### From `scripts/GATES.md`: helper rows
+
+| helper | used by | what it does |
+|---|---|---|
+| `scripts/history-anchor-body-generate.py` | default / `--check`; explicit `--write` | sole writer of exactly the USDC history-anchor body modules `HistoryAnchorBodyGenerated.lean`, `HistoryAnchorBodyGeneratedC00.lean` through `HistoryAnchorBodyGeneratedC09.lean`, and `HistoryAnchorBodyGeneratedD00.lean` through `HistoryAnchorBodyGeneratedD06.lean`, from the frozen ordered signed arrays in `scripts/history-anchor-body-C.json` and `scripts/history-anchor-body-D.json`; validates immutable source/metadata/array identities and byte-compares every output without writing in check mode. Generated proof source requires its narrow owned Lean build; bytes remain unadopted historical observations. `HistoryAnchorBody.lean` and `HistoryAnchorBodyInput.lean` are handwritten consumers and are outside generator ownership |

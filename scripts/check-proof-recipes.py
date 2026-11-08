@@ -876,8 +876,8 @@ def selector_findings(
 # K1 sees only byte-identical copies: a body that references renamed
 # neighbours (`sentinelGatewayPauseWorldSevm` for `gatewayPauseWorldSevm`)
 # or spells the same reference fully qualified (`qualified_refs`, which made
-# generated Curve3Pool obligations spell `Blanc.Lift.Curve3Pool.cert[74]`
-# only to dodge K1) is never byte-identical. K1b normalizes further, so those
+# generated lift obligations spell their certificate's `cert[74]` with its full
+# namespace only to dodge K1) is never byte-identical. K1b normalizes further, so those
 # shapes meet: after K1's name/doc erasure it masks comments and string
 # literals, reduces every dotted identifier to its last component (closing the
 # qualified-name dodge), replaces each identifier declared in the same file by

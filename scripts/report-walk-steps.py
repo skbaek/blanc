@@ -20,7 +20,7 @@ Two finding classes, both report-only:
   one indentation (deeper-indented continuation lines and comment lines do not break a run). The
   report counts how many of the run's lines a kit takes as they are: `Blanc/Lift/WalkKit.lean`'s
   `wrun` (the forward straight-line `xr` forms), Curve 3pool's backward `xa`
-  (`Blanc/Lift/Curve3Pool/Walk/AutoStep.lean`), or `Blanc/Lift/WalkInvKit.lean`'s `winv`/`wskip`
+  (a released family's step tactic), or `Blanc/Lift/WalkInvKit.lean`'s `winv`/`wskip`
   (the `ric_next` + `ri_<op>` inversion pairs, one- or two-line, their `replace … ; clear s`
   spelling, `ri_dup`/`ri_swap` with spelled-out implicits, `ric_dest`, and forgetful
   `obtain ⟨_, _, h⟩ := ric_next h`); the rest want a step tactic of their own family.
@@ -60,7 +60,7 @@ KIT_RE = re.compile(r"^\s*xr \((?:" + "|".join([
 _H = r"0x[0-9a-fA-F]+"
 _BOPS = ("add|mul|sub|div|lt|gt|eq|iszero|and|or|xor|not|pop|address|caller|callvalue|"
          "calldataload|calldatasize|returndatasize|timestamp")
-# Backward Curve 3pool steps that `xa` (Blanc/Lift/Curve3Pool/Walk/AutoStep.lean) takes as written.
+# Backward Curve 3pool steps that its `xa` step tactic takes as written.
 XA_RE = re.compile(r"^\s*(?:" + "|".join([
     rf"xs {_H} \(\.push \[[^\]]*\] \(by decide\)\) ri_push",
     rf"xs {_H} \(\.reg \(\.(?:dup|swap) \d+\)\) \(ri_(?:dup|swap) \(by rfl\)\)",
