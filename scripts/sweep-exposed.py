@@ -506,8 +506,11 @@ class Exposure:
                 self.ambiguous.add(row["name"])
             self.rows[row["name"]] = row
         from pathlib import Path
+        listing = module_listing_files(release)
         self.script_prefixed = prefixed_script_mentions(
-            leaf_audit, leaf_audit.tracked_external_sources(Path(base)), self.population)
+            leaf_audit, {rel: text for rel, text in leaf_audit.tracked_external_sources(Path(base)).items()
+                         if rel not in listing and not rel.startswith("scripts/releases/")},
+            self.population)
 
     def exposed(self, keep):
         result = self.cascade(self.population, self.users, self.permanent, self.departing, set(keep))
@@ -657,6 +660,13 @@ def tool_module_hits(texts, modules, token):
     return hits
 
 
+def module_listing_files(release):
+    """Tables that merely list modules (their unprefixed module names coincide with
+    declaration names such as a structure named like its module), and this file."""
+    listing = {rel for rel, _ in release.ROW_FILES} | {r for _, owned in release.WRITERS for r in owned}
+    return listing | {"scripts/check-layering.py", "scripts/sweep-exposed.py"}
+
+
 def tool_keeps(root, release, modules):
     """Keep rule (d): modules a live tool names, read from the tracked scripts on
     disk (Python, shell, TOML, JSON under scripts/), excluding the release and sweep
@@ -664,8 +674,7 @@ def tool_keeps(root, release, modules):
     tables that merely list modules (check-layering.py, release.py's row files and
     the registered writers' outputs). A lift generator option emitting
     `import Blanc.Lift.X`, say, keeps Blanc.Lift.X. -> {module: file}."""
-    listing = {rel for rel, _ in release.ROW_FILES} | {r for _, owned in release.WRITERS for r in owned}
-    listing |= {"scripts/check-layering.py", "scripts/sweep-exposed.py"}
+    listing = module_listing_files(release)
     texts = {}
     for rel in git(root, "ls-files", "-z", "--", "scripts").decode().split("\0"):
         if (not rel.endswith(TOOL_SUFFIXES) or rel.startswith("scripts/releases/")
