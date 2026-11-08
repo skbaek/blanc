@@ -5,7 +5,7 @@ import Blanc.Composition.ConsolidationRequestPublicObservers
 /-!
 # EIP-7251: FIFO over kept histories, from the checkpoint and at mainnet (C4)
 
-The frozen C4 headlines over the public observers: every committed submission at the consolidation contract is, in
+The C4 headlines over the public observers: every committed submission at the consolidation contract is, in
 order, a record the blocks published or an entry still in the final queue.
 
 * `history_fifo`: from a state where the predeploy is at its start (`CheckpointStart`: canonical code, the four
@@ -39,6 +39,7 @@ theorem record_out_length (r : Record) : r.out.length = 116 := by
 theorem records116_flatMap (rs : List Record) : records116 (rs.flatMap Record.out) = rs.map Record.out :=
   RequestQueue.Link.chunks_flatMap 116 Record.out record_out_length (by decide) rs
 
+/-- A block's consolidation payloads are the chain link's type-2 bytes. -/
 theorem blockConsolidations_eq (b : KeptBlock) :
     blockConsolidations b = RequestQueue.Link.blockDelivered 2 b := by
   unfold blockConsolidations RequestQueue.Link.blockDelivered
@@ -160,6 +161,53 @@ theorem history_fifo {cfg : ChainConfig} {checkpoint final : BlockChain} {blocks
     rw [← records116_flatMap, ← records116_flatMap, ← d, out]
   unfold Fifo
   rw [remainingQueue_eq rep, queue, e, same, ← List.map_append, List.take_append_drop, hsub]
+
+/-- The model's tail after a run of effects is at most the start tail plus the records pushed. -/
+theorem run_tail_le (cap : Nat) (st : QueueState Record) (es : List (RequestQueue.Effect Record)) :
+    (RequestQueue.run cap st es).tail ≤ st.tail + (RequestQueue.pushed es).length := by
+  induction es generalizing st with
+  | nil => exact Nat.le_add_right _ _
+  | cons e es ih =>
+    have h1 := ih (RequestQueue.apply cap st e)
+    have h2 := RequestQueue.apply_tail_le cap st e
+    have h3 := RequestQueue.pushed_cons_length e es
+    change (RequestQueue.run cap (RequestQueue.apply cap st e) es).tail ≤ _
+    omega
+
+/-- **The pointers along a history.** Under C4's premises, at the history's end the head is at most the tail, and
+the tail at most the number of submissions: the queue grows by one slot per submission and the call only advances
+the head or resets both pointers. So `ordered` (C1b, C5a) holds there, and `room` holds while fewer than `2 ^ 253`
+submissions have been made. -/
+theorem history_pointers {cfg : ChainConfig} {checkpoint final : BlockChain} {blocks : List KeptBlock}
+    (history : KeptHistory cfg checkpoint blocks final) (covered : ∀ b ∈ blocks, CoveredFork b.fork)
+    (start : CheckpointStart checkpoint.state) (clean : HistoryClean blocks)
+    (cap : (submissions blocks).length ≤ 2 ^ 253) :
+    (word final.state 2).toNat ≤ (word final.state 3).toNat ∧
+      (word final.state 3).toNat ≤ (submissions blocks).length := by
+  obtain ⟨steps, chain, subs, -, -⟩ := RequestQueue.Link.history_chain ConsolidationRequest.linked history covered
+    start.code start.systemEmpty clean.senders clean.authorities clean.creates
+  have hlen : (RequestQueue.submissions steps).length = (submissions blocks).length := by
+    rw [subs, submissions_eq, List.length_map]
+    rfl
+  have h256 : (2 : Nat) ^ 256 = 8 * 2 ^ 253 := rfl
+  obtain ⟨rep, -⟩ := chain.holds start.holds (by rw [hlen]; dsimp only; unfold queueBase; omega)
+    (by rw [hlen]; dsimp only; omega)
+  have hh : (word final.state 2).toNat = (RequestQueue.queueAfter ⟨2 ^ 256 - 1, 0, 0, 0, []⟩ steps).head := by
+    rw [show word final.state 2 = _ from rep.head]
+    exact B256.toNat_toB256_of_lt rep.head_lt
+  have ht : (word final.state 3).toNat = (RequestQueue.queueAfter ⟨2 ^ 256 - 1, 0, 0, 0, []⟩ steps).tail := by
+    rw [show word final.state 3 = _ from rep.tail]
+    exact B256.toNat_toB256_of_lt rep.tail_lt
+  have coh := rep.coherent
+  have tl := run_tail_le ConsolidationRequest.queue.cap ⟨2 ^ 256 - 1, 0, 0, 0, []⟩ (RequestQueue.effects steps)
+  have hsubs : (RequestQueue.pushed (RequestQueue.effects steps)).length = (submissions blocks).length := hlen
+  refine ⟨?_, ?_⟩
+  · rw [hh, ht]
+    omega
+  · rw [ht]
+    change (RequestQueue.run _ _ _).tail ≤ _
+    rw [← hsubs]
+    simpa only [Nat.zero_add] using tl
 
 /-- Mainnet's schedule names no Amsterdam activation, so a kept mainnet block is at a covered fork. -/
 theorem mainnet_covered {checkpoint final : BlockChain} {blocks : List KeptBlock}

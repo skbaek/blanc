@@ -4,9 +4,9 @@ import Blanc.Lift.RequestSystem.PathInv
 /-!
 # Every successful EIP-7251 system frame
 
-The converse of `system_call_ok` at frame level, from any fresh frame at the system caller: whatever storage,
-memory, calldata, value and gas it starts with, a successful run of the canonical bytes ends in `sysState` and
-returns the drained records. The runtime's system arm reads neither calldata nor `CALLVALUE`, so neither
+The converse of `system_call_ok` at frame level, from any frame at the system caller with an empty stack and
+well-formed memory: whatever storage, memory contents, calldata, value and gas it starts with, a successful run
+of the canonical bytes ends in `sysState` and returns the drained records. The runtime's system arm reads neither calldata nor `CALLVALUE`, so neither
 matters. The trees are inverted by the shared `RequestSystem.SysPath.exec_frame_inv`; here are the record body's
 inversion (`system_body_inv`) and the plain excess arm's (`system_excessInv`).
 

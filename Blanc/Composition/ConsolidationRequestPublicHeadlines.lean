@@ -16,12 +16,14 @@ Featured C1 (system call), C2 (what succeeds), C3 (fee against the EIP) and C5 (
 and live), over the observers in `ConsolidationRequestPublicObservers`. Each
 headline is a thin wrapper over the proved unit theorems in
 `Lift/ConsolidationRequest/`; every definition and theorem has a one-sentence
-docstring. C1b (`system_call_bookkept`, ordinary, unfeatured) carries the
-tail bound `2 ^ 253` the drafted packet lacked: without it a record key wraps
-onto slots 0 to 3. C2 (`exec_succeeded`) classifies every successful fresh
-frame; its dequeue arm reads the output as queue entries only with head ≤ tail
-(the user's decision of 2026-11-08), since the bytes subtract the pointers in
-words.
+docstring. C1b (`system_call_bookkept`, ordinary, unfeatured) takes the tail
+below `2 ^ 253`: a record occupies four slots from `4 + 4q`, computed in words,
+so a larger tail lets a record key wrap onto slots 0 to 3. C2 (`exec_succeeded`)
+classifies every successful fresh frame; its dequeue arm reads the output as
+queue entries only with head ≤ tail, since the bytes subtract the pointers in
+words (head > tail drains wrapped positions, where the stored queue is empty).
+`ConsolidationRequestPublicHistory.history_pointers` derives head ≤ tail, and
+the tail at most the number of submissions, from C4's premises.
 -/
 
 namespace Blanc.Composition.ConsolidationRequestPublic
@@ -30,12 +32,14 @@ open Jaune Blanc
 
 /-! ## C1: the system call -/
 
-/-- The checked EIP-7251 system call returns without error and uses at most 114,177 gas. -/
+/-- The checked EIP-7251 system call returns without error and uses at most 114,177 gas. The subtraction is of
+naturals; `system_call_ok` also shows the call ends with at most the 30,000,000 it started with, so it is exact. -/
 def SystemCallOk (benv : Benv) : Prop :=
   ∃ post out, processCheckedSystemTransaction benv addr [] = .ok (post, out) ∧
     systemTransactionGas - out.gasLeft ≤ 114177
 
-/-- **C1. EIP-7251 system call.** On a covered fork with the canonical code installed, the checked system call succeeds and uses at most 114,177 gas. -/
+/-- **C1. EIP-7251 system call.** On a covered fork with the canonical code installed, whatever storage holds,
+the checked system call succeeds and uses at most 114,177 gas. -/
 theorem system_call_succeeds {benv : Benv} (fork : CoveredFork benv.stat.fork)
     (installed : benv.state.getCode addr = code) :
     SystemCallOk benv := by
@@ -56,7 +60,7 @@ structure Bookkept (pre post : State) (out : Bytes) : Prop where
   queue : remainingQueue post = (remainingQueue pre).drop 2
   /-- When the queue empties, both pointers reset to 0. -/
   reset : (word pre 3).toNat - (word pre 2).toNat ≤ 2 → word post 2 = 0 ∧ word post 3 = 0
-  /-- No slot beyond the four words changes. -/
+  /-- No slot of the predeploy beyond the four words changes. -/
   others : ∀ k : B256, 3 < k.toNat → word post k = word pre k
   /-- The call returns exactly the entries that left, 116 bytes each. -/
   output : out = ((remainingQueue pre).take 2).flatten
@@ -86,7 +90,8 @@ theorem take_two_eq (s : B256 → B256) {h t : Nat} (h2 : s 2 = h.toB256) (h3 : 
 
 /-- **C1b. Bookkeeping.** On a covered fork with the canonical code installed, head ≤ tail with the tail below
 `2 ^ 253` (four slots per record: no record key wraps onto slots 0 to 3), and no word wrap in `excess + count`, the
-call does the EIP's bookkeeping. -/
+call does the EIP's bookkeeping. On a kept history from the checkpoint, `history_pointers` gives head ≤ tail and the
+tail at most the number of submissions, so `room` holds while fewer than `2 ^ 253` have been made. -/
 theorem system_call_bookkept {benv : Benv} (fork : CoveredFork benv.stat.fork) (installed : installed benv.state)
     (ordered : (word benv.state 2).toNat ≤ (word benv.state 3).toNat)
     (room : (word benv.state 3).toNat < 2 ^ 253)
@@ -166,7 +171,9 @@ theorem fee_eq_spec_of_le {excess : B256} (le : excess.toNat ≤ 2892) :
     (Blanc.WordFakeExponential.run_exists_unique excess 17 1 17 0).exists
   exact Lift.ConsolidationRequest.fee_eq_spec_of_le le hrun
 
-/-- **C3c. Finding: at excess 2893 the bytes quote less than the EIP's fee.** -/
+/-- **C3c. Finding: at excess 2893 the bytes quote less than the EIP's fee.** The fee loop's accumulator wraps a
+word there. The window is the EIP-7002 runtime's but for one jump-target byte (`fee_window_bytes_eq`); EIP-7002's
+`fee_guarantee_refuted` shows such an excess reached by a configured history. -/
 theorem fee_lt_spec_2893 {excess : B256} (at2893 : excess.toNat = 2893) :
     quotedFee excess < SpecFee excess := by
   have hrun := Classical.choose_spec
@@ -174,17 +181,21 @@ theorem fee_lt_spec_2893 {excess : B256} (at2893 : excess.toNat = 2893) :
   exact Nat.lt_of_le_of_ne (Lift.ConsolidationRequest.fee_le_spec hrun)
     (Lift.ConsolidationRequest.fee_ne_spec_2893 at2893 hrun)
 
-/-- The fee-window bytes (pc 0x1a to 0x71) of the two codes agree except the one revert-target byte. -/
-theorem fee_window_bytes_eq : ∀ (i : Nat), i < 87 →
-    ((Blanc.consolidationRequestCode.toList.drop 26).take 87)[i]? =
-      ((Blanc.withdrawalRequestCode.toList.drop 26).take 87)[i]? ∨
-    (((Blanc.consolidationRequestCode.toList.drop 26).take 87)[i]? = some 0x9a ∧
-      ((Blanc.withdrawalRequestCode.toList.drop 26).take 87)[i]? = some 0xf4) := by
+/-- The 87 fee-window bytes (pc 0x1a to 0x70 inclusive) of the EIP-7251 and EIP-7002 runtimes agree at every
+index but 41 (pc 0x43), the low byte of the revert target: `0x9a` against `0xf4`. -/
+theorem fee_window_bytes_eq :
+    (∀ (i : Nat), i < 87 → i ≠ 41 →
+      ((Blanc.consolidationRequestCode.toList.drop 26).take 87)[i]? =
+        ((Blanc.withdrawalRequestCode.toList.drop 26).take 87)[i]?) ∧
+    ((Blanc.consolidationRequestCode.toList.drop 26).take 87)[41]? = some 0x9a ∧
+    ((Blanc.withdrawalRequestCode.toList.drop 26).take 87)[41]? = some 0xf4 := by
   decide +kernel
 
 /-! ## C2: what succeeds -/
 
-/-- A fresh entry: empty stack, word-aligned well-formed memory, calldata a word can measure. -/
+/-- A fresh entry: empty stack, word-aligned well-formed memory, calldata a word can measure. Every frame Jaune
+opens starts with an empty stack and memory (`Blanc.Exec.FreshEntry`, `Frame.enter_run_fresh`), so it is one given
+its calldata length (`FreshEntry.of_exec`). -/
 structure FreshEntry (sevm : Sevm) (pre : Devm) : Prop where
   /-- The stack is empty. -/
   stack : pre.stack = []
@@ -195,10 +206,16 @@ structure FreshEntry (sevm : Sevm) (pre : Devm) : Prop where
   /-- Calldata fits in a word. -/
   lengthBound : sevm.data.length < 2 ^ 256
 
+/-- A frame Jaune opens, with calldata a word can measure, is a fresh entry. -/
+theorem FreshEntry.of_exec {sevm : Sevm} {pre : Devm} (entry : Exec.FreshEntry sevm pre)
+    (lengthBound : sevm.data.length < 2 ^ 256) : FreshEntry sevm pre :=
+  ⟨entry.1, by rw [entry.2]; rfl, by rw [entry.2]; exact Mem.wf_empty, lengthBound⟩
+
 /-- The one log a submission emits: topicless, its 116 record bytes. -/
 def submissionLog (sevm : Sevm) : Log := ⟨addr, [], sevm.caller.toBytes ++ sevm.data⟩
 
-/-- Every successful fresh frame at EIP-7251 is one of these three, with its exact storage, log and return bytes. -/
+/-- Every successful fresh frame at EIP-7251 is one of these three: the dequeue with its exact state and, for
+head ≤ tail, its return bytes; the submission and the fee read with their storage, logs and output. -/
 inductive Succeeded (sevm : Sevm) (pre post : Devm) : Prop
   /-- **Dequeue.** The system caller: storage updated as the system call defines; with head ≤ tail, the first two
   queued entries returned. -/
@@ -208,7 +225,7 @@ inductive Succeeded (sevm : Sevm) (pre post : Devm) : Prop
       (output : (pre.getStorVal addr 2).toNat ≤ (pre.getStorVal addr 3).toNat →
         post.output = ((storedQueue (pre.getStor addr).get).take 2).flatten)
   /-- **Submission.** 96 bytes from a user in a non-static frame, slot 0 off the inhibitor, value at least the quoted
-  fee: the record is stored at the tail and logged; no other storage changes; nothing is returned. -/
+  fee: the record is stored at the tail and logged; no other storage changes; the output is unchanged. -/
   | submission (caller : sevm.caller ≠ systemAddress) (length : sevm.data.length = 96)
       (dynamic : sevm.isStatic = false) (active : pre.getStorVal addr 0 ≠ B256.max)
       (paid : quotedFee (pre.getStorVal addr 0) ≤ sevm.value.toNat)
@@ -216,7 +233,7 @@ inductive Succeeded (sevm : Sevm) (pre post : Devm) : Prop
       (others : ∀ a, a ≠ addr → post.getStor a = pre.getStor a)
       (logs : post.logs = pre.logs ++ [submissionLog sevm]) (output : post.output = pre.output)
   /-- **Fee read.** Empty calldata and no value from a user, slot 0 off the inhibitor: returns the quoted fee as one
-  word and changes nothing. -/
+  word; storage and logs are unchanged. -/
   | feeRead (caller : sevm.caller ≠ systemAddress) (empty : sevm.data = []) (value : sevm.value = 0)
       (active : pre.getStorVal addr 0 ≠ B256.max)
       (output : post.output = (quotedFee (pre.getStorVal addr 0)).toB256.toBytes)
@@ -454,7 +471,9 @@ private theorem queued_submit_case {sevm : Sevm} {pre post : Devm} {i : Nat} {o 
         hhead htail hmap hlast
     exact hfin
 
-/-- **C5a. A submission is queued.** On a covered fork at the predeploy with head ≤ tail < 2^253, every successful fresh 96-byte user frame appends its record. -/
+/-- **C5a. A submission is queued.** On a covered fork at the predeploy with head ≤ tail < 2^253, every successful
+fresh 96-byte user frame appends its record. On a kept history from the checkpoint, `history_pointers` gives head ≤ tail
+and the tail at most the number of submissions so far. -/
 theorem submission_queued {sevm : Sevm} {pre post : Devm} (target : sevm.currentTarget = addr)
     (hcode : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (fresh : FreshEntry sevm pre) (user : sevm.caller ≠ systemAddress)
@@ -486,11 +505,13 @@ def submissionStores (sevm : Sevm) (b : Devm) : Nat :=
     sstoreCost sevm (Lift.ConsolidationRequest.logged sevm (afterSload sevm b 0) Mem.empty) 3
     (1 + Lift.ConsolidationRequest.tailWord sevm (afterSload sevm b 0))
 
-/-- Gas a fresh 96-byte submission consumes beyond the `G` it is left with: a fixed part, 87 per fee-loop iteration, the storage reads at the fork's schedule, the five stores. -/
+/-- Gas a fresh 96-byte submission consumes beyond the `G` it is left with: 269 for the straight-line instructions of
+dispatch, guard, fee window and body; 87 per fee-loop iteration; the three storage reads at the fork's schedule; and
+`submissionStores`: the six stores (count, four record words, tail) with the memory, copy and `LOG0` costs. -/
 def submissionCharge (sevm : Sevm) (b : Devm) (iterations : Nat) : Nat :=
   269 + 87 * iterations + submissionReads sevm b + submissionStores sevm b
 
-/-- The public charge is U1's exact submission charge at empty memory. -/
+/-- The public charge is the library's exact submission charge (`submissionGas`) at empty memory. -/
 theorem submissionCharge_eq (sevm : Sevm) (b : Devm) (iterations : Nat) :
     submissionCharge sevm b iterations =
       Lift.ConsolidationRequest.submissionGas sevm b Mem.empty iterations := by
