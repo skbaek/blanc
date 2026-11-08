@@ -17,6 +17,8 @@ no axioms beyond
 Lean's three. The bytes are read from mainnet without trusting the compilers
 that produced them; what is claimed about each artifact, and where, is mapped
 in [`docs/DEPLOYED_BYTECODE_CLAIM_MAP.md`](docs/DEPLOYED_BYTECODE_CLAIM_MAP.md).
+Curve 3pool, 3Crv, USDC and the Vyper pair are released: their proofs are at the
+tags `release/<family>-20261108`, listed in [`scripts/live-set.toml`](scripts/live-set.toml).
 
 The stack also offers the option of programming in Blanc's native language:
 the EVM's own instructions, arranged by four constructors, with a compiler
@@ -196,7 +198,7 @@ This repo contains the following files:
 - [`Blanc/Lift/`](Blanc/Lift/): kernel-checked lifts of bytecode already on
   mainnet — among them Curve's 3Crv token and 3pool, USDC's proxy and
   implementations, the EIP-7002 system contract, and the fixed and vulnerable
-  Vyper pool pair, plus token and attacker fixtures. The EIP-4788, EIP-2935 and
+  Vyper pool pair (now at their release tags), plus token and attacker fixtures. The EIP-4788, EIP-2935 and
   EIP-7251 SystemExecution support groups are concrete dependencies
   of configured EIP histories, not standalone paper-v2 exhibits. The certificate registry
   [`scripts/lift/certificates.json`](scripts/lift/certificates.json) is the
@@ -300,7 +302,7 @@ exempt from the import checks by construction, so a cross-family theorem hidden
 in a root would be invisible to the gate — which is precisely why composition
 gets its own classified, checked category instead.
 
-Retained compositions include Curve 3pool with 3Crv, USDC's own histories, and configured EIP histories, within the scope stated by the claim map.
+Retained compositions include Curve 3pool with 3Crv, USDC's own histories (both at their release tags), and configured EIP histories, within the scope stated by the claim map.
 
 ## Proof recipe lookup
 
