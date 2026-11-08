@@ -5,37 +5,31 @@ import Blanc.LadderBase
 open private resume_callAmsterdam_state from Blanc.LadderBase
 
 /-!
-# Kept-frame value: never falls, and covers the kept values (O37 sizing draft)
+# Kept-frame value: never falls, and covers the kept values
 
 **Build target.** Jaune pin `e8db2742`, built on `tests@v21.0.1`, EELS `1562e2f`.
 
-**Status.** Sizing draft written without Lean elaboration under the run's
-no-elaboration constraint. Every `sorry` carries a `-- DRAFT:` comment giving
-the leaf's route and an estimated line count from a comparable existing proof
-that was actually read. The master compiles this file and clears them.
-
 **What this is.** The neutral `Exec` fold O37 needs, over kept (settled) frames
 only: nothing here names `rawNodes`, `rawFrames`, a gas amount, or a frame that
-did not commit. `Exec.kept_bal_neverFalls` says the account's balance never
-falls across one kept run; `Exec.kept_bal_ge_keptPaid` says it additionally
-covers the values the kept frames carried in. Both induct over
-`Exec.retained_induction` with the code premise threaded down by
-`Blanc.Exec.Deriv.ParentStep.codePreserve` and the target premise
-`sevm.currentTarget ≠ a` threaded unchanged, exactly as `Exec.keptAt_entry`
-does. The target premise is load-bearing: a parent step at `a` running
-arbitrary code can debit the account, so without it the statements are
-unprovable as drafted. The at-code frame law is a premise, discharged per contract by
-`frame_keeps_balances` (`Blanc/Lift/BuilderRequest/Surplus.lean`, W18, merged).
-The foreign cases are the new work: balance twins of the storage twins in
-`Blanc/ExecutionKeptFrames.lean`.
+did not commit, and nothing reads a fork. `Exec.kept_bal_ge_keptPaid` says a
+committed run of a frame not at `a` leaves `a` with at least its balance plus
+every kept frame's carried value (`Exec.keptPaid`); `Exec.kept_bal_neverFalls`
+is its corollary. One induction over `Exec.retained_induction`: the code premise
+threads down by `Blanc.Exec.Deriv.ParentStep.codePreserve`, the target premise
+`sevm.currentTarget ≠ a` unchanged (a parent step at `a` running arbitrary code
+could debit the account), and the world-sum bound `SumNof` from the run's start
+by balance-total monotonicity. The at-code frame law is a premise, discharged
+per contract by `frame_keeps_balances` (`Blanc/Lift/BuilderRequest/Surplus.lean`).
 
-**Reuse.** `Exec.keptAt`, `Exec.retained_induction`, `Execution.committedPost`,
-`Execution.commits`, `Devm.getBal`, `SumNof`, `KeptFork`,
-`Blanc.Exec.Deriv.ParentStep.codePreserve`, `Evm.step_spawn_inv`,
-`Xinst.step_spawn_form` are reused, not redefined. Nothing here is
-contract-specific, so at the green boundary this module is a SHARED candidate
-(`scripts/check-layering.py` registration plus a `docs/COMMON_API.md` entry are
-left to the compiling run: this run edits no existing file).
+**The spawn facts.** `Xinst.step_spawn_bal_neutral`: a spawned frame's messages
+open on the parent's balances, and a value-moving spawn's caller is its parent's
+target, while a non-moving one stays at the parent's target. So
+`Evm.step_spawn_enter_bal` credits a child entering `a` exactly its value, and
+leaves `a` alone otherwise. `Evm.step_spawn_settled_getBal` hands a settled
+child's balances to its parent, on the create lane through code deposit;
+`Evm.step_spawn_rolled_getBal` restores the parent's balances after a child that
+does not commit. These are the balance twins of the storage facts in
+`Blanc/ExecutionKeptFrames.lean`, for every rule record.
 -/
 
 namespace Blanc
@@ -413,7 +407,7 @@ private theorem genericCreateAmsterdam_step_spawn_transfer
 /-- A spawned frame's two messages open on the parent's balances, and its value moves only
 from the parent's target, or nothing moves and the child stays at the parent's target. For
 every rule record. -/
-private theorem Xinst.step_spawn_bal_neutral {sevm : Sevm} {pre : Devm} {x : Xinst}
+theorem Xinst.step_spawn_bal_neutral {sevm : Sevm} {pre : Devm} {x : Xinst}
     {frame : Frame} {resume : Resume} (spawn : Xinst.step sevm pre x = .spawn frame resume) :
     frame.outer.benv.state.bal = pre.state.bal ∧ frame.inner.benv.state.bal = pre.state.bal ∧
       ((frame.inner.shouldTransferValue = true ∧ frame.inner.caller = sevm.currentTarget) ∨
@@ -458,7 +452,7 @@ private theorem Xinst.step_spawn_bal_neutral {sevm : Sevm} {pre : Devm} {x : Xin
 
 /-- **Entry credit.** A child spawned by a frame not at `a` opens with `a`'s balance plus
 the child's value when the child runs at `a`, and with `a`'s balance unchanged otherwise. -/
-private theorem Evm.step_spawn_enter_bal {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
+theorem Evm.step_spawn_enter_bal {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
     {frame : Frame} {resume : Resume} {child : Evm} {a : Adr}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc') (enter : frame.enter = .run child)
     (target : sevm.currentTarget ≠ a) (sum_nof : sum pre.state.bal < 2 ^ 256) :
@@ -517,7 +511,7 @@ private theorem Evm.step_spawn_enter_balSum {pc pc' : Nat} {sevm : Sevm} {pre : 
   exact h
 
 /-- A child whose settlement commits hands its balances to the parent. -/
-private theorem Evm.step_spawn_settled_getBal {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
+theorem Evm.step_spawn_settled_getBal {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
     {frame : Frame} {resume : Resume} {child : Evm} {raw : Execution}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc') (enter : frame.enter = .run child)
     (resumed : resume.run (frame.settle raw) = .ok post)
@@ -552,7 +546,7 @@ private theorem Evm.step_spawn_settled_getBal {pc pc' : Nat} {sevm : Sevm} {pre 
 
 /-- A child whose settlement does not commit leaves the parent's balances, whatever its
 subtree did. -/
-private theorem Evm.step_spawn_rolled_getBal {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
+theorem Evm.step_spawn_rolled_getBal {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
     {frame : Frame} {resume : Resume} {child : Evm} {raw : Execution}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc') (enter : frame.enter = .run child)
     (resumed : resume.run (frame.settle raw) = .ok post)

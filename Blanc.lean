@@ -861,6 +861,7 @@ import Blanc.ExecutionKeptFrames
 import Blanc.ExecutionKeptFacts
 import Blanc.ExecutionKeptTop
 import Blanc.ExecutionKeptChain
+import Blanc.ExecutionKeptValue
 import Blanc.ExecutionInCellProvenance
 import Blanc.ExecutionCommittedCell
 import Blanc.ExecutionSettledRootEntry

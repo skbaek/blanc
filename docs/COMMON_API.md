@@ -3170,6 +3170,11 @@ a bare set-membership goal does not identify this execution-specific route.
   `Exec.descendantFrames_caller_excluded_neutral`.
   [`Blanc/ExecutionKeptTop.lean`](../Blanc/ExecutionKeptTop.lean): `MessageRoots`, both lanes of `processMessageCall`.
   [`Blanc/ExecutionKeptChain.lean`](../Blanc/ExecutionKeptChain.lean): `TransactionRoots`, `BodyRoots`, `KeptHistory`.
+  For the balance at one account across a committed run of a frame elsewhere, kept frames only, under any rule
+  record: [`Blanc/ExecutionKeptValue.lean`](../Blanc/ExecutionKeptValue.lean): `Exec.kept_bal_ge_keptPaid` (at least
+  the balance plus every kept frame's value, `Exec.keptPaid`), `Exec.kept_bal_neverFalls`; the spawn balance facts
+  `Xinst.step_spawn_bal_neutral`, `Evm.step_spawn_enter_bal`, `Evm.step_spawn_settled_getBal`,
+  `Evm.step_spawn_rolled_getBal`.
   `ConfiguredBlockTraceIn` has no Amsterdam inhabitant, since its request stage fixes two contracts: use `KeptHistory`.
   For the cell at every actual settlement-retained node entry, use
   [`Blanc/ExecutionRetainedCellAt.lean`](../Blanc/ExecutionRetainedCellAt.lean):

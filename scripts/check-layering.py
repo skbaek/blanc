@@ -346,6 +346,7 @@ SHARED += [
     "ExecutionKeptFacts",
     "ExecutionKeptTop",
     "ExecutionKeptChain",
+    "ExecutionKeptValue",
     "ExecutionInCellProvenance",
     "ExecutionCommittedCell",
     "ExecutionSettledRootEntry",
@@ -1504,6 +1505,7 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.FeeDomain", "Lift.BuilderRequest.Exit.FeeDomain",
     "Lift.BuilderRequest.Static", "Lift.BuilderRequest.Deposit.Static", "Lift.BuilderRequest.Exit.Static",
     "Lift.BuilderRequest.Flood", "Lift.BuilderRequest.Exit.Flood", "Lift.BuilderRequest.Surplus",
+    "Lift.BuilderRequest.ValueKept",
     "Lift.BuilderRequest.Deposit.Properties", "Lift.BuilderRequest.Exit.Properties",
 ]
 

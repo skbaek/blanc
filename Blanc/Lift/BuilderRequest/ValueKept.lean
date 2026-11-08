@@ -12,10 +12,9 @@ import Blanc.Lift.BuilderRequest.Exit.Properties
 
 **Build target.** Jaune pin `e8db2742`, built on `tests@v21.0.1`, EELS `1562e2f`.
 
-**Status.** Sizing draft written without Lean elaboration under the run's
-no-elaboration constraint. Every `sorry` carries a `-- DRAFT:` comment giving
-the leaf's route and an estimated line count from a comparable existing proof
-that was actually read. The master compiles this file and clears them.
+**Status.** The run corollary and both certificate instances are proved. The two
+history headlines remain `sorry` (O37's history layer): see each one's `-- OPEN:`
+comment. This module is not imported by `Blanc.lean` until they close.
 
 **What this is.** The contract-level half of O37, generic over
 `Delivery.Contract`: the at-code frame law discharges
@@ -95,15 +94,16 @@ theorem history_value_neverFalls (h : KeptHistory cfg start blocks stop)
     (callers : ∀ b ∈ blocks, ∀ f ∈ b.keptAt c.address, f.sevm.caller ≠ c.address) :
     ((start.state.get c.address).bal).toNat ≤
       ((stop.state.get c.address).bal).toNat := by
-  -- DRAFT: induction on `h`, mirroring `KeptHistory.chain`
-  -- (ExecutionKeptChain.lean:1967, ~15 lines read) and `Mapped.ofHistory`
-  -- (ChainLink.lean:599, ~25 lines read). The per-block obligation is
-  -- message-level balance mono: gas debits the sender (`senders`), fee credit
-  -- and withdrawals only add, system calls keep balances by
-  -- `system_calls_keep_balances` (Balances.lean, 27 lines read), user frames
-  -- by `law`, nested kept frames by `kept_run_value`. Code across the history
-  -- by `(h.chain _ _).2`. Estimated 100-200 lines: the least-known part of
-  -- this route (message/transaction layers unread); attack second.
+  -- OPEN (2026-11-08, Mac worker): the per-block obligation is a balance twin of every level
+  -- of `KeptHistory.chain`: `MessageRoots`, `TransactionRoots`, `TransactionsRoots`,
+  -- `PreRoots`, withdrawals, `RequestPass`, `BodyRoots`. Two blockers. (1) The message level
+  -- needs the prepared message's balance at `a`; `ExecutionKeptTop`'s private `Prepared.kept`
+  -- exposes only code and storage, though `PrepKeep.kept` has the whole account, so the
+  -- route edits `Blanc/ExecutionKeptTop.lean`. (2) Transaction settlement credits
+  -- `benv.stat.coinbase` its tip and withdrawals credit their addresses, both by wrapping
+  -- `addBal`: without a settlement-amount bound, never-falls at `a` needs a visible premise
+  -- (the coinbase is not `a`, as `Submissions.transaction_balance` takes, and no withdrawal
+  -- credit to `a` wraps). Fold for every frame: `kept_run_value`.
   sorry
 
 /-- **At least the committed deposits plus fees.** As above, and the end
@@ -123,13 +123,8 @@ theorem history_value_ge_paid (h : KeptHistory cfg start blocks stop)
     (callers : ∀ b ∈ blocks, ∀ f ∈ b.keptAt c.address, f.sevm.caller ≠ c.address) :
     ((start.state.get c.address).bal).toNat + History.paid c.address blocks ≤
       ((stop.state.get c.address).bal).toNat := by
-  -- DRAFT: same induction as `history_value_neverFalls`; the per-block
-  -- obligation additionally telescopes the block's kept values via the
-  -- entry-credit clause (`Submissions.transaction_balance`,
-  -- Surplus.lean:39, ~40 lines read, for direct submissions; the internal-call
-  -- entry twin is unwritten). Needs no `Delivery.Chain`: the sum is over kept
-  -- frames, and `History.paid` already is that sum. Estimated 60-120 lines on
-  -- top of the never-falls induction.
+  -- OPEN: as `history_value_neverFalls`, with `History.paid` telescoped per root: a root
+  -- at `a` is credited its value at message entry, other roots by `kept_run_value`.
   sorry
 
 /-! ## Instances -/
