@@ -8,7 +8,7 @@ departure, in the departed tree.
 
 Usage:
   python3 scripts/sweep-exposed.py KEY [KEY ...] --date YYYYMMDD --census FILE
-          [--keep NAME ...] [--commit SHA] [--dry-run] [--root DIR]
+          [--keep NAME ...] [--keep-file FILE] [--commit SHA] [--dry-run] [--root DIR]
   python3 scripts/sweep-exposed.py --self-test
 
 The rule. The exposed set is recomputed from the release's tagged commit (the
@@ -42,10 +42,15 @@ stays byte-identical. Refused (exit 2, nothing written):
 - a keep, or a declaration the keep closure needs, in the removed set;
 - a touched module whose bytes differ from the tagged commit's (the ranges
   would not apply).
-Also kept: every declaration of a module a lift certificate generates
-(scripts/lift/certificates.json; retiring a certificate is release.py's job)
-and every declaration the claim map (docs/DEPLOYED_BYTECODE_CLAIM_MAP.md and
-docs/claim-map/) cites, since its checker resolves each citation.
+Also kept, with their dependency closure: every declaration of a module a
+lift certificate generates (scripts/lift/certificates.json; retiring a
+certificate is release.py's job), and (keep rule (b)) every declaration the
+shared claim map docs/DEPLOYED_BYTECODE_CLAIM_MAP.md or a live family's
+docs/claim-map/<key>.md cites (live: scripts/live-set.toml on disk), resolved
+with scripts/check-deployed-claim-map.py's own patterns. `--keep-file FILE`
+adds names, one per line (`#` comments). Every input (keys, census, keep
+list, claim-map files, release.py's helpers) is read from the tree at run
+time, so the sweep reruns on any departed tree.
 
 A SHARED module left with no declaration and no command other than imports,
 `open`, `variable`, `set_option`, `namespace`/`section`/`end`, file-local
@@ -494,6 +499,66 @@ class Exposure:
         return out
 
 
+def claim_map_keeps(root, candidates, survivors):
+    """Keep rule (b): the declarations among `candidates` that the shared claim
+    map or a live family's claim-map file cites, read from the files on disk
+    with scripts/check-deployed-claim-map.py's own patterns: a `Blanc.X` (`path:N`)
+    citation, any fully qualified `Blanc.X` span, and a bare name span (which
+    must stay some declaration's last component: kept when no surviving
+    declaration carries it). -> {name: file}."""
+    import tomllib
+    checker = load_claim_checker(root)
+    with open(os.path.join(root, "scripts", "live-set.toml"), "rb") as handle:  # live after the departure
+        live = tomllib.load(handle).get("live", {})
+    files = ["docs/DEPLOYED_BYTECODE_CLAIM_MAP.md"] + [
+        f"docs/claim-map/{key}.md" for key in sorted(live)
+        if os.path.exists(os.path.join(root, "docs", "claim-map", f"{key}.md"))]
+    texts = {}
+    for rel in files:
+        with open(os.path.join(root, rel), encoding="utf-8") as handle:
+            texts[rel] = handle.read()
+    return cited_keeps(checker, texts, candidates, survivors)
+
+
+def load_claim_checker(root):
+    path = os.path.join(root, "scripts", "check-deployed-claim-map.py")
+    spec = importlib.util.spec_from_file_location("claim_map_for_sweep", path)
+    checker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(checker)
+    return checker
+
+
+def cited_keeps(checker, texts, candidates, survivors):
+    surviving_last = {n.rsplit(".", 1)[-1] for n in survivors}
+    by_last = {}
+    for n in candidates:
+        by_last.setdefault(n.rsplit(".", 1)[-1], set()).add(n)
+    kept = {}
+    for rel, text in texts.items():
+        names = {m.group(1) for m in checker.CITE_RE.finditer(text)}
+        for m in checker.SPAN_RE.finditer(text):
+            span = m.group(1)
+            if checker.FQ_RE.fullmatch(span):
+                names.add(span)
+            elif (checker.BARE_RE.fullmatch(span) and checker.MIN_BARE_SUBJECT.search(span)
+                  and span not in getattr(checker, "NON_LEAN_IDENTIFIERS", ())
+                  and span not in surviving_last):
+                names.update(by_last.get(span, ()))
+        for n in sorted(names & set(candidates)):
+            kept.setdefault(n, rel)
+    return kept
+
+
+def read_keep_file(path):
+    names = []
+    with open(path, encoding="utf-8") as handle:
+        for line in handle:
+            line = line.split("#", 1)[0].strip()
+            if line:
+                names.append(line)
+    return names
+
+
 def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
     release, leaf_audit = load_release(root)
     manifest = os.path.join(root, "scripts", "releases", f"{keys[0]}-{date}.json")
@@ -528,14 +593,7 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
     plain_modules = sorted({ex.module_for(d).removeprefix("Blanc.") for d in plain})
     generated = {path for _, _, paths in release.lift_certificates(root, plain_modules) for path in paths}
     kept_generated = {d for d in plain if module_path(ex.module_for(d)) in generated}
-    claim_docs = {}
-    for rel in [release.CLAIM_MAP] + sorted(
-            os.path.join(release.CLAIM_MAP_DIR, f) for f in os.listdir(os.path.join(root, release.CLAIM_MAP_DIR))
-            if f.endswith(".md")):
-        with open(os.path.join(root, rel), encoding="utf-8") as handle:
-            claim_docs[rel] = handle.read()
-    cited, _ = leaf_audit.scan_external_sources(claim_docs, plain)
-    kept_cited = {d: paths[0] for d, paths in cited.items()}
+    kept_cited = claim_map_keeps(root, plain, ex.population - plain - ex.departing)
     keep_eff |= kept_generated | set(kept_cited)
     ranges = ex.census["ranges"]
     nested_kept = {}
@@ -884,6 +942,17 @@ theorem dead_b : True := dead_a
         failures.append("a `variable` binder naming a removed structure is not found")
     else:
         bites.append(("still named", [f"Fix.Dead is still named in {named['Fix.Dead'][0]}"]))
+    # Control 5, keep rule (b): claim-map citations keep their declarations.
+    checker = load_claim_checker(root)
+    doc = ("| x | `Blanc.Fix.cited` (`Blanc/Fix.lean:3`) | y |\n"
+           "`Blanc.Fix.spanned` and the bare `bare_only` and `bare_twice`\n")
+    kept_b = cited_keeps(checker, {"d.md": doc},
+                         {"Blanc.Fix.cited", "Blanc.Fix.spanned", "Blanc.Fix.bare_only",
+                          "Blanc.Fix.bare_twice", "Blanc.Fix.free"}, {"Blanc.Other.bare_twice"})
+    if set(kept_b) != {"Blanc.Fix.cited", "Blanc.Fix.spanned", "Blanc.Fix.bare_only"}:
+        failures.append(f"keep rule (b): kept {sorted(kept_b)}")
+    else:
+        bites.append(("claim-map keep", [f"kept {sorted(kept_b)}; Blanc.Fix.free removable"]))
     # The SHARED table edit, through the AST, re-executed and compared.
     table = 'SHARED = ["A", "B",\n          "C"]\nSHARED += ["D"]\nOTHER = {"x": ["A"]}\n'
     new_t, problems = edit_shared_table(table, {"B", "D"}, release._exec_tables)
@@ -898,16 +967,16 @@ theorem dead_b : True := dead_a
     if failures:
         print(f"REGRESSION — sweep self-test: {len(failures)} failure(s)")
         return 1
-    print("OK — sweep self-test: 16 controls (exact fixture sweep with prefix, comment and blank "
+    print("OK — sweep self-test: 17 controls (exact fixture sweep with prefix, comment and blank "
           "line; dangling end; live use; keep and keep closure; nested deriving instance; kept "
-          "overlap; still-named declaration; emptied-module leftovers; import drop and rewrite; "
+          "overlap; still-named declaration; claim-map keep rule (b); emptied-module leftovers; import drop and rewrite; "
           "SHARED table edit and its refusal)")
     return 0
 
 
 USAGE = """usage:
   sweep-exposed.py KEY [KEY ...] --date YYYYMMDD --census FILE [--keep NAME ...]
-                   [--commit SHA] [--dry-run] [--root DIR]
+                   [--keep-file FILE] [--commit SHA] [--dry-run] [--root DIR]
   sweep-exposed.py --self-test"""
 
 
@@ -916,7 +985,8 @@ def main(argv):
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if args == ["--self-test"]:
         return self_test(root)
-    keys, keep, opts = [], [], {"--date": None, "--census": None, "--commit": None, "--root": None}
+    keys, keep, opts = [], [], {"--date": None, "--census": None, "--commit": None, "--root": None,
+                                "--keep-file": None}
     dry = False
     i = 0
     while i < len(args):
@@ -944,6 +1014,8 @@ def main(argv):
         return 2
     root = os.path.abspath(opts["--root"] or root)
     try:
+        if opts["--keep-file"]:
+            keep += read_keep_file(opts["--keep-file"])
         return run_sweep(root, keys, opts["--date"], os.path.abspath(opts["--census"]),
                          set(keep), opts["--commit"], dry)
     except Refusal as exc:
