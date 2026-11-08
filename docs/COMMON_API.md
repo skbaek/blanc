@@ -3174,7 +3174,9 @@ a bare set-membership goal does not identify this execution-specific route.
   record: [`Blanc/ExecutionKeptValue.lean`](../Blanc/ExecutionKeptValue.lean): `Exec.kept_bal_ge_keptPaid` (at least
   the balance plus every kept frame's value, `Exec.keptPaid`), `Exec.kept_bal_neverFalls`; the spawn balance facts
   `Xinst.step_spawn_bal_neutral`, `Evm.step_spawn_enter_bal`, `Evm.step_spawn_settled_getBal`,
-  `Evm.step_spawn_rolled_getBal`.
+  `Evm.step_spawn_rolled_getBal`. Up the levels of a kept history: `MessageRoots.bal_covers`,
+  `TransactionRoots.bal_covers`, `BodyRoots.bal_covers`, `KeptHistory.bal_covers` (premises `HistoryRootsFit`,
+  `HistoryCreditsFit`).
   `ConfiguredBlockTraceIn` has no Amsterdam inhabitant, since its request stage fixes two contracts: use `KeptHistory`.
   For the cell at every actual settlement-retained node entry, use
   [`Blanc/ExecutionRetainedCellAt.lean`](../Blanc/ExecutionRetainedCellAt.lean):

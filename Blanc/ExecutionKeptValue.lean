@@ -38,6 +38,13 @@ child's balances to its parent, on the create lane through code deposit;
 `Evm.step_spawn_rolled_getBal` restores the parent's balances after a child that
 does not commit. These are the balance twins of the storage facts in
 `Blanc/ExecutionKeptFrames.lean`, for every rule record.
+
+**Above the run.** `MessageRoots.bal_covers`, `TransactionRoots.bal_covers`,
+`TransactionsRoots.bal_covers`, `BodyRoots.bal_covers` and `KeptHistory.bal_covers` carry the cover
+(`BalCovers`) up the levels of `KeptHistory.chain`. Their premises beyond the account's: the
+world-sum bound at each root's message (`RootsFit`, `HistoryRootsFit`), and no wrap at a credit to
+the account outside any frame (`TipFits`, `WdsFit`, `HistoryCreditsFit`). Nothing bounds a tip or a
+withdrawal from a debit or the supply: no settlement amount is named.
 -/
 
 namespace Blanc
@@ -1362,5 +1369,47 @@ theorem BodyRoots.bal_covers {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers :
   unfold BalCovers at joined covers₃ ⊢
   simp only [Root.paidAt_append] at joined ⊢
   omega
+
+/-! ## The history level -/
+
+/-- **The world-sum bound per root message.** Every root of every block opened on a world whose
+balances sum below `2 ^ 256`. A virtual certainty: no pinned read answers it today. -/
+def HistoryRootsFit (blocks : List KeptBlock) : Prop := ∀ b ∈ blocks, RootsFit b.run.roots
+
+/-- **No wrap at a credit to `a`.** In every block, no transaction's tip and no withdrawal credit to
+`a` wraps `a`'s balance. A virtual certainty: no pinned read answers it today. -/
+def HistoryCreditsFit (a : Adr) (blocks : List KeptBlock) : Prop :=
+  ∀ b ∈ blocks, (∀ decoded, b.block.txs.mapM (decodeTx b.benv.stat.rules) = .ok decoded →
+      TipsFit a decoded.putIndex (b.benv.withState b.run.preState) {BlockOutput.init with bal := b.run.preBal}) ∧
+    WdsFit a b.run.txEnv.state b.block.wds
+
+/-- **The value fold of a kept history.** At an account holding code `C` that no kept fork runs as a
+precompile, sending no transaction: its balance at the end covers its balance at the start plus every
+kept frame's carried value, under the world-sum bound per root and no wrap at a credit to it. -/
+theorem KeptHistory.bal_covers {cfg : ChainConfig} {start post : BlockChain} {blocks : List KeptBlock}
+    (h : KeptHistory cfg start blocks post) {a : Adr} {C : ByteArray} (V : KeptValueAt a C)
+    (code : start.state.getCode a = C) (precomp : ∀ f, KeptFork f → ¬ f.ruleSet.isPrecomp a)
+    (senders : ∀ b ∈ blocks, NoSenderAt a b.run.senders) (fits : HistoryRootsFit blocks)
+    (credits : HistoryCreditsFit a blocks) :
+    (start.state.bal a).toNat + ((blocks.flatMap (KeptBlock.keptAt a)).map fun f => f.sevm.value.toNat).sum ≤
+      (post.state.bal a).toNat := by
+  have hc : (start.state.getCode a).toList ≠ [] := by rw [code]; exact V.nonempty
+  have hd : ¬ isValidDelegation (start.state.getCode a) := by rw [code]; exact V.nondelegating
+  induction h with
+  | refl =>
+      rw [List.flatMap_nil, List.map_nil, List.sum_nil, Nat.add_zero]
+  | @step blocks b post prior step ih =>
+      have here : b ∈ blocks ++ [b] := List.mem_append_right _ List.mem_cons_self
+      have before := ih (fun x hx => senders x (List.mem_append_left _ hx))
+        (fun x hx => fits x (List.mem_append_left _ hx)) (fun x hx => credits x (List.mem_append_left _ hx))
+      have codeP : b.parent.state.getCode a = C := ((KeptHistory.chain prior hc hd).2).trans code
+      have block := step.body.bal_covers step.kept.rules V codeP (precomp b.fork step.kept)
+        AdrSet.not_mem_empty (senders b here) (fits b here) (credits b here).1 (credits b here).2
+      unfold BalCovers Root.paidAt at block
+      change (b.parent.state.bal a).toNat + _ ≤ _ at block
+      rw [List.flatMap_append, List.flatMap_singleton, List.map_append, List.sum_append]
+      have hk : KeptBlock.keptAt a b = b.run.roots.flatMap (Root.keptAt a) := rfl
+      rw [hk]
+      omega
 
 end Blanc

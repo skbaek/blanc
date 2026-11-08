@@ -8,31 +8,23 @@ import Blanc.Lift.BuilderRequest.Deposit.Properties
 import Blanc.Lift.BuilderRequest.Exit.Properties
 
 /-!
-# The builder contracts' kept value (O37 sizing draft)
+# The builder contracts' kept value (O37)
 
 **Build target.** Jaune pin `e8db2742`, built on `tests@v21.0.1`, EELS `1562e2f`.
 
-**Status.** The run corollary and both certificate instances are proved. The two
-history headlines remain `sorry` (O37's history layer): see each one's `-- OPEN:`
-comment. This module is not imported by `Blanc.lean` until they close.
+**What this is.** O37 at the two builder contracts, generic over `Delivery.Contract`. Across a kept
+history the contract's balance never falls (`history_value_neverFalls`) and covers its start plus the
+committed values (`history_value_ge_paid`: `ChainLink.History.paid`, each submission's carried value,
+its deposit plus its fee). Stated as at least, never equality: tips, withdrawals and `SELFDESTRUCT`
+elsewhere can only add. Both are corollaries of the shared fold `KeptHistory.bal_covers`
+(`Blanc/ExecutionKeptValue.lean`) over kept frames; `kept_run_value` is the same over one run.
 
-**What this is.** The contract-level half of O37, generic over
-`Delivery.Contract`: the at-code frame law discharges
-`Exec.kept_bal_neverFalls`'s `at_code` premise, and the two history headlines
-state O37 over kept histories: the balance never falls, and it covers the
-committed values (`ChainLink.History.paid`, the kept frames' carried values in
-wei: each submission's value is its deposit plus its fee). Stated as at least,
-never equality: `SELFDESTRUCT` elsewhere and withdrawals can only add. The
-deposit and exit instances supply only their certificate triple; everything
-else is shared.
-
-**Reuse.** `frame_keeps_balances` (Surplus.lean, W18, merged),
-`system_calls_keep_balances` (Balances.lean), `KeptHistory` and its `chain`,
-`caller_ne`, `entry_in` folds, `ChainLink.history_chain`, `History.paid`,
-`History.kept`, `Deposit.contract`, `Exit.contract`, `Deposit.linked`,
-`Exit.linked` are reused, not redefined. At the green boundary the generic
-section stays in this family module and only genuinely generic leaves hoist to
-`Blanc/ExecutionKeptValue.lean`; the two instances are contract-local.
+**Premises.** `Linked` (the contract's code runs, and no kept fork runs a precompile at its address),
+the code installed at the start (a pinned read), the at-code law (`AtCodeKeeps`, discharged per
+contract from its lift certificate by `frame_keeps_balances`), no transaction sent from the contract
+(`History.NoSender`), and two virtual certainties no pinned read answers today: the world-sum bound
+at every root message (`HistoryRootsFit`) and no wrap at a credit to the contract
+(`HistoryCreditsFit`: the tips and withdrawal credits).
 -/
 
 namespace Blanc.Lift.BuilderRequest
@@ -76,56 +68,32 @@ theorem kept_run_value {C : ByteArray} {pc : Nat} {sevm : Sevm} {pre : Devm}
     Exec.kept_bal_ge_keptPaid run committed target code nonempty
     nondelegating sums at_code⟩
 
-variable {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
+variable {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock} {ty : UInt8}
 
-/-- **Never falls across a kept history.** From installed code, with the
-world-sum bound, no sender, authority or creation at the account, and no kept
-caller at it, the contract's balance at the end covers its balance at the
-start. The start balance is a pinned read, not a universal. -/
-theorem history_value_neverFalls (h : KeptHistory cfg start blocks stop)
-    (code : start.state.getCode c.address = c.code)
-    (runnable : c.code.toList ≠ [] ∧ ¬ isValidDelegation c.code)
-    (law : AtCodeKeeps c)
-    (sums : ∀ {q : Nat} {s : Sevm} {d : Devm} {o : Execution},
-      Exec q s d o → SumNof d.state.bal)
-    (senders : History.NoSender c.address blocks)
-    (authorities : History.NoAuthority c.address blocks)
-    (creates : History.NoCreate c.address blocks)
-    (callers : ∀ b ∈ blocks, ∀ f ∈ b.keptAt c.address, f.sevm.caller ≠ c.address) :
-    ((start.state.get c.address).bal).toNat ≤
-      ((stop.state.get c.address).bal).toNat := by
-  -- OPEN (2026-11-08, Mac worker): the per-block obligation is a balance twin of every level
-  -- of `KeptHistory.chain`: `MessageRoots`, `TransactionRoots`, `TransactionsRoots`,
-  -- `PreRoots`, withdrawals, `RequestPass`, `BodyRoots`. Two blockers. (1) The message level
-  -- needs the prepared message's balance at `a`; `ExecutionKeptTop`'s private `Prepared.kept`
-  -- exposes only code and storage, though `PrepKeep.kept` has the whole account, so the
-  -- route edits `Blanc/ExecutionKeptTop.lean`. (2) Transaction settlement credits
-  -- `benv.stat.coinbase` its tip and withdrawals credit their addresses, both by wrapping
-  -- `addBal`: without a settlement-amount bound, never-falls at `a` needs a visible premise
-  -- (the coinbase is not `a`, as `Submissions.transaction_balance` takes, and no withdrawal
-  -- credit to `a` wraps). Fold for every frame: `kept_run_value`.
-  sorry
-
-/-- **At least the committed deposits plus fees.** As above, and the end
-balance additionally covers every kept frame's carried value. Each
-submission's carried value is its deposit plus its quoted fee
-(`Contract.paid`); fee reads and system calls carry no committed value away.
-Stated as at least, never equality. -/
-theorem history_value_ge_paid (h : KeptHistory cfg start blocks stop)
-    (code : start.state.getCode c.address = c.code)
-    (runnable : c.code.toList ≠ [] ∧ ¬ isValidDelegation c.code)
-    (law : AtCodeKeeps c)
-    (sums : ∀ {q : Nat} {s : Sevm} {d : Devm} {o : Execution},
-      Exec q s d o → SumNof d.state.bal)
-    (senders : History.NoSender c.address blocks)
-    (authorities : History.NoAuthority c.address blocks)
-    (creates : History.NoCreate c.address blocks)
-    (callers : ∀ b ∈ blocks, ∀ f ∈ b.keptAt c.address, f.sevm.caller ≠ c.address) :
+/-- **At least the committed deposits plus fees.** From the contract's code installed at the start,
+with the at-code law, no transaction sent from the contract, the world-sum bound per root message,
+and no wrap at a credit to the contract: its balance at the end covers its balance at the start plus
+every kept frame's carried value (`History.paid`). Each submission's carried value is its deposit plus
+its quoted fee; fee reads and system calls carry none. Stated as at least, never equality: tips,
+withdrawals and `SELFDESTRUCT` elsewhere can only add. The start balance is a pinned read. -/
+theorem history_value_ge_paid (L : Linked c ty) (h : KeptHistory cfg start blocks stop)
+    (code : start.state.getCode c.address = c.code) (law : AtCodeKeeps c)
+    (senders : History.NoSender c.address blocks) (fits : HistoryRootsFit blocks)
+    (credits : HistoryCreditsFit c.address blocks) :
     ((start.state.get c.address).bal).toNat + History.paid c.address blocks ≤
       ((stop.state.get c.address).bal).toNat := by
-  -- OPEN: as `history_value_neverFalls`, with `History.paid` telescoped per root: a root
-  -- at `a` is credited its value at message entry, other roots by `kept_run_value`.
-  sorry
+  have V : KeptValueAt c.address c.code := ⟨L.runnable.1, L.runnable.2, fun {s d e} _ hcode exec =>
+    congrArg B256.toNat (congrFun (law hcode exec) c.address)⟩
+  exact KeptHistory.bal_covers h V code L.placed.precompile senders fits credits
+
+/-- **Never falls across a kept history.** Under the premises of `history_value_ge_paid`, the
+contract's balance at the end covers its balance at the start. -/
+theorem history_value_neverFalls (L : Linked c ty) (h : KeptHistory cfg start blocks stop)
+    (code : start.state.getCode c.address = c.code) (law : AtCodeKeeps c)
+    (senders : History.NoSender c.address blocks) (fits : HistoryRootsFit blocks)
+    (credits : HistoryCreditsFit c.address blocks) :
+    ((start.state.get c.address).bal).toNat ≤ ((stop.state.get c.address).bal).toNat :=
+  Nat.le_trans (Nat.le_add_right _ _) (history_value_ge_paid L h code law senders fits credits)
 
 /-! ## Instances -/
 
@@ -145,42 +113,28 @@ theorem Exit.atCodeKeeps : AtCodeKeeps Exit.contract := by
 falls and covers the committed deposits plus fees. -/
 theorem Deposit.history_value (h : KeptHistory cfg start blocks stop)
     (installed : start.state.getCode Deposit.contract.address = Deposit.contract.code)
-    (sums : ∀ {q : Nat} {s : Sevm} {d : Devm} {o : Execution},
-      Exec q s d o → SumNof d.state.bal)
-    (senders : History.NoSender Deposit.contract.address blocks)
-    (authorities : History.NoAuthority Deposit.contract.address blocks)
-    (creates : History.NoCreate Deposit.contract.address blocks)
-    (callers : ∀ b ∈ blocks, ∀ f ∈ b.keptAt Deposit.contract.address,
-      f.sevm.caller ≠ Deposit.contract.address) :
+    (senders : History.NoSender Deposit.contract.address blocks) (fits : HistoryRootsFit blocks)
+    (credits : HistoryCreditsFit Deposit.contract.address blocks) :
     ((start.state.get Deposit.contract.address).bal).toNat ≤
       ((stop.state.get Deposit.contract.address).bal).toNat ∧
     ((start.state.get Deposit.contract.address).bal).toNat +
         History.paid Deposit.contract.address blocks ≤
       ((stop.state.get Deposit.contract.address).bal).toNat :=
-  ⟨history_value_neverFalls h installed Deposit.linked.runnable Deposit.atCodeKeeps
-      sums senders authorities creates callers,
-    history_value_ge_paid h installed Deposit.linked.runnable Deposit.atCodeKeeps
-      sums senders authorities creates callers⟩
+  ⟨history_value_neverFalls Deposit.linked h installed Deposit.atCodeKeeps senders fits credits,
+    history_value_ge_paid Deposit.linked h installed Deposit.atCodeKeeps senders fits credits⟩
 
 /-- **O37 at the exit contract, over a kept history.** The balance never falls
 and covers the committed values. -/
 theorem Exit.history_value (h : KeptHistory cfg start blocks stop)
     (installed : start.state.getCode Exit.contract.address = Exit.contract.code)
-    (sums : ∀ {q : Nat} {s : Sevm} {d : Devm} {o : Execution},
-      Exec q s d o → SumNof d.state.bal)
-    (senders : History.NoSender Exit.contract.address blocks)
-    (authorities : History.NoAuthority Exit.contract.address blocks)
-    (creates : History.NoCreate Exit.contract.address blocks)
-    (callers : ∀ b ∈ blocks, ∀ f ∈ b.keptAt Exit.contract.address,
-      f.sevm.caller ≠ Exit.contract.address) :
+    (senders : History.NoSender Exit.contract.address blocks) (fits : HistoryRootsFit blocks)
+    (credits : HistoryCreditsFit Exit.contract.address blocks) :
     ((start.state.get Exit.contract.address).bal).toNat ≤
       ((stop.state.get Exit.contract.address).bal).toNat ∧
     ((start.state.get Exit.contract.address).bal).toNat +
         History.paid Exit.contract.address blocks ≤
       ((stop.state.get Exit.contract.address).bal).toNat :=
-  ⟨history_value_neverFalls h installed Exit.linked.runnable Exit.atCodeKeeps
-      sums senders authorities creates callers,
-    history_value_ge_paid h installed Exit.linked.runnable Exit.atCodeKeeps
-      sums senders authorities creates callers⟩
+  ⟨history_value_neverFalls Exit.linked h installed Exit.atCodeKeeps senders fits credits,
+    history_value_ge_paid Exit.linked h installed Exit.atCodeKeeps senders fits credits⟩
 
 end Blanc.Lift.BuilderRequest
