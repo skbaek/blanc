@@ -1277,17 +1277,6 @@ theorem MessageRoots.chain {msg : Msg} {state : State} {out : MsgCallOutput} {rs
       rw [Root.keptAt, dite_eq_right rolled, hstor]
       exact ⟨.nil _, hcode⟩
 
-private theorem benvAfterTransfer_stat {msg : Msg} {benv : Benv} (h : msg.benvAfterTransfer = .ok benv) :
-    benv.stat = msg.benv.stat := by
-  by_cases zero : msg.value = 0
-  · rw [Msg.benvAfterTransfer_of_value_zero zero] at h
-    cases h
-    rfl
-  by_cases transfer : msg.shouldTransferValue = true
-  · obtain ⟨st, subtract, rfl⟩ := of_benvAfterTransfer transfer zero h
-    rfl
-  · rw [of_benvAfterTransfer_no transfer h]
-
 private theorem not_isValidDelegation_empty : ¬ isValidDelegation ByteArray.empty :=
   fun h => absurd h.1 (by decide)
 

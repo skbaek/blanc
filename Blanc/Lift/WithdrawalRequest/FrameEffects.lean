@@ -25,7 +25,7 @@ inductive FrameEffect (sevm : Sevm) (pre post : Devm) : Prop where
       (iterations : Nat) (finalOutput : B256)
       (fee : WordFakeExponential.Run (pre.getStorVal sevm.currentTarget 0)
         17 1 17 0 iterations finalOutput)
-      (gas : Nat) (state : post = feeGetterPost (afterSload sevm pre 0) pre.memory
+      (gas : Nat) (state : post = RequestFee.feeGetterPost (afterSload sevm pre 0) pre.memory
         (finalOutput / 17) gas)
       (output : post.output = (finalOutput / (17 : B256)).toBytes)
 
@@ -85,19 +85,19 @@ theorem submissionPost_inherited (sevm : Sevm) (b : Devm) (M : Mem) (gas : Nat) 
 
 /-- The getter changes output and memory, retaining all raw storage and balances. -/
 theorem feeGetterPost_preserves (b : Devm) (M : Mem) (fee : B256) (gas : Nat) :
-    (∀ address, (feeGetterPost b M fee gas).getStor address = b.getStor address) ∧
-    (∀ address, (feeGetterPost b M fee gas).getBal address = b.getBal address) ∧
-    (feeGetterPost b M fee gas).logs = b.logs ∧
-    (feeGetterPost b M fee gas).error = b.error := by
+    (∀ address, (RequestFee.feeGetterPost b M fee gas).getStor address = b.getStor address) ∧
+    (∀ address, (RequestFee.feeGetterPost b M fee gas).getBal address = b.getBal address) ∧
+    (RequestFee.feeGetterPost b M fee gas).logs = b.logs ∧
+    (RequestFee.feeGetterPost b M fee gas).error = b.error := by
   refine ⟨?_, ?_, ?_, ?_⟩
   · intro address
-    rw [feeGetterPost, (returnPost_facts _ _ _ _).2.2.1 address, St_getStor]
+    rw [RequestFee.feeGetterPost, (returnPost_facts _ _ _ _).2.2.1 address, St_getStor]
   · intro address
-    simp only [feeGetterPost, returnPost, Devm.getBal, Devm.getAcct,
+    simp only [RequestFee.feeGetterPost, returnPost, Devm.getBal, Devm.getAcct,
       Devm.withOutput_state, Devm.memRead_state, Devm.setMach_state, St]
-  · simp only [feeGetterPost, returnPost, Devm.withOutput_logs, Devm.memRead_logs,
+  · simp only [RequestFee.feeGetterPost, returnPost, Devm.withOutput_logs, Devm.memRead_logs,
       Devm.setMach_logs, St]
-  · rw [feeGetterPost, (returnPost_facts _ _ _ _).2.1]
+  · rw [RequestFee.feeGetterPost, (returnPost_facts _ _ _ _).2.1]
     rfl
 
 /-- Raw balance/foreign-storage/error preservation follows exact post states. -/
@@ -151,7 +151,7 @@ theorem FrameEffect.static_getter {sevm : Sevm} {pre post : Devm}
     ∃ iterations finalOutput,
       WordFakeExponential.Run (pre.getStorVal sevm.currentTarget 0)
         17 1 17 0 iterations finalOutput ∧
-      ∃ gas, post = feeGetterPost (afterSload sevm pre 0) pre.memory (finalOutput / 17) gas ∧
+      ∃ gas, post = RequestFee.feeGetterPost (afterSload sevm pre 0) pre.memory (finalOutput / 17) gas ∧
         post.output = (finalOutput / (17 : B256)).toBytes := by
   cases effect with
   | system _ dynamic _ _ => exact Bool.noConfusion (static.symm.trans dynamic)
@@ -189,7 +189,7 @@ theorem exec_static_frame {sevm : Sevm} {pre post : Devm}
     (∃ iterations finalOutput,
       WordFakeExponential.Run (pre.getStorVal sevm.currentTarget 0)
         17 1 17 0 iterations finalOutput ∧
-      ∃ gas, post = feeGetterPost (afterSload sevm pre 0) pre.memory (finalOutput / 17) gas ∧
+      ∃ gas, post = RequestFee.feeGetterPost (afterSload sevm pre 0) pre.memory (finalOutput / 17) gas ∧
         post.output = (finalOutput / (17 : B256)).toBytes) ∧
     (∀ address, post.getStor address = pre.getStor address) ∧ post.logs = pre.logs ∧
     (∀ address, post.getBal address = pre.getBal address) := by

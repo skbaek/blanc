@@ -10,8 +10,6 @@ namespace Blanc.Lift.WithdrawalRequest
 
 open Jaune
 
-export RequestFee (feeLoopGas feeLoopGas_eq)
-
 private def loopDest : RequestFee.PushWord := ⟨0x4d, [], by decide⟩
 private def postloopDest : RequestFee.PushWord := ⟨0x68, [], by decide⟩
 
@@ -39,7 +37,7 @@ theorem fee_loop_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     (tail : ∀ finalCounter, SFunc.RunExact prog sevm
       (St b [finalOutput, 0, finalCounter, numerator, denominator] M G) t_0068_c0 o) :
     SFunc.RunExact prog sevm
-      (St b [output, accumulator, counter, numerator, denominator] M (G + feeLoopGas iterations))
+      (St b [output, accumulator, counter, numerator, denominator] M (G + RequestFee.feeLoopGas iterations))
       t_004d_c0 o :=
   RequestFee.loop_exact loop_entry hfork.rules_push0 wordRun tail
 
@@ -68,7 +66,7 @@ theorem user_fee_loop_exact {sevm : Sevm} {b : Devm} {M : Mem} {G iterations : N
       (St (afterSload sevm b 0) [finalOutput, 0, finalCounter, b.getStorVal sevm.currentTarget 0, 17] M G)
       t_0068_c0 o) :
     SFunc.RunExact prog sevm
-      (St b [] M (G + feeLoopGas iterations + userSetupGas sevm b)) t_001a_c0 o := by
+      (St b [] M (G + RequestFee.feeLoopGas iterations + userSetupGas sevm b)) t_001a_c0 o := by
   exact user_setup_exact hfork active (fee_loop_exact hfork wordRun tail)
 
 end Blanc.Lift.WithdrawalRequest

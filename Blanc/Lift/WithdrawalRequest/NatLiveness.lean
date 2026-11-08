@@ -111,7 +111,7 @@ theorem history_fee_getter_word_live {cfg : ChainConfig} {checkpoint future : Bl
           NatFeeDomain (base.getStorVal withdrawalRequestPredeployAddress 0) result.1) ∧
         ∀ G, Nonempty (Exec 0 fresh
           (St base [] Mem.empty (G + (180 + 87 * result.1 + sloadCost fresh base 0)))
-          (.ok (feeGetterPost (afterSload fresh base 0) Mem.empty
+          (.ok (RequestFee.feeGetterPost (afterSload fresh base 0) Mem.empty
             (result.2 / (17 : B256)) G)))) := by
   have installed :
       ({ historySubmissionSevm future.state sevm [] with value := 0 } : Sevm).code =

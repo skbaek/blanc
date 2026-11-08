@@ -298,7 +298,7 @@ theorem submissionBody_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
 
 def userSubmissionGas (sevm : Sevm) (b : Devm) (M : Mem) (iterations : Nat) : Nat :=
   submissionBodyGas sevm (afterSload sevm b 0) M + 64 +
-    feeLoopGas iterations + userSetupGas sevm b + dispatchGas
+    RequestFee.feeLoopGas iterations + userSetupGas sevm b + dispatchGas
 
 /-- A literal 56-byte canonical successful submission has the actual sequential effects. -/
 theorem exec_submission {sevm : Sevm} {pre post : Devm}
@@ -339,7 +339,7 @@ theorem exec_submission_exact {sevm : Sevm} {b : Devm} {M : Mem} {G iterations :
   rw [branchGas] at acceptedWalk
   have gasEq : G + userSubmissionGas sevm b M iterations =
       (G + submissionBodyGas sevm (afterSload sevm b 0) M + 64 +
-        feeLoopGas iterations + userSetupGas sevm b) + dispatchGas := by
+        RequestFee.feeLoopGas iterations + userSetupGas sevm b) + dispatchGas := by
     simp only [userSubmissionGas, Nat.add_assoc]
   rw [gasEq]
   exact exec_of_dispatch hcode fork (by

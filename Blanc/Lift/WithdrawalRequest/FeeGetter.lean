@@ -10,32 +10,30 @@ namespace Blanc.Lift.WithdrawalRequest
 
 open Jaune
 
-export RequestFee (feeGetterMemory feeGetterPost feeGetterGas feeGetterPost_facts)
-
 /-- A successful getter leaves exactly the named RETURN state, including its error field. -/
 theorem fee_getter_inv {sevm : Sevm} {b post : Devm} {M : Mem} {fee : B256} {G : Nat}
     (aligned : M.size % 32 = 0)
     (run : SFunc.Run prog sevm (St b [fee] M G) t_0082_c0 (.halted post)) :
-    ∃ G', post = feeGetterPost b M fee G' :=
+    ∃ G', post = RequestFee.feeGetterPost b M fee G' :=
   RequestFee.return_inv aligned run
 
 /-- Construct the actual return outcome at exactly the getter charge. -/
 theorem fee_getter_exact {sevm : Sevm} {b : Devm} {M : Mem} {fee : B256} {G : Nat}
     (hfork : CoveredFork sevm.benvStat.fork) (aligned : M.size % 32 = 0) :
-    SFunc.RunExact prog sevm (St b [fee] M (G + feeGetterGas M)) t_0082_c0
-      (.halted (feeGetterPost b M fee G)) :=
+    SFunc.RunExact prog sevm (St b [fee] M (G + RequestFee.feeGetterGas M)) t_0082_c0
+      (.halted (RequestFee.feeGetterPost b M fee G)) :=
   RequestFee.return_exact hfork.rules_push0 aligned
 
 /-- Full raw getter execution charge, excluding any call-frame settlement charge. -/
 def userFeeGetterGas (sevm : Sevm) (b : Devm) (M : Mem) (iterations : Nat) : Nat :=
-  feeGetterGas M + 75 + feeLoopGas iterations + userSetupGas sevm b + dispatchGas
+  RequestFee.feeGetterGas M + 75 + RequestFee.feeLoopGas iterations + userSetupGas sevm b + dispatchGas
 
 
 theorem userFeeGetterGas_empty (sevm : Sevm) (b : Devm) (iterations : Nat) :
     userFeeGetterGas sevm b Mem.empty iterations = 180 + 87 * iterations + sloadCost sevm b 0 := by
   calc
     _ = (13 + 75 + 25 + 46 + 21) + (87 * iterations + sloadCost sevm b 0) := by
-      simp only [userFeeGetterGas, RequestFee.feeGetterGas_empty, feeLoopGas_eq,
+      simp only [userFeeGetterGas, RequestFee.feeGetterGas_empty, RequestFee.feeLoopGas_eq,
         userSetupGas, userSetupFixedGas_eq, dispatchGas_eq,
         Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
     _ = _ := by simp only [← Nat.add_assoc]
@@ -50,7 +48,7 @@ theorem exec_fee_getter {sevm : Sevm} {pre post : Devm}
     sevm.value = 0 ∧ pre.getStorVal sevm.currentTarget 0 ≠ B256.max ∧
     ∃ iterations finalOutput,
       WordFakeExponential.Run (pre.getStorVal sevm.currentTarget 0) 17 1 17 0 iterations finalOutput ∧
-      ∃ G, post = feeGetterPost (afterSload sevm pre 0) pre.memory (finalOutput / (17 : B256)) G ∧
+      ∃ G, post = RequestFee.feeGetterPost (afterSload sevm pre 0) pre.memory (finalOutput / (17 : B256)) G ∧
         post.output = (finalOutput / (17 : B256)).toBytes := by
   obtain ⟨active, iterations, finalOutput, wordRun, accepted⟩ :=
     exec_user_fee_dispatch hcode hfork hstack user exec
@@ -59,7 +57,7 @@ theorem exec_fee_getter {sevm : Sevm} {pre post : Devm}
     exact False.elim ((by decide : (0 : B256) ≠ 56) hlen)
   · obtain ⟨G, postEq⟩ := fee_getter_inv aligned run
     exact ⟨zero, active, iterations, finalOutput, wordRun, G, postEq,
-      postEq ▸ (feeGetterPost_facts _ _ _ _ wf aligned).1⟩
+      postEq ▸ (RequestFee.feeGetterPost_facts _ _ _ _ wf aligned).1⟩
 
 /-- Construct a complete raw canonical getter Exec with an actual RETURN outcome. -/
 theorem exec_fee_getter_exact {sevm : Sevm} {b : Devm} {M : Mem} {G iterations : Nat}
@@ -70,7 +68,7 @@ theorem exec_fee_getter_exact {sevm : Sevm} {b : Devm} {M : Mem} {G iterations :
     (active : b.getStorVal sevm.currentTarget 0 ≠ B256.max)
     (wordRun : WordFakeExponential.Run (b.getStorVal sevm.currentTarget 0) 17 1 17 0 iterations finalOutput) :
     Nonempty (Exec 0 sevm (St b [] M (G + userFeeGetterGas sevm b M iterations))
-      (.ok (feeGetterPost (afterSload sevm b 0) M (finalOutput / (17 : B256)) G))) := by
+      (.ok (RequestFee.feeGetterPost (afterSload sevm b 0) M (finalOutput / (17 : B256)) G))) := by
   have hlen : sevm.data.length.toB256 = 0 := by rw [empty]; rfl
   have branchGas : userFeeDispatchGas sevm = 75 := by
     rw [userFeeDispatchGas_eq, hlen]
@@ -80,7 +78,7 @@ theorem exec_fee_getter_exact {sevm : Sevm} {b : Devm} {M : Mem} {G iterations :
       (fee := finalOutput / (17 : B256)) (G := G) hfork aligned⟩)
   rw [branchGas] at tail
   have hgas : G + userFeeGetterGas sevm b M iterations =
-      (G + feeGetterGas M + 75 + feeLoopGas iterations + userSetupGas sevm b) + dispatchGas := by
+      (G + RequestFee.feeGetterGas M + 75 + RequestFee.feeLoopGas iterations + userSetupGas sevm b) + dispatchGas := by
     simp only [userFeeGetterGas, Nat.add_assoc]
   rw [hgas]
   exact exec_of_dispatch hcode hfork (by
@@ -93,7 +91,7 @@ theorem exec_fee_getter_fresh {sevm : Sevm} {b : Devm} {G iterations : Nat} {fin
     (active : b.getStorVal sevm.currentTarget 0 ≠ B256.max)
     (wordRun : WordFakeExponential.Run (b.getStorVal sevm.currentTarget 0) 17 1 17 0 iterations finalOutput) :
     Nonempty (Exec 0 sevm (St b [] Mem.empty (G + (180 + 87 * iterations + sloadCost sevm b 0)))
-      (.ok (feeGetterPost (afterSload sevm b 0) Mem.empty (finalOutput / (17 : B256)) G))) := by
+      (.ok (RequestFee.feeGetterPost (afterSload sevm b 0) Mem.empty (finalOutput / (17 : B256)) G))) := by
   rw [← userFeeGetterGas_empty]
   exact exec_fee_getter_exact hcode hfork (by decide) user empty zero active wordRun
 

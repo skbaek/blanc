@@ -75,7 +75,7 @@ theorem userSubmissionGas_empty (sevm : Sevm) (b : Devm) (iterations : Nat) :
     _ = (1102 + 64 + 25 + 46 + 21) +
         (87 * iterations + sloadScheduleCost sevm (userSubmissionReads sevm b) +
           submissionStoreGas sevm (afterSload sevm b 0) Mem.empty) := by
-      simp only [userSubmissionGas, submissionBodyGas_empty, feeLoopGas_eq,
+      simp only [userSubmissionGas, submissionBodyGas_empty, RequestFee.feeLoopGas_eq,
         userSetupGas, userSetupFixedGas_eq, dispatchGas_eq, userSubmissionReads,
         sloadScheduleCost, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil,
         Nat.zero_add, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
@@ -145,7 +145,7 @@ theorem exec_fee_getter_word_live {sevm : Sevm} {b : Devm}
         17 1 17 0 result.1 result.2 ∧
       ∀ G, Nonempty (Exec 0 sevm
         (St b [] Mem.empty (G + (180 + 87 * result.1 + sloadCost sevm b 0)))
-        (.ok (feeGetterPost (afterSload sevm b 0) Mem.empty (result.2 / (17 : B256)) G))) := by
+        (.ok (RequestFee.feeGetterPost (afterSload sevm b 0) Mem.empty (result.2 / (17 : B256)) G))) := by
   obtain ⟨result, run, unique⟩ := WordFakeExponential.run_exists_unique
     (b.getStorVal sevm.currentTarget 0) 17 1 17 0
   refine ⟨result, ⟨run, ?_⟩, ?_⟩

@@ -11,14 +11,12 @@ namespace Blanc.Lift.WithdrawalRequest
 
 open Jaune
 
-export RequestFee (postloopFixedGas getterGuardGas)
-
 /-- JUMPDEST/CALLVALUE/LT/PUSH/JUMPI. -/
 def submissionGuardGas : Nat := gJumpdest + gBase + 2 * gVerylow + gHigh
 
 /-- The selected postloop path ends before its memory/storage body. -/
 def userFeeDispatchGas (sevm : Sevm) : Nat :=
-  postloopFixedGas + if sevm.data.length.toB256 = 56 then submissionGuardGas else getterGuardGas
+  RequestFee.postloopFixedGas + if sevm.data.length.toB256 = 56 then submissionGuardGas else RequestFee.getterGuardGas
 
 theorem submissionGuardGas_eq : submissionGuardGas = 19 := rfl
 
@@ -162,7 +160,7 @@ theorem user_fee_prefix_exact {sevm : Sevm} {b : Devm} {M : Mem} {G iterations :
       (sevm.data.length.toB256 = 0 ∧ sevm.value = 0 ∧
         SFunc.RunExact prog sevm (St (afterSload sevm b 0) [finalOutput / (17 : B256)] M G) t_0082_c0 o)) :
     SFunc.RunExact prog sevm
-      (St b [] M (G + userFeeDispatchGas sevm + feeLoopGas iterations + userSetupGas sevm b))
+      (St b [] M (G + userFeeDispatchGas sevm + RequestFee.feeLoopGas iterations + userSetupGas sevm b))
       t_001a_c0 o := by
   apply user_fee_loop_exact hfork active wordRun
   intro finalCounter
