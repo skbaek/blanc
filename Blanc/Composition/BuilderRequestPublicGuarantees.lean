@@ -9,16 +9,19 @@ import Blanc.Lift.BuilderRequest.Exit.FeeDomain
 import Blanc.Lift.BuilderRequest.FeeDomain
 import Blanc.Lift.BuilderRequest.Message
 import Blanc.Lift.BuilderRequest.Surplus
+import Blanc.Lift.BuilderRequest.ValueKept
 import Blanc.Composition.RequestPhaseAmsterdam
 import Blanc.RequestFeeWordBound
 
 /-!
 # Builder request contracts: public guarantees
 
-Featured headlines 1-6 of §17. History form leads where it exists; the form of
-each headline is named in its docstring. The gas bound of O7 lives in the unit
-layer (`SystemCallOk` shape); the headline states success. Proofs are thin
-wrappers over the existing unit theorems; every bridge is proved.
+Featured headlines 1-6 of §17, and O37's value guarantee, which joins them
+unnumbered (featured findings 7-8 are in `BuilderRequestPublicFindings`).
+History form leads where it exists; the form of each headline is named in its
+docstring. The gas bound of O7 lives in the unit layer (`SystemCallOk` shape);
+the headline states success. Proofs are thin wrappers over the existing unit
+theorems; every bridge is proved.
 -/
 
 namespace Blanc.Composition.BuilderRequestPublic
@@ -186,6 +189,21 @@ def exitDirectUse : Prop :=
 direct transaction to either contract, paying the quote read at its storage and
 enough gas, succeeds and moves the full value to the contract. -/
 def direct_use_succeeds : Prop := depositDirectUse ∧ exitDirectUse
+
+/-- **Value guarantee (O37), history form: the builder contracts' value never falls.**
+Over every kept history that started with both builder codes installed, each
+builder's balance at the end is at least its balance at the start plus every
+value its kept frames carried (`feesPaidAt`: each deposit plus its fee), so it
+never falls. At least, never equality: tips and withdrawals can only add. Beyond
+the start, the contract sends no transaction, and two virtual certainties no
+pinned read answers today: every root message opens on a world whose balances
+sum below `2 ^ 256`, and no tip or withdrawal credit to the contract wraps. -/
+def value_kept : Prop :=
+  ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock},
+    CodesKept cfg start blocks stop → HistoryRootsFit blocks →
+    ∀ a ∈ [depositAddr, exitAddr],
+      ChainLink.History.NoSender a blocks → HistoryCreditsFit a blocks →
+      ((start.state.get a).bal).toNat + feesPaidAt blocks a ≤ ((stop.state.get a).bal).toNat
 
 /-! ## Bridges: each guarantee from its unit theorem -/
 
@@ -386,5 +404,13 @@ theorem direct_use_bridge : direct_use_succeeds := by
         d hinst hpre hnew hcaller hval hlen hgas' hoff hrun
         (by rw [hq']; exact hadmit) hnoalias hcb
     exact ⟨_, _, hproc, hbal⟩
+
+/-- The builders' kept value over a history, from the O37 instances. -/
+theorem value_kept_bridge : value_kept := by
+  intro cfg start stop blocks h fits a ha senders credits
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at ha
+  rcases ha with rfl | rfl
+  · exact (Deposit.history_value h.linked h.deposit senders fits credits).2
+  · exact (Exit.history_value h.linked h.exit senders fits credits).2
 
 end Blanc.Composition.BuilderRequestPublic

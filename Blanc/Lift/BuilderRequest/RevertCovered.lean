@@ -45,6 +45,16 @@ theorem feeBase_stateGas_covered (s : Sevm) (b : Devm) :
   show (afterSload s (afterSload s b 0) 1).stateGas = _
   rw [afterSload_stateGas, afterSload_stateGas]
 
+/-- **While slot 0 holds the inhibitor, a non-system frame at a code with an inhibitor cut executes
+`REVERT`, under covered forks.** Shared by both contracts' instances below. -/
+theorem frameReverts_inhibited_covered {code : ByteArray} {systemDest revert : RequestFee.PushWord} {e : Nat}
+    {s : Sevm} {b : Devm}
+    (root : cutOk code [] e 0 none (inhibitCut systemDest revert) = true) (rev : Linst.At code e .revert)
+    (hcode : s.code = code) (fork : CoveredFork s.benvStat.fork) (caller : s.caller ≠ systemAddress)
+    (inhibited : b.getStorVal s.currentTarget 0 = B256.max) :
+    FrameReverts s b (revertBound 0) :=
+  frameReverts_inhibited_on (coveredSteps_valid fork) root rev hcode caller inhibited afterSload_stateGas
+
 namespace Deposit
 
 open Blanc.Lift.BuilderRequest.Deposit
@@ -52,10 +62,8 @@ open Blanc.Lift.BuilderRequest.Deposit
 /-- **While slot 0 holds the inhibitor, a non-system frame at the deposit code executes `REVERT`, under covered forks.** -/
 theorem frameReverts_inhibited_covered {s : Sevm} {b : Devm} (hcode : s.code = code)
     (fork : CoveredFork s.benvStat.fork) (caller : s.caller ≠ systemAddress)
-    (inhibited : b.getStorVal s.currentTarget 0 = B256.max) :
-    FrameReverts s b (revertBound 0) :=
-  frameReverts_inhibited_on (coveredSteps_valid fork) inhibit_cut revert_at hcode caller inhibited
-    afterSload_stateGas
+    (inhibited : b.getStorVal s.currentTarget 0 = B256.max) : FrameReverts s b (revertBound 0) :=
+  Blanc.Lift.BuilderRequest.frameReverts_inhibited_covered inhibit_cut revert_at hcode fork caller inhibited
 
 /-- **Calldata of neither form reverts at the deposit code, under covered forks.** -/
 theorem frameReverts_badLength_covered {s : Sevm} {b : Devm} {n : Nat} {out : B256}
@@ -97,10 +105,8 @@ open Blanc.Lift.BuilderRequest.Exit
 /-- **While slot 0 holds the inhibitor, a non-system frame at the exit code executes `REVERT`, under covered forks.** -/
 theorem frameReverts_inhibited_covered {s : Sevm} {b : Devm} (hcode : s.code = code)
     (fork : CoveredFork s.benvStat.fork) (caller : s.caller ≠ systemAddress)
-    (inhibited : b.getStorVal s.currentTarget 0 = B256.max) :
-    FrameReverts s b (revertBound 0) :=
-  frameReverts_inhibited_on (coveredSteps_valid fork) inhibit_cut revert_at hcode caller inhibited
-    afterSload_stateGas
+    (inhibited : b.getStorVal s.currentTarget 0 = B256.max) : FrameReverts s b (revertBound 0) :=
+  Blanc.Lift.BuilderRequest.frameReverts_inhibited_covered inhibit_cut revert_at hcode fork caller inhibited
 
 /-- **Calldata of neither form reverts at the exit code, under covered forks.** -/
 theorem frameReverts_badLength_covered {s : Sevm} {b : Devm} {n : Nat} {out : B256}
