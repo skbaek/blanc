@@ -726,6 +726,9 @@ def table_rows(body: str) -> list[list[str]]:
 def check_structure(text: str, errors: list[str], expected: list[str], where: str) -> None:
     h2 = [line[3:].strip() for line in text.splitlines() if line.startswith("## ")]
     h2_short = [heading.split(":")[0].strip() for heading in h2]
+    if "See also" not in h2_short:
+        # Cross-references to another family's file go when that family is released.
+        expected = [heading for heading in expected if heading != "See also"]
     if h2_short != expected:
         errors.append(f"{where}: section structure drifted: got {h2_short!r}, expected {expected!r}")
 
@@ -902,7 +905,7 @@ def check_leaf_count(auth: Authority, text: str, errors: list[str]) -> None:
             errors.append(f"a quoted leaf count {quoted} differs from {LEAF_COUNT} ({leaves})")
 
 
-def check_trust_base(auth: Authority, text: str, errors: list[str], whole: str) -> None:
+def check_trust_base(auth: Authority, text: str, errors: list[str]) -> None:
     match = re.search(r"Jaune revision `([0-9a-f]{7,40})`", text)
     if not match:
         errors.append("the Jaune revision is not stated")
@@ -925,7 +928,7 @@ def check_trust_base(auth: Authority, text: str, errors: list[str], whole: str) 
         errors.append(f"Lean toolchain {match.group(1)} differs from lean-toolchain ({auth.toolchain})")
     if not re.search(r"coveredForks : List Fork := \[\.prague, \.osaka, \.bpo1, \.bpo2\]", auth.semantics):
         errors.append(f"{SEMANTICS} no longer defines the covered forks as Prague, Osaka, BPO1, BPO2")
-    if "Prague, Osaka, BPO1 and BPO2" not in whole:
+    if "prague, osaka, bpo1 and bpo2" not in norm(text):
         errors.append("the covered forks are not stated as Prague, Osaka, BPO1 and BPO2")
 
 
@@ -1168,7 +1171,7 @@ def check_bundle(auth: Authority, bundle: dict[str, str]) -> tuple[list[str], di
             stats["glossary"] += check_glossary(body, errors, "9. Named premises",
                                                 GLOSSARY_ROWS.get("shared", 0), where)
             stats["stricter"] = check_axioms(auth, body, errors)
-            check_trust_base(auth, body, errors, "\n".join(t for t in bundle.values() if t))
+            check_trust_base(auth, body, errors)
             stats["artifacts"] += check_system_table(auth, section(body, "2. Artifacts"), errors)
         else:
             check_structure(body, errors, family_layout(key), where)
@@ -1386,7 +1389,7 @@ def falsifiers(auth: Authority, bundle: dict) -> list[tuple[str, str, str | None
         ("wrong Jaune revision", "Jaune revision", None,
          lambda a, b: (a, map_first(b, re.compile(r"Jaune revision `[0-9a-f]+`"), lambda t: re.sub(r"Jaune revision `[0-9a-f]+`", "Jaune revision `b019bbe`", t, count=1)))),
         ("process vocabulary", "process vocabulary", None,
-         lambda a, b: (a, append_to(b, first_live_family(), "\nThe master session decided this.\n"))),
+         lambda a, b: (a, append_to(b, "shared", "\nThe master session decided this.\n"))),
         ("deleted headline", "required headline", None,
          lambda a, b: (a, map_all(b, lambda t: drop_headline(t, first_headline())))),
         ("dropped disclosure", "load-bearing disclosure vanished", None,
