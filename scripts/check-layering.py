@@ -2317,6 +2317,100 @@ def architecture_failures(root, owner, found, compositions):
     return failures
 
 
+LIVE_SET = os.path.join("scripts", "live-set.toml")
+
+
+def live_set_failures(root, owner, found, contracts, compositions):
+    """Checks (a) and (b) of the live set (`scripts/live-set.toml`).
+
+    (a) CONTRACTS has exactly the live keys, and no released key appears in
+        CONTRACTS or as a COMPOSITION family.
+    (b) A module on disk that a release manifest lists and nothing live
+        classifies fails by name, so a released family can't come back
+        without a restore.
+    -> (failures, number of live keys, number of released keys).
+    """
+    import json
+
+    path = os.path.join(root, LIVE_SET)
+    try:
+        with open(path, "rb") as handle:
+            table = tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        return [f"cannot read the live set {LIVE_SET}: {exc}"], 0, 0
+    failures = []
+    live = table.get("live")
+    if not isinstance(live, dict) or not live:
+        return [f"{LIVE_SET}: [live] must be a nonempty table of key = reason"], 0, 0
+    for key, reason in live.items():
+        if not isinstance(reason, str) or not reason.strip():
+            failures.append(f"{LIVE_SET}: live key {key} has no reason")
+    for key in sorted(set(contracts) - set(live)):
+        failures.append(
+            f"CONTRACTS has {key}, which {LIVE_SET} does not list as live — "
+            f"list it under [live] or release it"
+        )
+    for key in sorted(set(live) - set(contracts)):
+        failures.append(f"{LIVE_SET} lists {key} as live, but CONTRACTS has no such key")
+    released = table.get("released", [])
+    if not isinstance(released, list):
+        return failures + [f"{LIVE_SET}: [[released]] must be an array of tables"], len(live), 0
+    released_keys = {}
+    for entry in released:
+        if not isinstance(entry, dict):
+            failures.append(f"{LIVE_SET}: a [[released]] entry is not a table")
+            continue
+        missing = [f for f in ("key", "tag", "commit", "manifest")
+                   if not isinstance(entry.get(f), str) or not entry.get(f)]
+        if missing:
+            failures.append(f"{LIVE_SET}: [[released]] entry lacks {', '.join(missing)}")
+            continue
+        key = entry["key"]
+        if key in released_keys:
+            failures.append(f"{LIVE_SET}: {key} is released twice")
+        released_keys[key] = entry
+        if key in live:
+            failures.append(f"{LIVE_SET}: {key} is both live and released")
+        if key in contracts:
+            failures.append(f"released key {key} ({entry['tag']}) is still in CONTRACTS")
+        for mod, families in sorted(compositions.items()):
+            if key in families:
+                failures.append(
+                    f"{mod} (composition) declares released family {key} ({entry['tag']})"
+                )
+        manifest_path = os.path.join(root, entry["manifest"])
+        try:
+            with open(manifest_path, encoding="utf-8") as handle:
+                manifest = json.load(handle)
+        except (OSError, ValueError) as exc:
+            failures.append(f"{key}: cannot read release manifest {entry['manifest']}: {exc}")
+            continue
+        modules = manifest.get("modules") if isinstance(manifest, dict) else None
+        if not isinstance(modules, list) or not modules:
+            failures.append(f"{key}: release manifest {entry['manifest']} lists no modules")
+            continue
+        for mod in sorted(set(modules) & set(found)):
+            if mod not in owner:
+                failures.append(
+                    f"{mod} belongs to released key {key} ({entry['tag']}) — "
+                    f"restore the family or remove the module"
+                )
+    return failures, len(live), len(released_keys)
+
+
+def load_root_generator():
+    """scripts/generate-root.py, loaded beside this script."""
+    import importlib.util
+
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generate-root.py")
+    spec = importlib.util.spec_from_file_location("root_generator", path)
+    if spec is None or spec.loader is None:
+        raise SystemExit(f"REGRESSION — layering: cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def main(argv):
     root = None
     args = list(argv[1:])
@@ -2359,6 +2453,16 @@ def main(argv):
     inventory = load_inventory_generator()
     failures.extend(inventory.check(root, sys.modules[__name__], owner))
 
+    # Checks 8 and 9: the live set (scripts/live-set.toml) agrees with
+    # CONTRACTS, and no released family's module is back on disk.
+    live_failures, n_live, n_released = live_set_failures(
+        root, owner, found, CONTRACTS, COMPOSITION
+    )
+    failures.extend(live_failures)
+
+    # Check 10: Blanc.lean matches its generator (scripts/generate-root.py).
+    failures.extend(load_root_generator().check(root, sys.modules[__name__], owner))
+
     for line in failures:
         print(f"LAYERING — {line}")
     n_checked = sum(1 for m in found if owner.get(m) not in (None, "root"))
@@ -2378,7 +2482,9 @@ def main(argv):
         f"{n_citations} need-first registry citation(s), none stale; "
         f"{n_shared_cited}/{n_shared} shared module(s) cited by the need-first "
         f"registry, {len(DISCOVERY_EXEMPT)} exempt with a stated reason; "
-        f"{INVENTORY_DOC} matches its generator"
+        f"{INVENTORY_DOC} matches its generator; "
+        f"live set: {n_live} key(s) live, {n_released} released; "
+        f"Blanc.lean matches its generator"
     )
     return 0
 

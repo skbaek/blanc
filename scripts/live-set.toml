@@ -1,0 +1,39 @@
+# Blanc's live set: the contract families that stay on main.
+#
+# A family is live when it is being worked on or a live family's goal needs it.
+# A finished family leaves main as a release: an annotated tag on a commit
+# where the full catalogue is green, plus a manifest under scripts/releases/
+# that records its modules, claim pins and counts. Restoring it means bringing
+# it back from that tag.
+#
+# scripts/check-layering.py reads this file:
+#   - CONTRACTS must have exactly the [live] keys;
+#   - a released key may not appear in CONTRACTS or COMPOSITION;
+#   - a module on disk that a release manifest lists, and that nothing live
+#     classifies, fails as "belongs to released key K".
+# scripts/generate-root.py writes Blanc.lean from the classification of the
+# live set.
+
+[live]
+# Each key with the reason it is live, in the order of CONTRACTS.
+withdrawal-request = "EIP-7002; its kit is reused by EIP-8282 and EIP-7251"
+curve-3crv = "Curve 3pool flagship (member of the 3pool compositions)"
+curve-3pool = "Curve 3pool flagship"
+vyper-nonreentrant-deployed = "Vyper non-reentrant pair"
+usdc = "USDC (member of the 3pool compositions)"
+dai = "DAI (member of the 3pool compositions)"
+usdt = "USDT (member of the 3pool compositions)"
+builder-request = "EIP-8282 builder request contracts"
+
+# One table per release, written by the release operation:
+# [[released]]
+# key = "<family>"
+# tag = "release/<family>-<date>"
+# commit = "<full sha of the tagged commit>"
+# manifest = "scripts/releases/<family>-<date>.json"
+
+# Archives cut before the whitelist existed. They record no keys, so check (b)
+# does not apply to them.
+[[archive]]
+tag = "corpus-v1-20261105"
+note = "pre-whitelist mothball: WETH9, Beacon deposit, Lido, Uniswap and Blanc-native programmes"

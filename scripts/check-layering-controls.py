@@ -12,6 +12,7 @@ on a minimal temporary source tree, without Lean or a green production corpus.
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import re
 import shutil
@@ -138,7 +139,17 @@ def fixture() -> tempfile.TemporaryDirectory[str]:
                  target / "docs" / "MODULE_INVENTORY.md")
     shutil.copy2(ROOT / "scripts" / "proof-recipes.toml",
                  target / "scripts" / "proof-recipes.toml")
+    # Checks 8-10 read the live set under --root; check 10 regenerates the root.
+    shutil.copy2(ROOT / "scripts" / "live-set.toml", target / "scripts" / "live-set.toml")
     return raw
+
+
+def load_root_generator():
+    spec = importlib.util.spec_from_file_location(
+        "root_generator_controls", ROOT / "scripts" / "generate-root.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def must_pass(root: Path, label: str) -> None:
@@ -224,6 +235,10 @@ def gate_patched(root: Path, extra_composition: list[str]) -> tuple[int, str]:
     }}
     buffer = io.StringIO()
     try:
+        # A newly classified probe belongs in the generated root: regenerate it,
+        # as an author would, so the edge under test is the only difference.
+        text, _ = load_root_generator().render(str(root), layering)
+        (root / "Blanc.lean").write_text(text, encoding="utf-8")
         with contextlib.redirect_stdout(buffer):
             code = layering.main(["check-layering.py", "--root", str(root)])
     finally:
@@ -651,6 +666,60 @@ def inventory_controls() -> None:
         must_pass(Path(raw), "inventory restoration")
 
 
+def live_set_controls() -> None:
+    """Checks 8-10 bite: the live set agrees with CONTRACTS, a released
+    family's module can't come back unclassified, and Blanc.lean is generated.
+
+    A released family whose modules are gone is the positive witness. Each
+    mutation runs on a fresh copy, so a fresh fixture is the restoration.
+    """
+    released = (
+        '\n[[released]]\nkey = "{key}"\ntag = "release/{key}-fixture"\n'
+        'commit = "0000000000000000000000000000000000000000"\n'
+        'manifest = "scripts/releases/{key}-fixture.json"\n'
+    )
+
+    def release(root: Path, key: str, modules: list[str]) -> None:
+        live_set = root / "scripts" / "live-set.toml"
+        live_set.write_text(live_set.read_text(encoding="utf-8") + released.format(key=key),
+                            encoding="utf-8")
+        (root / "scripts" / "releases").mkdir(exist_ok=True)
+        (root / "scripts" / "releases" / f"{key}-fixture.json").write_text(
+            json.dumps({"key": key, "modules": modules}), encoding="utf-8")
+
+    with fixture() as raw:
+        root = Path(raw)
+        release(root, "retired-fixture", ["LayeringReleased"])
+        must_pass(root, "released family with its modules gone")
+    with fixture() as raw:
+        root = Path(raw)
+        release(root, "retired-fixture", ["LayeringReleased"])
+        (root / "Blanc" / "LayeringReleased.lean").write_text("def x := 1\n", encoding="utf-8")
+        must_fail(root, "released-module-back mutation",
+                  "LayeringReleased belongs to released key retired-fixture")
+    with fixture() as raw:
+        root = Path(raw)
+        live_set = root / "scripts" / "live-set.toml"
+        text = live_set.read_text(encoding="utf-8")
+        line = next(l for l in text.splitlines(keepends=True) if l.startswith("dai = "))
+        live_set.write_text(text.replace(line, "", 1), encoding="utf-8")
+        must_fail(root, "live-key-missing mutation",
+                  "CONTRACTS has dai, which scripts/live-set.toml does not list as live")
+    with fixture() as raw:
+        root = Path(raw)
+        release(root, "dai", ["Lift.Dai.Prog"])
+        must_fail(root, "released-key-still-in-CONTRACTS mutation",
+                  "released key dai (release/dai-fixture) is still in CONTRACTS")
+    with fixture() as raw:
+        root = Path(raw)
+        blanc = root / "Blanc.lean"
+        lines = blanc.read_text(encoding="utf-8").splitlines(keepends=True)
+        blanc.write_text("".join(lines[:5] + lines[6:]), encoding="utf-8")
+        must_fail(root, "stale-root mutation", "Blanc.lean differs from its generator")
+    with fixture() as raw:
+        must_pass(Path(raw), "live-set restoration")
+
+
 def architecture_controls() -> None:
     """Exercise the three real-tree architecture failures without Lean grammar checks."""
     contracts = production_contract_fixtures()
@@ -766,6 +835,7 @@ def main() -> int:
     discovery_controls()
     shared_coverage_controls()
     inventory_controls()
+    live_set_controls()
 
     print(
         "OK — layering controls: 11 accepted import forms pair imports_of with Lean; "
@@ -777,7 +847,10 @@ def main() -> int:
         "recipe-free shared facility losing its only registry entry, an "
         "exemption going stale by being cited, a citation only in an appended "
         "tail or a fenced code block, and the no-shared-citation escape; "
-        "2 inventory controls cover a hand-edited and a stale generated inventory"
+        "2 inventory controls cover a hand-edited and a stale generated inventory; "
+        "4 live-set controls cover a live key missing from the live set, a released "
+        "key still in CONTRACTS, a released family's module back on disk and a "
+        "stale generated root"
     )
     return 0
 
