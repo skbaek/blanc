@@ -524,7 +524,14 @@ WRITERS = (
     (("scripts/check-proof-module-size.sh", "--write-baseline"), ("scripts/proof-module-size-baseline.json",)),
     (("scripts/check-gates.sh", "--inventory"), ("docs/GATE_INPUTS.md",)),
     (("python3", RECIPE_GENERATOR, "--write"), RECIPE_OUTPUTS),
+    # Restricted: after it runs, the manifest may differ only in the frozenAssuranceFiles
+    # hashes of files the run itself edited (`frozen_retake_problems`).
+    (("python3", "scripts/check-transient-settlement.py", "--write-manifest"),
+     ("scripts/transient-settlement-owner-manifest.json",)),
 )
+TRANSIENT_MANIFEST = "scripts/transient-settlement-owner-manifest.json"
+# Writers whose command line takes --root (the others run from the tree they sit in).
+ROOT_WRITERS = ("scripts/generate-root.py", "scripts/generate-module-inventory.py", RECIPE_GENERATOR)
 WRITER_JSON = {
     "scripts/proof-debt-baseline.json": "scripts/check-proof-debt.sh --write-baseline",
     "scripts/proof-duplication-baseline.json": "scripts/check-proof-duplication.sh --write-baseline",
@@ -737,6 +744,7 @@ class Departure:
         self.text_rows()
         self.claimcheck()
         self.proof_recipes()
+        self.frozen_hashes()
         self.writer_rows()
         self.record_hand_rows()
 
@@ -1136,6 +1144,24 @@ class Departure:
                                             f"choose a live example or retire the recipe")
                     break
 
+    def frozen_hashes(self):
+        """The transient-settlement manifest pins sha256 hashes of predecessor assurance
+        files (frozenAssuranceFiles). Every such file this release edits gets its hash
+        retaken by the registered writer; the writer's output must be exactly the manifest
+        with those hashes moved (`expected_writes`). Editing a file whose other manifest
+        fields the writer derives (common module, moved donors, Jaune pin files), or
+        deleting a frozen file, is a hand decision."""
+        if not os.path.exists(os.path.join(self.root, TRANSIENT_MANIFEST)):
+            return
+        changed = {rel: text.encode("utf-8") for rel, text in self.edits.items()}
+        changed.update({rel: None for rel in self.deletes})
+        text, touched, problems = frozen_retake_text(self.current(TRANSIENT_MANIFEST), changed)
+        self.outstanding += [f"{TRANSIENT_MANIFEST}: {p}" for p in problems]
+        if touched and not problems:
+            self.expected_writes[TRANSIENT_MANIFEST] = text
+            self.notes.append((TRANSIENT_MANIFEST, f"frozen hashes retaken by its writer for "
+                               f"{', '.join(touched)}"))
+
     def writer_rows(self):
         """Rows the registered writers will remove: every line naming a departing
         module, verbatim from HEAD."""
@@ -1494,6 +1520,47 @@ def family_only_files(texts, candidates, gone, departing_token, live_family_toke
     return out
 
 
+def frozen_retake_text(manifest_text, changed):
+    """-> (manifest text with the frozenAssuranceFiles hashes of the `changed` files
+    ({path: new bytes, or None when deleted}) retaken, in the writer's own rendering;
+    the frozen files touched; problems)."""
+    data = json.loads(manifest_text)
+    frozen = data.get("frozenAssuranceFiles", {})
+    derived = ({data.get("commonModule")} | {d[0] for d in data.get("movedDonors", [])}
+               | set(data.get("jaunePinFiles", {})))
+    problems, touched = [], []
+    for rel, new in sorted(changed.items()):
+        if rel in derived:
+            problems.append(f"{rel} feeds a derived manifest field (common module, moved donor or "
+                            f"Jaune pin); edit it by hand")
+        if rel in frozen:
+            if new is None:
+                problems.append(f"{rel} is frozen-assured and would be deleted")
+            else:
+                touched.append(rel)
+                frozen[rel] = sha256_bytes(new)
+    return json.dumps(data, indent=2, sort_keys=True) + "\n", touched, problems
+
+
+def frozen_retake_problems(before_text, after_text, edited):
+    """The restriction on the frozen-hash writer: between `before_text` and `after_text`
+    the manifest may differ only in frozenAssuranceFiles entries of `edited` files."""
+    if not before_text:
+        return []
+    before, after = json.loads(before_text), json.loads(after_text)
+    problems = []
+    for key in sorted(set(before) | set(after)):
+        if key == "frozenAssuranceFiles":
+            old, new = before.get(key, {}), after.get(key, {})
+            if set(old) != set(new):
+                problems.append("the frozen file list changed")
+            problems += [f"the frozen hash of {rel} moved, but this run did not edit it"
+                         for rel in sorted(old) if old.get(rel) != new.get(rel) and rel not in edited]
+        elif before.get(key) != after.get(key):
+            problems.append(f"the writer changed {key}")
+    return problems
+
+
 def edit_build_lines(text, dotted):
     """-> (text, problems [(line number, why)]): every `lake build` line loses the
     departing modules (`dotted`) it names; a line that would name no module is left
@@ -1815,7 +1882,8 @@ def edit_claimcheck(text, leaf_audit, population, departing_names, departing_dot
 # --- applying a departure ---------------------------------------------------------
 
 def run_writer(root, argv):
-    done = subprocess.run(list(argv) + (["--root", root] if argv[0] == "python3" else []),
+    done = subprocess.run(list(argv) + (["--root", root] if argv[0] == "python3"
+                                        and argv[1] in ROOT_WRITERS else []),
                           cwd=root, capture_output=True, text=True)
     tail = (done.stdout + done.stderr).strip().splitlines()
     return done.returncode, tail[-1] if tail else ""
@@ -2030,6 +2098,10 @@ def cmd_release(root, keys, date, log, census_path, commit_arg, do_tag, do_depar
         print(f"ran {' '.join(argv)}: exit {code}; {last}")
         if code:
             failures.append(f"{' '.join(argv)} exited {code}")
+    edited = set(dep.edits) | set(dep.deletes)
+    failures += [f"{TRANSIENT_MANIFEST}: {p}" for p in
+                 frozen_retake_problems(git(root, "show", f"{head}:{TRANSIENT_MANIFEST}",
+                                            check=False), read(root, TRANSIENT_MANIFEST), edited)]
     for rel, text in sorted(dep.expected_writes.items()):
         if read(root, rel) != text:
             failures.append(f"{rel}: its writer's output is not the registry rendering without the "
@@ -2197,7 +2269,7 @@ def cmd_restore(root, tag, build_label, census_path):
 
 
 FAMILY_CONTROLS = 12
-EDIT_CONTROLS = 9
+EDIT_CONTROLS = 12
 
 
 def edit_controls():
@@ -2245,6 +2317,23 @@ def edit_controls():
             and 'expect_recipe_trigger "t"' in new and "-- EXPECT: kept" in new)
     control("another mention of a departing recipe id is reported",
             strip_recipe_harness(harness + '  other "gone"\n', {"gone"})[1] != [])
+    manifest = json.dumps({"commonModule": "Blanc/Common.lean", "movedDonors": [["Blanc/Donor.lean", "d", "k"]],
+                           "jaunePinFiles": {"lakefile.lean": "aa"}, "signatureHashes": {"x": "11"},
+                           "frozenAssuranceFiles": {"scripts/a.py": "00", "scripts/b.py": "00"}},
+                          indent=2, sort_keys=True) + "\n"
+    retaken, touched, problems = frozen_retake_text(manifest, {"scripts/a.py": b"new", "scripts/c.py": b"x"})
+    control("an edited frozen-assured file's hash is retaken, nothing else moves",
+            not problems and touched == ["scripts/a.py"]
+            and json.loads(retaken)["frozenAssuranceFiles"] == {"scripts/a.py": sha256_bytes(b"new"),
+                                                                 "scripts/b.py": "00"}
+            and not frozen_retake_problems(manifest, retaken, {"scripts/a.py"}))
+    other = json.loads(retaken)
+    other["frozenAssuranceFiles"]["scripts/b.py"] = "ff"
+    other["signatureHashes"]["x"] = "22"
+    control("the writer moving a hash of an unedited file or another field fails",
+            len(frozen_retake_problems(manifest, json.dumps(other), {"scripts/a.py"})) == 2)
+    control("editing a derived-field source or deleting a frozen file is reported",
+            len(frozen_retake_text(manifest, {"Blanc/Common.lean": b"", "scripts/b.py": None})[2]) == 2)
     script = "import Blanc\nimport Blanc.Fam.A\nimport Blanc.Live.C\n#check x\n"
     control("a script's departing imports go, live ones stay",
             drop_departing_imports(script, dotted) == "import Blanc\nimport Blanc.Live.C\n#check x\n")

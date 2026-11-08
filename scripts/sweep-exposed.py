@@ -823,6 +823,14 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
     with open(os.path.join(root, layering_rel), "w", encoding="utf-8", newline="") as handle:
         handle.write(new_layering)
     failures = []
+    # The frozen-hash writer (release.py's restricted writer) may move only the hashes of
+    # files this sweep wrote or removed.
+    swept_files = {module_path(m) for m in texts} | set(import_edits) | {layering_rel}
+    try:
+        with open(os.path.join(root, release.TRANSIENT_MANIFEST), encoding="utf-8") as handle:
+            frozen_before = handle.read()
+    except OSError:
+        frozen_before = ""
     removed_tokens = set(emptied) | {module_path(m) for m in emptied} | short
     swept_tokens = set(texts) | {module_path(m) for m in texts} | {m.removeprefix("Blanc.") for m in texts}
     for argv, owned in release.WRITERS:
@@ -851,6 +859,10 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
                         for t in removed_tokens | swept_tokens):
                     failures.append(f"{rel}: writer removed a line naming no removed module: {line[:100]}")
                     break
+    if frozen_before:
+        with open(os.path.join(root, release.TRANSIENT_MANIFEST), encoding="utf-8") as handle:
+            failures += [f"{release.TRANSIENT_MANIFEST}: {p}" for p in
+                         release.frozen_retake_problems(frozen_before, handle.read(), swept_files)]
     for rel, name, old, new in release.sync_doc_counts(root):
         print(f"re-stated {name} in {rel}: {old} -> {new}")
     record["writers"] = [" ".join(argv) for argv, _ in release.WRITERS]
