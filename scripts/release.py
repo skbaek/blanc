@@ -49,6 +49,20 @@ manifest records each departing script with its reason (`departing_scripts`)
 besides its sha256 under `files`, and the departure record lists it as deleted,
 so restore brings it back from the tag.
 
+Exact edits of live scripts a departure makes (recorded as rows, replayed by
+restore): a Lean script importing departing and live modules loses its departing
+imports when its code names no departing declaration (AxiomCheck.lean's audit
+roots); a `lake build` line in a tracked shell script or workflow loses the
+departing modules it names (`edit_build_lines`); the PY_ROW_TABLES rows naming
+only departing modules leave (`edit_py_row_table`); a recipe whose canonical
+example departs leaves scripts/proof-recipes.toml whole together with its
+suggestion-harness markers (`split_departing_recipes`, `strip_recipe_harness`),
+the generated recipe outputs being rewritten by the registered generator and
+checked against the registry rendering without those recipes; the family's
+claim-map checker part scripts/claim-map-families/<key>.py leaves whole with its
+claim-map file; scripts/keccak-consumers.json rows are pruned with the JSON
+row files. Anything these rules cannot decide exactly is OUTSTANDING.
+
 `--tag` creates the annotated tags `release/<key>-<date>` at HEAD, the
 manifest as message. Locally only: the master pushes and verifies.
 
@@ -116,6 +130,8 @@ ROW_FILES = (
     ("scripts/lift/certificates.json", "scripts/lift/lift.py --registry ... --write"),
     ("scripts/gate-registry.json", "hand-maintained (check-gates.sh --audit)"),
     ("scripts/proof-recipes.toml", "hand-maintained (docs/PROOF_RECIPES.md via generate-proof-recipes.py)"),
+    ("scripts/keccak-consumers.json", "hand-maintained"),
+    ("scripts/check-execution-occurrence.py", "hand-maintained (EXPECTED_REQUIRED_CONSUMERS)"),
     ("docs/COMMON_API.md", "hand-maintained"),
     ("docs/DEPLOYED_BYTECODE_CLAIM_MAP.md", "hand-maintained (claim-map rows are the user's)"),
     ("scripts/check-deployed-claim-map.py", "hand-maintained (REQUIRED_HEADLINES and section list)"),
@@ -486,14 +502,28 @@ JSON_HAND = (
     CERTIFICATES,
     "scripts/gate-registry.json",
     "scripts/leaf-review.json",
+    "scripts/keccak-consumers.json",
 )
 TEXT_HAND = ("scripts/trust-surface-allow.txt",)
+PROOF_RECIPES = "scripts/proof-recipes.toml"
+RECIPE_HARNESS = "scripts/ProofRecipeSuggestions.lean"
+RECIPE_GENERATOR = "scripts/generate-proof-recipes.py"
+RECIPE_OUTPUTS = ("docs/PROOF_RECIPES.md", "Blanc/ProofRecipesGenerated.lean")
+CLAIM_MAP_CHECKS = "scripts/claim-map-families"
+# Python list literals of per-module rows in live scripts, pruned element by element (located
+# through the AST, re-evaluated and compared): (file, variable).
+PY_ROW_TABLES = (
+    ("scripts/check-execution-occurrence.py", "EXPECTED_REQUIRED_CONSUMERS"),
+)
+# Files whose `lake build` command lines name modules explicitly.
+BUILD_LIST_SUFFIXES = (".sh", ".yml", ".yaml")
 # Writers that run without Lean, in order, with the files they own.
 WRITERS = (
     (("python3", "scripts/generate-root.py", "--write"), ("Blanc.lean",)),
     (("python3", "scripts/generate-module-inventory.py", "--write"), ("docs/MODULE_INVENTORY.md",)),
     (("scripts/check-proof-module-size.sh", "--write-baseline"), ("scripts/proof-module-size-baseline.json",)),
     (("scripts/check-gates.sh", "--inventory"), ("docs/GATE_INPUTS.md",)),
+    (("python3", RECIPE_GENERATOR, "--write"), RECIPE_OUTPUTS),
 )
 WRITER_JSON = {
     "scripts/proof-debt-baseline.json": "scripts/check-proof-debt.sh --write-baseline",
@@ -647,6 +677,8 @@ class Departure:
         self.outstanding = []      # hand decisions; --depart refuses while any remain
         self.extra = {k: {} for k in keys}
         self.family_live_users = {}
+        self.expected_writes = {}      # writer-owned path -> the exact text its writer must write
+        self.removed_recipes = []
         for path, mod in self.paths.items():
             self.deletes[path] = self.owner_key[mod]
 
@@ -693,6 +725,9 @@ class Departure:
     # computation ----------------------------------------------------------
     def compute(self):
         self.departing_scripts()
+        self.departing_recipes()
+        self.build_lists()
+        self.py_row_tables()
         self.family_files()
         self.claim_map()
         self.shared_docs()
@@ -718,14 +753,80 @@ class Departure:
                 stems.add(rel[:-len(".lean")])
                 self.deletes[rel] = self.key_for_text(" ".join(imports))
             elif rel != CLAIMCHECK and any(i in self.dotted for i in imports):
-                gone = [i for i in imports if i in self.dotted]
-                self.outstanding.append(f"{rel}: imports departing {gone[0]}"
-                                        f"{' and more' if len(gone) > 1 else ''} and live modules; "
-                                        f"edit its imports by hand")
+                self.mixed_imports(rel)
         for rel in tracked:
             stem = os.path.splitext(rel)[0]
             if stem in stems and rel not in self.deletes:
                 self.deletes[rel] = self.deletes[stem + ".lean"]
+
+    def mixed_imports(self, rel):
+        """A Lean script importing departing and live modules loses its departing imports
+        when its code names no departing declaration (an import kept only to put the
+        module in scope, as AxiomCheck.lean's audit roots); otherwise a hand decision."""
+        text = self.current(rel)
+        named = set().union(*lean_mentions(text, self.ctx["leaf_audit"], self.population).values()) \
+            if text else set()
+        gone = sorted(named & self.names)
+        if gone:
+            self.outstanding.append(f"{rel}: imports departing modules and uses departing "
+                                    f"{gone[0]}; edit it by hand")
+            return
+        self.edit(rel, drop_departing_imports(text, set(self.dotted)), "imports of departing "
+                  "modules removed (no departing declaration named)")
+
+    def build_lists(self):
+        """A `lake build` command line in a tracked shell script or workflow loses the
+        departing modules it names; a line left naming no module is a hand decision."""
+        for rel in git(self.root, "ls-files").splitlines():
+            if not rel.endswith(BUILD_LIST_SUFFIXES):
+                continue
+            try:
+                text = self.current(rel)
+            except (OSError, UnicodeDecodeError):
+                continue
+            if "lake build" not in text:
+                continue
+            new, problems = edit_build_lines(text, set(self.dotted))
+            self.outstanding += [f"{rel}:{n}: {p}" for n, p in problems]
+            if new != text:
+                self.edit(rel, new, "departing modules removed from `lake build` lines")
+
+    def py_row_tables(self):
+        for rel, variable in PY_ROW_TABLES:
+            if not os.path.exists(os.path.join(self.root, rel)):
+                continue
+            new, removed, problems = edit_py_row_table(
+                self.current(rel), variable, self.departing_str, self.blancish)
+            self.outstanding += [f"{rel}: {p}" for p in problems]
+            if removed and not problems:
+                self.edit(rel, new, f"{len(removed)} row(s) of {variable} removed (ast-located, "
+                          f"re-evaluated and compared)")
+
+    def departing_recipes(self):
+        """A recipe whose canonical example departs leaves scripts/proof-recipes.toml whole;
+        its suggestion-harness markers (`-- EXPECT: id` and the `expect_recipe_offered` /
+        `expect_no_recipe_offered` lines naming it) go with it. Its trigger arm and the
+        harness's trigger-only cases stay: they are shared code. The generated outputs
+        are rewritten by the registered generator, and the rows it removes are computed
+        here exactly from the registry (`expected_writes`)."""
+        self.expected_writes = {}
+        kept, removed = split_departing_recipes(self.current(PROOF_RECIPES), set(self.paths))
+        self.removed_recipes = [rid for rid, _ in removed]
+        if not removed:
+            return
+        for rid, example in removed:
+            self.extra[self.key_for_text(example)].setdefault("proof_recipes", []).append(rid)
+        self.edit(PROOF_RECIPES, kept, f"{len(removed)} recipe(s) whose canonical example "
+                  f"departs removed: {', '.join(self.removed_recipes)}")
+        new, problems = strip_recipe_harness(self.current(RECIPE_HARNESS), set(self.removed_recipes))
+        self.outstanding += [f"{RECIPE_HARNESS}: {p}" for p in problems]
+        self.edit(RECIPE_HARNESS, new, f"suggestion-harness markers of {len(removed)} departing "
+                  f"recipe(s) removed")
+        try:
+            self.expected_writes = recipe_outputs_without(self.root, set(removed))
+        except Exception as exc:  # the generator refusing the registry, chiefly
+            self.outstanding.append(f"{RECIPE_GENERATOR}: cannot render the outputs without the "
+                                    f"departing recipes: {exc}")
 
     def family_files(self):
         """Tracked non-Lean files under scripts/ that only the departing families use
@@ -735,14 +836,15 @@ class Departure:
         texts = {}
         for rel in tracked:
             try:
-                with open(os.path.join(self.root, rel), encoding="utf-8") as handle:
-                    texts[rel] = handle.read()
+                texts[rel] = self.current(rel)
             except (OSError, UnicodeDecodeError):
                 continue
         candidates = {rel for rel in tracked if rel.startswith("scripts/")
                       and not rel.endswith(".lean") and rel not in self.deletes
                       and not is_protected(rel)}
-        gone = set(self.deletes) | {f"{CLAIM_MAP_DIR}/{k}.md" for k in self.keys}
+        gone = set(self.deletes) | {f"{CLAIM_MAP_DIR}/{k}.md" for k in self.keys} | {
+            f"{CLAIM_MAP_CHECKS}/{k}.py" for k in self.keys}
+        candidates -= gone
         owner = self.layering.classify()
 
         def departing_token(token):
@@ -772,18 +874,43 @@ class Departure:
                                    paths=tracked,
                                    ignored_users={o for _, owned in WRITERS for o in owned})
         self.family_live_users = result["live_users"]
-        # Departing files first (named-only ones take their users' key), so a file
-        # takes the key of the departing files that name it.
-        order = sorted(result["depart"], key=lambda r: (result["depart"][r]["reason"]
-                                                         == "named only by departing files", r))
-        for rel in order:
-            why = result["depart"][rel]
-            keys = set(self.keys_of_text(texts.get(rel, "")))
-            if not keys:
-                keys = {self.deletes[u] for u in why["users"] if u in self.deletes}
-            key = next((k for k in self.keys if k in keys), self.keys[0])
+        # Keys: a file's own Blanc tokens; else a departing certificate it is an input of;
+        # else, round by round, the keys of the departing files it names, then of those
+        # naming it; the first release key when nothing decides.
+        cert_keys = {}
+        for entry in json_rows.get(CERTIFICATES, {}).get("certificates", []):
+            if isinstance(entry, dict) and any(self.departing_str(v) for v in json_strings(entry)):
+                key = self.key_for_text(json.dumps(entry))
+                for value in json_strings(entry):
+                    if value.startswith("scripts/lift/inputs/"):
+                        cert_keys.setdefault(value, key)
+        refs = reference_index(tracked, set(result["depart"]) | set(self.deletes))
+        assigned = {}
+        for rel in result["depart"]:
+            keys = self.keys_of_text(texts.get(rel, ""))
+            if keys:
+                assigned[rel] = next(k for k in self.keys if k in keys)
+            elif rel in cert_keys:
+                assigned[rel] = cert_keys[rel]
+        named = {rel: refs(texts.get(rel, "")) - {rel} for rel in result["depart"]}
+        while True:
+            known = {**{f"{CLAIM_MAP_DIR}/{k}.md": k for k in self.keys},
+                     **{f"{CLAIM_MAP_CHECKS}/{k}.py": k for k in self.keys},
+                     **self.deletes, **assigned}
+            progress = False
+            for rel in sorted(set(result["depart"]) - set(assigned)):
+                keys = {known[n] for n in named[rel] if n in known}
+                if not keys:
+                    keys = {known[u] for u in result["depart"][rel]["users"] if u in known}
+                if keys:
+                    assigned[rel] = next(k for k in self.keys if k in keys)
+                    progress = True
+            if not progress:
+                break
+        for rel in sorted(result["depart"]):
+            key = assigned.get(rel, self.keys[0])
             self.deletes[rel] = key
-            self.extra[key].setdefault("departing_scripts", {})[rel] = why["reason"]
+            self.extra[key].setdefault("departing_scripts", {})[rel] = result["depart"][rel]["reason"]
         for rel, entry in sorted(result["blocked"].items()):
             why = (f"live {', '.join(entry['users'][:3])} use(s) it" if entry["users"] else
                    "it is not family-only (it calls departing files but nothing departing names it)")
@@ -955,6 +1082,12 @@ class Departure:
             self.deletes[rel] = key
             self.extra[key]["claim_map_file"] = {"path": rel, "sha256": sha256_file(
                 os.path.join(self.root, rel))}
+            part = f"{CLAIM_MAP_CHECKS}/{key}.py"
+            if os.path.isdir(os.path.join(self.root, CLAIM_MAP_CHECKS)):
+                if not os.path.exists(os.path.join(self.root, part)):
+                    self.outstanding.append(f"{part}: live key {key} has no claim-map checker part")
+                else:
+                    self.deletes[part] = key
         gone = {f"{k}.md" for k in self.keys}
         text = read(self.root, CLAIM_MAP)
         kept = [l for l in text.splitlines(keepends=True)
@@ -995,8 +1128,8 @@ class Departure:
                                             f"module; move or reword the passage first")
 
     def proof_recipes(self):
-        rel = "scripts/proof-recipes.toml"
-        for number, line in enumerate(read(self.root, rel).splitlines(), 1):
+        rel = PROOF_RECIPES
+        for number, line in enumerate(self.current(rel).splitlines(), 1):
             for token in re.findall(r"Blanc/[A-Za-z0-9_/']+\.lean|Blanc\.[A-Za-z0-9_.'!?]+", line):
                 if self.departing_str(token):
                     self.outstanding.append(f"{rel}:{number}: a recipe names departing {token}; "
@@ -1008,6 +1141,15 @@ class Departure:
         module, verbatim from HEAD."""
         for _, owned in WRITERS:
             for rel in owned:
+                if rel in self.expected_writes:
+                    old = read(self.root, rel).splitlines()
+                    matcher = difflib.SequenceMatcher(None, old, self.expected_writes[rel].splitlines(),
+                                                      autojunk=False)
+                    rows = [[i + 1, old[i]] for tag, i1, i2, _, _ in matcher.get_opcodes()
+                            if tag in ("delete", "replace") for i in range(i1, i2)]
+                    if rows:
+                        self.rows[rel] = rows
+                    continue
                 rows = []
                 for number, line in enumerate(read(self.root, rel).splitlines(), 1):
                     tokens = BLANC_TOKEN.findall(line) + re.findall(r"scripts/[A-Za-z0-9_./-]+", line)
@@ -1172,6 +1314,7 @@ def json_prune(data, departing, blancish, where="$"):
 
 
 PATH_TOKEN = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]*")
+IMPORT_LINE = re.compile(r"(?m)^[ \t]*(?:from[ \t]+([A-Za-z_][A-Za-z0-9_]*)|import[ \t]+([^\n#]+))")
 
 
 def is_protected(rel):
@@ -1188,7 +1331,7 @@ def is_protected(rel):
 def reference_index(paths, targets):
     """-> refs(text) -> the targets the text names. A target is named by any
     suffix of its path (`scripts/a/b.py`, `a/b.py`, `b.py`) that no other tracked
-    path shares, or, for a Python file, by its module stem as an import head."""
+    path shares, or, for a Python file, by its module stem in an `import`/`from` statement."""
     owners = {}
     stems = {}
     for rel in paths:
@@ -1212,8 +1355,12 @@ def reference_index(paths, targets):
                     if hit:
                         found.add(hit)
                         break
-            if "/" not in token:
-                hit = stems.get(token.split(".", 1)[0])
+        for match in IMPORT_LINE.finditer(text):
+            heads = [match.group(1)] if match.group(1) else [
+                part.strip().split()[0].split(".")[0] for part in match.group(2).split(",")
+                if part.strip()]
+            for head in heads:
+                hit = stems.get(head)
                 if hit:
                     found.add(hit)
         return found
@@ -1234,8 +1381,9 @@ def family_only_files(texts, candidates, gone, departing_token, live_family_toke
     - grounded: it names a departing module or declaration, or a gone file, or
       is named by a gone file or by a JSON row the release removes whole; or a
       grounded departing candidate names it (a lock file or helper only the
-      family uses). Naming a departing candidate does not ground a file: a
-      tool that calls a family script is reported, not deleted;
+      family uses); or every tracked file it names is gone or grounded (a tool
+      of the family). A tool that also names any other file is not grounded by
+      naming a departing one: it is reported, not deleted;
     - unused by live files: every tracked file naming F departs too (gone, or a
       departing candidate: so same-stem siblings and generator/lock pairs leave
       together), except in a JSON row file, where only a reference left after
@@ -1254,6 +1402,10 @@ def family_only_files(texts, candidates, gone, departing_token, live_family_toke
     # Blanc modules are named by their module tokens (`departing_token`), not by
     # path suffixes: `A.lean` in a fixture is not Blanc/Lift/X/Callee/A.lean.
     refs = reference_index(paths, set(candidates) | {g for g in gone if not g.startswith("Blanc/")})
+    # Every tracked non-module file a text names: a candidate naming only departing files
+    # is a tool of the family (grounded), one naming any other file is not.
+    every = reference_index(paths, {p for p in paths if not p.startswith("Blanc/")})
+    all_refs = {rel: every(texts[rel]) - {rel} for rel in candidates if rel in texts}
     blancish = blancish or (lambda s: bool(BLANC_TOKEN.fullmatch(s)))
     names = {}
     for rel, text in texts.items():
@@ -1297,13 +1449,19 @@ def family_only_files(texts, candidates, gone, departing_token, live_family_toke
             for target in targets:
                 all_users.setdefault(target, set()).add(rel)
         grounded = base & depart
-        frontier = list(grounded)
-        while frontier:
-            rel = frontier.pop()
-            near = names.get(rel, set()) & depart
-            for other in near - grounded:
-                grounded.add(other)
-                frontier.append(other)
+        while True:
+            frontier = list(grounded)
+            while frontier:
+                rel = frontier.pop()
+                near = names.get(rel, set()) & depart
+                for other in near - grounded:
+                    grounded.add(other)
+                    frontier.append(other)
+            tools = {rel for rel in depart - grounded
+                     if all_refs.get(rel) and all_refs[rel] <= set(gone) | grounded}
+            if not tools:
+                break
+            grounded |= tools
         live_users = {rel: sorted(u for u in all_users.get(rel, set())
                                   if u not in gone and u not in depart and u != rel
                                   and u not in ignored_users)
@@ -1334,6 +1492,126 @@ def family_only_files(texts, candidates, gone, departing_token, live_family_toke
         if named:
             out["blocked"][rel] = {"names": named, "users": live_users[rel]}
     return out
+
+
+def edit_build_lines(text, dotted):
+    """-> (text, problems [(line number, why)]): every `lake build` line loses the
+    departing modules (`dotted`) it names; a line that would name no module is left
+    as it is and reported."""
+    lines = text.split("\n")
+    problems = []
+    module = r"(?<![A-Za-z0-9_.'])Blanc(?:\.[A-Za-z0-9_']+)+(?![A-Za-z0-9_.'])"
+    for i, line in enumerate(lines):
+        if "lake build" not in line:
+            continue
+        tokens = re.findall(module, line)
+        gone = [t for t in tokens if t in dotted]
+        if not gone:
+            continue
+        if len(gone) == len(tokens):
+            problems.append((i + 1, "a `lake build` line names only departing modules; edit it by hand"))
+            continue
+        for token in gone:
+            line = re.sub(r"[ \t]+" + re.escape(token) + r"(?![A-Za-z0-9_.'])", "", line, count=1)
+        lines[i] = line
+    return "\n".join(lines), problems
+
+
+def split_departing_recipes(text, departing_paths):
+    """-> (registry text without the recipes whose canonical example file departs,
+    [(recipe id, example file)] removed). A block runs from its `[[recipe]]` line to
+    the next one."""
+    keep, removed = [], []
+    for block in re.split(r"(?m)^(?=\[\[recipe\]\]\n)", text):
+        rid = re.search(r'(?m)^id = "([^"]+)"', block)
+        example = re.search(r'(?m)^canonical_example = "([^":]+):', block)
+        if block.startswith("[[recipe]]") and rid and example and example.group(1) in departing_paths:
+            removed.append((rid.group(1), example.group(1)))
+            continue
+        keep.append(block)
+    return "".join(keep), removed
+
+
+def strip_recipe_harness(text, removed):
+    """-> (harness text, problems): the `-- EXPECT: id` markers and the
+    `expect_recipe_offered`/`expect_no_recipe_offered` lines of the removed recipe
+    ids go; any other mention of a removed id is reported."""
+    kept = []
+    for line in text.split("\n"):
+        marker = re.match(r"^-- EXPECT: (\S+)\s*$", line)
+        offered = re.match(r'^\s*expect_(?:no_)?recipe_offered "([^"]+)"\s*$', line)
+        if (marker and marker.group(1) in removed) or (offered and offered.group(1) in removed):
+            continue
+        kept.append(line)
+    new = "\n".join(kept)
+    problems = [f"still names departing recipe {rid}; edit it by hand" for rid in sorted(removed)
+                if f'"{rid}"' in new or re.search(r"(?m)^-- EXPECT: " + re.escape(rid) + r"\s*$", new)]
+    return new, problems
+
+
+def drop_departing_imports(text, dotted):
+    """The script without its `import` lines of departing modules."""
+    return "\n".join(l for l in text.split("\n")
+                     if not (re.match(r"^import\s+(\S+)\s*$", l)
+                             and re.match(r"^import\s+(\S+)", l).group(1) in dotted))
+
+
+def recipe_outputs_without(root, removed):
+    """-> {output path: text}: scripts/generate-proof-recipes.py's rendering of the
+    registry at `root` without the recipes `removed` (the generator's own renderers)."""
+    import dataclasses
+    from pathlib import Path
+    path = os.path.join(root, RECIPE_GENERATOR)
+    spec = importlib.util.spec_from_file_location("recipe_generator_for_release", path)
+    module = importlib.util.module_from_spec(spec)
+    sys.path.insert(0, os.path.join(root, "scripts"))
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    registry = module.load_and_validate(Path(root))
+    kept = dataclasses.replace(registry, recipes=tuple(r for r in registry.recipes
+                                                       if r.id not in removed))
+    return module.generated_surfaces(kept)
+
+
+def edit_py_row_table(text, variable, departing, blancish):
+    """Remove the elements of the top-level list literal `variable` whose Blanc
+    references (string constants) all depart. Each element must occupy whole lines.
+    -> (new text, removed elements, problems); the result is re-evaluated and must
+    equal the original list minus exactly those elements."""
+    tree = ast.parse(text)
+    lines = text.splitlines(keepends=True)
+    node = next((n for n in tree.body if isinstance(n, ast.Assign) and len(n.targets) == 1
+                 and isinstance(n.targets[0], ast.Name) and n.targets[0].id == variable
+                 and isinstance(n.value, ast.List)), None)
+    if node is None:
+        return text, [], [f"no top-level list literal {variable}"]
+    drop, removed, problems = set(), [], []
+    for element in node.value.elts:
+        strings = [c.value for c in ast.walk(element)
+                   if isinstance(c, ast.Constant) and isinstance(c.value, str)]
+        refs = [v for v in strings if blancish(v)]
+        if not refs or not all(departing(v) for v in refs):
+            if any(departing(v) for v in refs):
+                problems.append(f"{variable} row at line {element.lineno} names departing and live entries")
+            continue
+        first, last = element.lineno, element.end_lineno
+        lead = lines[first - 1][:element.col_offset]
+        tail = lines[last - 1][element.end_col_offset:]
+        if lead.strip() or not re.fullmatch(r"\s*,?\s*(#.*)?\s*", tail):
+            problems.append(f"{variable} row at line {first} shares its line with other code")
+            continue
+        drop.update(range(first, last + 1))
+        removed.append(ast.literal_eval(element))
+    if problems or not removed:
+        return text, [], problems
+    new = "".join(l for i, l in enumerate(lines, 1) if i not in drop)
+    old_value = ast.literal_eval(node.value)
+    new_node = next(n for n in ast.parse(new).body if isinstance(n, ast.Assign)
+                    and isinstance(n.targets[0], ast.Name) and n.targets[0].id == variable)
+    expect = [v for v in old_value if v not in removed]
+    if ast.literal_eval(new_node.value) != expect:
+        return text, [], [f"{variable} after the edit is not {variable} minus the departing rows"]
+    return new, removed, []
 
 
 def edit_layering_tables(text, keys, compositions):
@@ -1752,6 +2030,10 @@ def cmd_release(root, keys, date, log, census_path, commit_arg, do_tag, do_depar
         print(f"ran {' '.join(argv)}: exit {code}; {last}")
         if code:
             failures.append(f"{' '.join(argv)} exited {code}")
+    for rel, text in sorted(dep.expected_writes.items()):
+        if read(root, rel) != text:
+            failures.append(f"{rel}: its writer's output is not the registry rendering without the "
+                            f"departing recipes")
     restated = sync_doc_counts(root)
     for rel, name, old, new in restated:
         print(f"re-stated {name} in {rel}: {old} -> {new}")
@@ -1914,7 +2196,59 @@ def cmd_restore(root, tag, build_label, census_path):
     return 1 if conflicts else 0
 
 
-FAMILY_CONTROLS = 10
+FAMILY_CONTROLS = 12
+EDIT_CONTROLS = 9
+
+
+def edit_controls():
+    """In-memory controls of the exact edits a departure makes to live scripts."""
+    failures = []
+
+    def control(label, ok):
+        if not ok:
+            failures.append(f"edit control: {label}")
+
+    dotted = {"Blanc.Fam.A", "Blanc.Fam.B"}
+    text = ("x\n  run: lake build Blanc.Fam.A Blanc.Live.C Blanc.Fam.B\n"
+            "  (lake build Blanc.Live.D Blanc.Fam.A); then\n  lake build Blanc.Fam.B\n"
+            "# Blanc.Fam.A in prose\n")
+    new, problems = edit_build_lines(text, dotted)
+    control("departing modules leave a `lake build` line, live ones stay",
+            "run: lake build Blanc.Live.C\n" in new and "(lake build Blanc.Live.D); then" in new)
+    control("a `lake build` line naming only departing modules is reported, not emptied",
+            "  lake build Blanc.Fam.B" in new and [n for n, _ in problems] == [4])
+    control("prose outside `lake build` lines is untouched", "# Blanc.Fam.A in prose" in new)
+    table = ("ROWS = [\n    {\"module\": \"Blanc/Fam/A.lean\", \"references\": 1},\n"
+             "    {\"module\": \"Blanc/Live/C.lean\", \"references\": 1},\n]\nOTHER = 1\n")
+    departing = lambda v: v.startswith("Blanc/Fam/")
+    blancish = lambda v: v.startswith("Blanc/")
+    new, removed, problems = edit_py_row_table(table, "ROWS", departing, blancish)
+    control("a departing row leaves the Python row table, a live one stays",
+            not problems and removed == [{"module": "Blanc/Fam/A.lean", "references": 1}]
+            and "Blanc/Live/C.lean" in new and "Blanc/Fam/A.lean" not in new and "OTHER = 1" in new)
+    mixed = table.replace('"references": 1},\n    {"module": "Blanc/Live', '"x": "Blanc/Live/E.lean"},\n    {"module": "Blanc/Live', 1)
+    control("a row naming departing and live entries is reported, nothing edited",
+            edit_py_row_table(mixed, "ROWS", departing, blancish)[2] != []
+            and edit_py_row_table(mixed, "ROWS", departing, blancish)[0] == mixed)
+    registry = ('schema = 1\n\n[[recipe]]\nid = "gone"\ncanonical_example = "Blanc/Fam/A.lean:x"\n\n'
+                '[[recipe]]\nid = "kept"\ncanonical_example = "Blanc/Live/C.lean:y"\n')
+    kept, removed = split_departing_recipes(registry, {"Blanc/Fam/A.lean"})
+    control("a recipe whose canonical example departs leaves the registry whole",
+            removed == [("gone", "Blanc/Fam/A.lean")] and 'id = "gone"' not in kept
+            and 'id = "kept"' in kept and kept.startswith("schema = 1\n"))
+    harness = ('-- EXPECT: gone\nexample : True := by\n  expect_recipe_trigger "t"\n'
+               '  expect_recipe_offered "gone"\n  trivial\n-- EXPECT: kept\n'
+               '  expect_no_recipe_offered "gone"\n')
+    new, problems = strip_recipe_harness(harness, {"gone"})
+    control("the departing recipe's harness markers go, its trigger case stays",
+            not problems and '"gone"' not in new and "EXPECT: gone" not in new
+            and 'expect_recipe_trigger "t"' in new and "-- EXPECT: kept" in new)
+    control("another mention of a departing recipe id is reported",
+            strip_recipe_harness(harness + '  other "gone"\n', {"gone"})[1] != [])
+    script = "import Blanc\nimport Blanc.Fam.A\nimport Blanc.Live.C\n#check x\n"
+    control("a script's departing imports go, live ones stay",
+            drop_departing_imports(script, dotted) == "import Blanc\nimport Blanc.Live.C\n#check x\n")
+    return failures
 
 
 def family_only_controls():
@@ -1933,6 +2267,11 @@ def family_only_controls():
         # A family-only script a live gate runs, and the gate.
         "scripts/tool.py": "N = 'Blanc.Fam.thm'\n",
         "scripts/check.sh": "python3 scripts/tool.py\n",
+        ".github/workflows/ci.yml": "run: scripts/check.sh\n",
+        # Tools nothing names: one calls only the departing generator, one also a shared helper.
+        "scripts/gen-trace.py": "import gen\n",
+        "scripts/gen-report.py": "import fam_helper\nimport shared\n",
+        "scripts/fam_helper.py": "M = 'Blanc/Fam/A.lean'\n",
         "scripts/mixed.py": "A = 'Blanc/Fam/A.lean'\nB = 'Blanc/Live/B.lean'\n",
         # Two files naming each other and nothing departing.
         "scripts/orphan-a.py": "import orphan_b\n",
@@ -1976,6 +2315,10 @@ def family_only_controls():
     control("a script a surviving registry row runs stays and is reported",
             "scripts/gated.py" not in depart and "scripts/gated.py" in out["blocked"])
     control("a script only a removed registry row names departs", "scripts/famgate.py" in depart)
+    control("a tool naming only departing files departs", "scripts/gen-trace.py" in depart)
+    control("a tool also naming a shared file stays and keeps the family script it calls",
+            "scripts/gen-report.py" not in depart and "scripts/fam_helper.py" not in depart
+            and out["blocked"].get("scripts/fam_helper.py", {}).get("users") == ["scripts/gen-report.py"])
     return failures
 
 
@@ -2022,13 +2365,15 @@ def self_test(root):
     if apply_hunks(lines, hunks) != ["a\n", "c\n", "d\n"]:
         failures.append("apply_hunks does not reproduce a recorded departure")
     failures += family_only_controls()
+    failures += edit_controls()
     for line in failures:
         print(f"SELF-TEST — {line}")
     if failures:
         print(f"REGRESSION — release self-test: {len(failures)} failure(s)")
         return 1
-    print(f"OK — release self-test: {13 + FAMILY_CONTROLS} controls (dirty tree, non-live key, "
-          f"catalogue log for another commit and its variants, hunk replay, family-only files)")
+    print(f"OK — release self-test: {13 + FAMILY_CONTROLS + EDIT_CONTROLS} controls (dirty tree, "
+          f"non-live key, catalogue log for another commit and its variants, hunk replay, "
+          f"family-only files, exact live-script edits)")
     return 0
 
 
