@@ -1138,15 +1138,13 @@ def edit_layering_tables(text, keys, compositions):
                      f"{table}[{key!r}] statement")
     if problems:
         return text, [], problems
-    kept = [l for i, l in enumerate(lines, 1) if i not in drop]
-    # Do not leave two blank lines where one entry used to sit between them.
-    new_lines = []
-    for line in kept:
-        if new_lines and not line.strip() and not new_lines[-1].strip() and len(new_lines) > 1 \
-                and not new_lines[-2].strip():
-            continue
-        new_lines.append(line)
-    new = "".join(new_lines)
+    # Where a removed range sat between two blank lines, drop the second too.
+    for i in sorted(drop):
+        if i + 1 not in drop and i + 1 <= len(lines) and not lines[i].strip():
+            before = min(j for j in range(1, i + 1) if all(k in drop for k in range(j, i + 1))) - 1
+            if before >= 1 and not lines[before - 1].strip():
+                drop.add(i + 1)
+    new = "".join(l for i, l in enumerate(lines, 1) if i not in drop)
     old_mod, new_mod = _exec_tables(text), _exec_tables(new)
     if new_mod is None:
         return text, [], ["the edited file does not execute"]
