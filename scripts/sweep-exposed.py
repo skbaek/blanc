@@ -24,7 +24,9 @@ kept, and so is one whose source range sits inside a kept declaration's range
 (a `deriving` clause's instance), and so is one the swept text of the
 remaining Blanc modules still names (leaf_audit's identifier resolution:
 syntax quotations inside a tactic `def`, `example`s and `variable` binders,
-which the census does not see); all are reported, and the cascade reruns with
+which the census does not see), and so is one whose last name component
+follows a `.` inside an `example` or `#` command of the remaining code (field
+notation `x.foo`, resolved through a type; conservative); all are reported, and the cascade reruns with
 them kept. Only declarations of SHARED modules are removed.
 
 Each removed declaration loses exactly its census source range (the range
@@ -549,6 +551,48 @@ def cited_keeps(checker, texts, candidates, survivors):
     return kept
 
 
+FIELD = re.compile(r"(?<=[\w')\]])\.([A-Za-z_][A-Za-z0-9_'!?]*)")
+UNNAMED = re.compile(r"^(?:@\[[^\]]*\]\s*)?(?:example|#[a-z_]+)\b")
+
+
+def unnamed_blocks(code):
+    """The text of the commands no census edge records: `example`s and `#`
+    commands (`#eval`, `#guard`, ...), each up to the next unindented line."""
+    out, take = [], False
+    for line in code.split("\n"):
+        if line[:1] and not line[:1].isspace():
+            take = bool(UNNAMED.match(line))
+        if take:
+            out.append(line)
+    return "\n".join(out)
+
+
+def field_mentions(leaf_audit, texts, removed, cache=None):
+    """Removed declarations a remaining text may reach through field notation
+    (`x.foo`, resolved through the type of `x`, which no lexical namespace
+    resolution sees and, inside an `example`, no census edge records): every
+    removed declaration whose last component follows a `.` after an
+    identifier or a closing bracket inside an `example` or `#` command of the
+    comment-stripped code (inside a declaration the census sees the term).
+    -> {name: file}."""
+    by_last = {}
+    for d in removed:
+        by_last.setdefault(d.rsplit(".", 1)[-1], set()).add(d)
+    found = {}
+    for rel, text in sorted(texts.items()):
+        key = (rel, hash(text))
+        if cache is not None and key in cache:
+            fields = cache[key]
+        else:
+            fields = set(FIELD.findall(unnamed_blocks(leaf_audit.strip_comments_and_strings(text, rel))))
+            if cache is not None:
+                cache[key] = fields
+        for last in fields & set(by_last):
+            for d in by_last[last]:
+                found.setdefault(d, rel)
+    return found
+
+
 def read_keep_file(path):
     names = []
     with open(path, encoding="utf-8") as handle:
@@ -608,6 +652,7 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
             with open(os.path.join(root, rel), encoding="utf-8", newline="") as handle:
                 disk[rel] = handle.read()
     mentioned_kept = {}
+    field_cache = {}
     while True:
         removed = ex.exposed(keep_eff) - keep_eff
         no_range = sorted(d for d in removed if d not in ranges)
@@ -657,6 +702,8 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
             if mod not in emptied_set:
                 remaining[rel] = new_texts.get(mod, text)
         mentions, _ = leaf_audit.scan_external_sources(remaining, removed)
+        for d, rel in field_mentions(leaf_audit, remaining, removed, field_cache).items():
+            mentions.setdefault(d, [rel])
         if mentions:
             for d, paths in mentions.items():
                 mentioned_kept[d] = paths[0]
@@ -942,6 +989,15 @@ theorem dead_b : True := dead_a
         failures.append("a `variable` binder naming a removed structure is not found")
     else:
         bites.append(("still named", [f"Fix.Dead is still named in {named['Fix.Dead'][0]}"]))
+    # Control 6: a removed declaration reached by field notation in an
+    # `example` (no census edge, no namespace resolution) is found.
+    found = field_mentions(leaf_audit, {"Blanc/F.lean": "theorem t (h : T) : P := h.other\n"
+                                        "example (h : T) : P :=\n  h.dead_field\n"},
+                           {"Fix.T.dead_field", "Fix.other"})
+    if found != {"Fix.T.dead_field": "Blanc/F.lean"}:
+        failures.append(f"field notation in an example: found {found}")
+    else:
+        bites.append(("field notation", [f"Fix.T.dead_field is reached by field notation in {found['Fix.T.dead_field']}"]))
     # Control 5, keep rule (b): claim-map citations keep their declarations.
     checker = load_claim_checker(root)
     doc = ("| x | `Blanc.Fix.cited` (`Blanc/Fix.lean:3`) | y |\n"
@@ -967,9 +1023,9 @@ theorem dead_b : True := dead_a
     if failures:
         print(f"REGRESSION — sweep self-test: {len(failures)} failure(s)")
         return 1
-    print("OK — sweep self-test: 17 controls (exact fixture sweep with prefix, comment and blank "
+    print("OK — sweep self-test: 18 controls (exact fixture sweep with prefix, comment and blank "
           "line; dangling end; live use; keep and keep closure; nested deriving instance; kept "
-          "overlap; still-named declaration; claim-map keep rule (b); emptied-module leftovers; import drop and rewrite; "
+          "overlap; still-named declaration; field notation; claim-map keep rule (b); emptied-module leftovers; import drop and rewrite; "
           "SHARED table edit and its refusal)")
     return 0
 
