@@ -29,8 +29,8 @@ go into the manifest). It computes one manifest per key: the commit, the Jaune
 rev, the catalogue evidence, the departing modules (a composition declaring
 several released keys goes in the first key's manifest and is cross-referenced
 in the others), the files that leave, the claim pins (ClaimCheck blocks and
-their roots.tsv rows, from the census's name resolution), the claim-map
-sections and rows, the lift certificates with their inputs' sha256, every
+their roots.tsv rows, from the census's name resolution), the family's
+claim-map file docs/claim-map/<key>.md (taken whole), the lift certificates with their inputs' sha256, every
 other committed row verbatim, per-release counts (modules, declarations,
 leaves among them, pins) and the statement fingerprints of the shared
 declarations the release uses. Without `--tag`/`--depart` it is a dry run.
@@ -43,17 +43,20 @@ writes the departure, uncommitted: departing modules, departing scripts and
 unshared lift inputs deleted; hand edits made exactly (check-layering.py
 tables through the AST, re-executed and compared; live-set.toml; JSON rows
 pruned structurally and re-serialised in the file's own style; ClaimCheck
-pins; claim-map sections and rows; check-deployed-claim-map.py lists in pprint
-form; COMMON_API.md citations re-pointed at the release tag); the
+pins; the claim-map index line and see-also links to the family). Shared
+documents (README, PORTING, COMMON_API, GATES) are never edited: check 11 of
+check-layering.py keeps family citations out of them; the
 registered writers run (generate-root.py, generate-module-inventory.py,
 check-proof-module-size.sh --write-baseline, check-gates.sh --inventory) and
 check-doc-counts.py's registered count quotations are re-stated. Every line a
 writer removed must be a row the manifest recorded. The manifests are written
-under scripts/releases/, the first with the departure record (line hunks from
-the tagged commit) that restore replays. Steps that need an owned build
+under scripts/releases/, each byte for byte its tag's message, and the
+departure record (line hunks from the tagged commit, which restore replays)
+beside the first as <key>-<date>.departure.json. Steps that need an owned build
 (claim-hash manifest, leaf count) are printed as pending. Hand decisions the
-tool cannot make exactly are listed as OUTSTANDING and block --depart unless
---allow-outstanding. Shared declarations in shared modules are not removed,
+tool cannot make exactly are listed as OUTSTANDING and block --tag and
+--depart; --allow-outstanding is for controls only, and the manifest records
+the items it allowed. Shared declarations in shared modules are not removed,
 and shared modules the census leaves empty are kept: both are swept
 separately.
 
@@ -447,7 +450,8 @@ MANIFEST_SCHEMA = "blanc-release-manifest-v1"
 CLAIMCHECK = "scripts/ClaimCheck.lean"
 ROOTS_TSV = "scripts/claim-pin-hash/roots.tsv"
 CLAIM_MAP = "docs/DEPLOYED_BYTECODE_CLAIM_MAP.md"
-CLAIM_MAP_CHECK = "scripts/check-deployed-claim-map.py"
+CLAIM_MAP_DIR = "docs/claim-map"
+SHARED_DOCS = ("README.md", "PORTING.md", "docs/COMMON_API.md", "scripts/GATES.md")
 COMMON_API_DOC = "docs/COMMON_API.md"
 CERTIFICATES = "scripts/lift/certificates.json"
 LAYERING = "scripts/check-layering.py"
@@ -592,6 +596,9 @@ class Departure:
         self.root, self.keys, self.date = root, list(keys), date
         self.tags = {k: f"release/{k}-{date}" for k in keys}
         self.manifest_paths = {k: f"{RELEASES_DIR}/{k}-{date}.json" for k in keys}
+        # The departure record (line hunks restore replays) lives beside the first manifest,
+        # so each committed manifest is byte for byte its tag's message.
+        self.departure_path = f"{RELEASES_DIR}/{keys[0]}-{date}.departure.json"
         self.ctx = {}
         report, refusal = plan(root, keys, census_path, self.ctx)
         if refusal:
@@ -671,13 +678,13 @@ class Departure:
     # computation ----------------------------------------------------------
     def compute(self):
         self.departing_scripts()
+        self.claim_map()
+        self.shared_docs()
         self.layering_tables()
         self.live_set()
         self.json_rows()
         self.text_rows()
         self.claimcheck()
-        self.claim_map()
-        self.common_api()
         self.proof_recipes()
         self.writer_rows()
         self.record_hand_rows()
@@ -835,48 +842,55 @@ class Departure:
                                     f"departing pin(s); the manifest is not a pin-for-pin record")
 
     def claim_map(self):
-        if not os.path.exists(os.path.join(self.root, CLAIM_MAP)):
-            return
+        """A family's claim-map file leaves whole; the shared part's index line and other
+        files' see-also links to it go. Any other claim-map text still naming a departing
+        module, file or declaration is a hand decision."""
+        for key in self.keys:
+            rel = f"{CLAIM_MAP_DIR}/{key}.md"
+            if not os.path.exists(os.path.join(self.root, rel)):
+                self.outstanding.append(f"{rel}: live key {key} has no claim-map file")
+                continue
+            self.deletes[rel] = key
+            self.extra[key]["claim_map_file"] = {"path": rel, "sha256": sha256_file(
+                os.path.join(self.root, rel))}
+        gone = {f"{k}.md" for k in self.keys}
         text = read(self.root, CLAIM_MAP)
-        result = edit_claim_map(text, self)
-        self.outstanding += [f"{CLAIM_MAP}: {p}" for p in result["problems"]]
-        self.edit(CLAIM_MAP, result["text"],
-                  f"{len(result['sections'])} section(s) and {len(result['rows'])} row(s) removed")
-        for section in result["sections"]:
-            key = self.key_for_text(section["text"])
-            self.extra[key].setdefault("claim_map", {}).setdefault("sections", []).append(section)
-        for row in result["rows"]:
-            key = self.key_for_text(row[1])
-            self.extra[key].setdefault("claim_map", {}).setdefault("rows", []).append(row)
-        headings = [s["heading"].removeprefix("### ") for s in result["sections"]]
-        check = read(self.root, CLAIM_MAP_CHECK)
-        new, problems = edit_python_list(check, "H3", lambda v: any(h.startswith(v) for h in headings))
-        self.outstanding += [f"{CLAIM_MAP_CHECK}: {p}" for p in problems]
-        new, problems = edit_python_list(new, "REQUIRED_HEADLINES", lambda v: v in self.names)
-        self.outstanding += [f"{CLAIM_MAP_CHECK}: {p}" for p in problems]
-        self.edit(CLAIM_MAP_CHECK, new, "H3 and REQUIRED_HEADLINES entries removed (pprint form)")
+        kept = [l for l in text.splitlines(keepends=True)
+                if not any(l.rstrip("\n").endswith(f"(claim-map/{g})") for g in gone)]
+        self.edit(CLAIM_MAP, "".join(kept), "index line(s) of the departing families removed")
+        others = sorted(f for f in os.listdir(os.path.join(self.root, CLAIM_MAP_DIR))
+                        if f.endswith(".md") and f not in gone)
+        for name in others:
+            rel = f"{CLAIM_MAP_DIR}/{name}"
+            body = read(self.root, rel)
+            lines = [l for l in body.splitlines(keepends=True)
+                     if not (l.startswith("- [") and any(f"]({g}#" in l or f"]({g})" in l
+                                                         for g in gone))]
+            new = "".join(lines)
+            new = re.sub(r"\n## See also\n\n(?=## |\Z)", "\n", new)
+            new = new.rstrip("\n") + "\n" if new.strip() else new
+            self.edit(rel, new, "see-also link(s) to a departing family removed")
+        last = {n.rsplit(".", 1)[-1] for n in self.names}
+        live_last = {n.rsplit(".", 1)[-1] for n in self.population if n not in self.names}
+        for rel in [CLAIM_MAP] + [f"{CLAIM_MAP_DIR}/{n}" for n in others]:
+            for number, line in enumerate(self.current(rel).splitlines(), 1):
+                tokens = BLANC_TOKEN.findall(line) + re.findall(r"scripts/[A-Za-z0-9_./-]+", line)
+                bare = [t for t in re.findall(r"`([A-Za-z_][A-Za-z0-9_']*)`", line)
+                        if t in last and t not in live_last]
+                if any(self.departing_str(t) for t in tokens) or bare:
+                    self.outstanding.append(f"{rel}:{number}: claim-map text names a departing "
+                                            f"module, file or declaration; edit it by hand")
 
-    def common_api(self):
-        """A shared doc citing a departing module now cites it in its release:
-        `Blanc/X.lean` becomes `release/<key>-<date>:Blanc/X.lean`, which
-        check-layering's citation reader no longer takes for a file in the tree."""
-        text = read(self.root, COMMON_API_DOC)
-        count = 0
-
-        def swap(match):
-            nonlocal count
-            path = match.group(1)
-            if path not in self.paths:
-                return match.group(0)
-            count += 1
-            return f"`{self.tags[self.owner_key[self.paths[path]]]}:{path}`"
-
-        new = re.sub(r"`(Blanc/[A-Za-z0-9_/']+\.lean)`", swap, text)
-        for path in self.paths:
-            if f"](../{path})" in new or f"]({path})" in new:
-                self.outstanding.append(f"{COMMON_API_DOC}: links {path}; reword that link by hand")
-        if count:
-            self.edit(COMMON_API_DOC, new, f"{count} citation(s) re-pointed at the release tag")
+    def shared_docs(self):
+        """Shared documents name no family (check-layering check 11); a listed exception
+        naming a departing module is a hand decision. A release never edits them."""
+        for rel in SHARED_DOCS:
+            if not os.path.exists(os.path.join(self.root, rel)):
+                continue
+            for number, line in enumerate(read(self.root, rel).splitlines(), 1):
+                if any(self.departing_str(t) for t in BLANC_TOKEN.findall(line)):
+                    self.outstanding.append(f"{rel}:{number}: a shared document names a departing "
+                                            f"module; move or reword the passage first")
 
     def proof_recipes(self):
         rel = "scripts/proof-recipes.toml"
@@ -911,7 +925,7 @@ class Departure:
                 self.rows[rel] = rows
 
     # the manifests --------------------------------------------------------
-    def manifests(self, commit, catalogue, census_path):
+    def manifests(self, commit, catalogue, census_path, allow=False):
         census = self.ctx["census"]
         leaf_audit = self.ctx["leaf_audit"]
         jaune = next((p.get("rev") for p in json.loads(read(self.root, "lake-manifest.json"))
@@ -963,6 +977,8 @@ class Departure:
                 "files": [{"path": p, "sha256": sha256_file(os.path.join(self.root, p))}
                           for p in files],
                 "rows": rows,
+                "departure_record": self.departure_path,
+                "outstanding_allowed": list(self.outstanding) if allow else [],
                 "counts": {
                     "modules": len(mods),
                     "contract_modules": len(self.layering.CONTRACTS[key]),
@@ -1050,34 +1066,6 @@ def json_prune(data, departing, blancish, where="$"):
             problems += p
         return out, removed, problems
     return data, removed, problems
-
-
-def edit_python_list(text, name, drop):
-    """Remove the elements `drop` selects from the module-level list literal
-    NAME, which must be written exactly as pprint.pformat renders it."""
-    tree = ast.parse(text)
-    nodes = [n for n in tree.body if isinstance(n, ast.Assign) and len(n.targets) == 1
-             and isinstance(n.targets[0], ast.Name) and n.targets[0].id == name
-             and isinstance(n.value, ast.List)]
-    if len(nodes) != 1:
-        return text, [f"no single list literal {name}"]
-    node = nodes[0].value
-    value = ast.literal_eval(node)
-    kept = [v for v in value if not drop(v)]
-    if kept == value:
-        return text, []
-    lines = text.splitlines(keepends=True)
-    start = offset_of(lines, node.lineno, node.col_offset)
-    end = offset_of(lines, node.end_lineno, node.end_col_offset)
-    if pprint.pformat(value) != text[start:end]:
-        return text, [f"{name} is not in pprint form; cannot edit it exactly"]
-    return text[:start] + pprint.pformat(kept) + text[end:], []
-
-
-def offset_of(lines, lineno, col):
-    """Character offset of (1-based line, utf-8 byte column) in the joined lines."""
-    prefix = sum(len(l) for l in lines[:lineno - 1])
-    return prefix + len(lines[lineno - 1].encode("utf-8")[:col].decode("utf-8"))
 
 
 def edit_layering_tables(text, keys, compositions):
@@ -1278,62 +1266,6 @@ def edit_claimcheck(text, leaf_audit, population, departing_names, departing_dot
             "removed_imports": removed_imports}
 
 
-def edit_claim_map(text, dep):
-    """Remove the `###` sections of the claim map that cite departing
-    declarations (fully qualified names and `path:line`) and no declaration of
-    another live family or composition, and table rows elsewhere of the same
-    kind. Citations of shared machinery are context and keep nothing; a row
-    citing a departing and a live family is left for a hand edit."""
-    lines = text.split("\n")
-    problems, drop, sections, rows = [], set(), [], []
-
-    owner = dep.layering.classify()
-
-    def family(module):
-        """The live family or composition a module belongs to; None for shared."""
-        category = owner.get(module.removeprefix("Blanc."), "unclassified")
-        return None if category == "shared" else category
-
-    def citations(chunk):
-        """(departing citations, citations of another live family or composition).
-        Citations of shared machinery are context: they keep nothing."""
-        departing, live = 0, 0
-        for path in re.findall(r"(Blanc/[A-Za-z0-9_/']+\.lean)(:\d+)?", chunk):
-            if path[0] in dep.paths:
-                departing += 1
-            elif path[1] and family(path[0][len("Blanc/"):-len(".lean")].replace("/", ".")):
-                live += 1
-        for name in re.findall(r"`(Blanc\.[A-Za-z0-9_.'!?]+)`", chunk):
-            if name in dep.names:
-                departing += 1
-            elif name in dep.population and family(dep.module_for(name) or ""):
-                live += 1
-        return departing, live
-
-    heads = [i for i, l in enumerate(lines) if re.match(r"^#{2,3} ", l)] + [len(lines)]
-    for n, start in enumerate(heads[:-1]):
-        if not lines[start].startswith("### "):
-            continue
-        end = heads[n + 1]
-        chunk = "\n".join(lines[start:end])
-        departing, live = citations(chunk)
-        if departing and not live:
-            drop.update(range(start, end))
-            sections.append({"heading": lines[start], "lines": [start + 1, end],
-                             "text": chunk})
-    for i, line in enumerate(lines):
-        if i in drop or not line.startswith("|"):
-            continue
-        departing, live = citations(line)
-        if departing and not live:
-            drop.add(i)
-            rows.append([i + 1, line])
-        elif departing:
-            problems.append(f"line {i + 1} cites departing and live declarations; edit it by hand")
-    new = "\n".join(l for i, l in enumerate(lines) if i not in drop)
-    return {"text": new, "problems": problems, "sections": sections, "rows": rows}
-
-
 # --- applying a departure ---------------------------------------------------------
 
 def run_writer(root, argv):
@@ -1441,13 +1373,15 @@ def residual_references(root, dep):
 
 # --- the commands ------------------------------------------------------------------
 
-def tag_manifest(root, tag):
+def tag_message(root, tag):
     raw = git(root, "cat-file", "tag", tag)
     message = raw.split("\n\n", 1)[1] if "\n\n" in raw else ""
-    end = message.find("\n-----BEGIN PGP SIGNATURE-----")
-    if end >= 0:
-        message = message[:end]
-    return json.loads(message)
+    end = message.find("-----BEGIN PGP SIGNATURE-----")
+    return message[:end] if end >= 0 else message
+
+
+def tag_manifest(root, tag):
+    return json.loads(tag_message(root, tag))
 
 
 def manifest_text(manifest):
@@ -1484,7 +1418,7 @@ def cmd_release(root, keys, date, log, census_path, commit_arg, do_tag, do_depar
         if os.path.exists(os.path.join(root, dep.manifest_paths[key])):
             raise Refusal(f"{dep.manifest_paths[key]} already exists")
     dep.compute()
-    manifests = dep.manifests(head, evidence, census_path)
+    manifests = dep.manifests(head, evidence, census_path, allow)
     existing = {k: git(root, "rev-parse", "-q", "--verify", f"refs/tags/{dep.tags[k]}",
                        check=False).strip() for k in keys}
 
@@ -1510,6 +1444,10 @@ def cmd_release(root, keys, date, log, census_path, commit_arg, do_tag, do_depar
     for item in dep.outstanding:
         print(f"OUTSTANDING: {item}")
 
+    if dep.outstanding and (do_tag or do_depart) and not allow:
+        raise Refusal(f"{len(dep.outstanding)} outstanding hand decision(s) (listed above); "
+                      f"settle them first (--allow-outstanding is for controls only and is "
+                      f"recorded in the manifest)")
     if do_tag:
         for key in keys:
             if existing[key]:
@@ -1532,9 +1470,6 @@ def cmd_release(root, keys, date, log, census_path, commit_arg, do_tag, do_depar
         tagged = tag_manifest(root, dep.tags[key])
         if tagged != json.loads(manifest_text(manifests[key])):
             raise Refusal(f"tag {dep.tags[key]} carries a different manifest than this run computes")
-    if dep.outstanding and not allow:
-        raise Refusal(f"{len(dep.outstanding)} outstanding hand decision(s) (listed above); "
-                      f"settle them or pass --allow-outstanding")
 
     for rel in sorted(dep.deletes):
         os.remove(os.path.join(root, rel))
@@ -1549,7 +1484,8 @@ def cmd_release(root, keys, date, log, census_path, commit_arg, do_tag, do_depar
     restated = sync_doc_counts(root)
     for rel, name, old, new in restated:
         print(f"re-stated {name} in {rel}: {old} -> {new}")
-    record = departure_record(root, head, set(dep.manifest_paths.values()))
+    written = set(dep.manifest_paths.values()) | {dep.departure_path}
+    record = departure_record(root, head, written)
     # Lines sync_doc_counts changed in place (a count re-stated, nothing else).
     count_lines = set()
     for rel in {r for r, _, _, _ in restated}:
@@ -1557,11 +1493,13 @@ def cmd_release(root, keys, date, log, census_path, commit_arg, do_tag, do_depar
             if i2 - i1 == len(new):
                 count_lines.update((rel, i + 1) for i in range(i1, i2))
     failures += d1_check(root, head, record, dep, count_lines)
-    record["added"] = sorted(set(record["added"]) | set(dep.manifest_paths.values()))
-    for index, key in enumerate(keys):
-        manifest = dict(manifests[key])
-        manifest["departure"] = record if index == 0 else {"in": dep.manifest_paths[keys[0]]}
-        write(root, dep.manifest_paths[key], manifest_text(manifest))
+    record["added"] = sorted(set(record["added"]) | written)
+    for key in keys:
+        write(root, dep.manifest_paths[key], manifest_text(manifests[key]))
+        if read(root, dep.manifest_paths[key]) != tag_message(root, dep.tags[key]):
+            failures.append(f"{dep.manifest_paths[key]} is not byte for byte its tag's message")
+    write(root, dep.departure_path, json.dumps(record, indent=1, sort_keys=True,
+                                               ensure_ascii=False) + "\n")
     residual = residual_references(root, dep)
     print(f"residual references to departing modules, files or declarations: {len(residual)}")
     by_file = {}
@@ -1600,9 +1538,19 @@ def cmd_restore(root, tag, build_label, census_path):
             raise Refusal(f"{key} is not released from {commit[:12]} in {LIVE_SET}; "
                           f"a release is restored with all its keys ({', '.join(keys)})")
         committed[key] = json.loads(read(root, entry["manifest"]))
-    record = committed[keys[0]].get("departure")
+    for key in keys:
+        if manifest_text(committed[key]) != read(root, released[key]["manifest"]):
+            raise Refusal(f"{released[key]['manifest']} is not in its canonical form")
+        if read(root, released[key]["manifest"]) != tag_message(root, committed[key]["tag"]):
+            raise Refusal(f"{released[key]['manifest']} is not byte for byte the message of "
+                          f"{committed[key]['tag']}")
+    path = manifest.get("departure_record", "")
+    try:
+        record = json.loads(read(root, path))
+    except (OSError, ValueError) as exc:
+        raise Refusal(f"cannot read the departure record {path!r}: {exc}")
     if not isinstance(record, dict) or "edited" not in record:
-        raise Refusal(f"{released[keys[0]]['manifest']} carries no departure record")
+        raise Refusal(f"{path} is not a departure record")
     conflicts, restored = [], 0
     for rel in record["deleted"]:
         data = git(root, "show", f"{commit}:{rel}", binary=True)
