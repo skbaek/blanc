@@ -61,23 +61,6 @@ mutual
 
 end
 
-def trieS (j : NTB) : B256 :=
-  Bytes.keccak <| BLT.toBytesS (structCompS (2 * (j.maxKeyLength + 1)) j)
-
-theorem comp_eq_compS : ∀ k : Nat,
-    nodeComp k = nodeCompS k ∧ structComp k = structCompS k
-  | 0 => ⟨funext fun _ => by simp only [nodeComp, nodeCompS],
-          funext fun _ => by simp only [structComp, structCompS]⟩
-  | k + 1 => by
-    obtain ⟨ihn, ihs⟩ := comp_eq_compS k
-    refine ⟨funext fun j => ?_, funext fun j => ?_⟩
-    · simp only [nodeComp, nodeCompS, ihs, BLT.toBytes_eq_toBytesS]
-    · simp only [structComp, structCompS, ihn]; rfl
-
-/-- Bridge: the public trie root equals the twin on every map. -/
-theorem trie_eq_trieS (j : NTB) : trie j = trieS j := by
-  rw [trie, collapse, trieS, (comp_eq_compS _).2, BLT.toBytes_eq_toBytesS]
-
 /-! ### Hash-parametric twin and a hash certificate
 
 `trieH H` is `trieS` with `Bytes.keccak` abstracted to `H`. Instantiated at
@@ -116,43 +99,5 @@ mutual
                 | some (pfx, j') => .list [.bytes (hp pfx 0), nodeCompH H k j']
 
 end
-
-def trieH (H : Bytes → B256) (j : NTB) : B256 :=
-  H <| BLT.toBytesS (structCompH H (2 * (j.maxKeyLength + 1)) j)
-
-theorem compS_eq_compH : ∀ k : Nat,
-    nodeCompS k = nodeCompH Bytes.keccak k ∧ structCompS k = structCompH Bytes.keccak k
-  | 0 => ⟨funext fun _ => by simp only [nodeCompS, nodeCompH],
-          funext fun _ => by simp only [structCompS, structCompH]⟩
-  | k + 1 => by
-    obtain ⟨ihn, ihs⟩ := compS_eq_compH k
-    refine ⟨funext fun j => ?_, funext fun j => ?_⟩
-    · simp only [nodeCompS, nodeCompH, ihs]
-    · simp only [structCompS, structCompH, ihn]
-
-theorem trie_eq_trieH (j : NTB) : trie j = trieH Bytes.keccak j := by
-  rw [trie_eq_trieS, trieS, trieH, (compS_eq_compH _).2]
-
-/-- Hash lookup in a certificate, falling back to `Bytes.keccak`. -/
-def cached (cert : List (Bytes × B256)) (b : Bytes) : B256 :=
-  match cert.find? (fun p => p.1 == b) with
-  | some p => p.2
-  | none => Bytes.keccak b
-
-theorem cached_eq (cert : List (Bytes × B256))
-    (hc : cert.Forall fun p => Bytes.keccak p.1 = p.2) : cached cert = Bytes.keccak := by
-  funext b
-  unfold cached
-  split
-  · next p hp =>
-    have hb : p.1 = b := by simpa only [beq_iff_eq] using List.find?_some hp
-    rw [← hb]
-    exact ((List.forall_iff_forall_mem.mp hc) p (List.mem_of_find?_eq_some hp)).symm
-  · rfl
-
-theorem trie_eq_cached (cert : List (Bytes × B256))
-    (hc : cert.Forall fun p => Bytes.keccak p.1 = p.2) (j : NTB) :
-    trie j = trieH (cached cert) j := by
-  rw [trie_eq_trieH, cached_eq cert hc]
 
 end Blanc.TrieKernel

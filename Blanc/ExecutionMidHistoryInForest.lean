@@ -171,65 +171,6 @@ theorem MidHistoryTraceIn.senderQueries_subset_full
   rw [MidHistoryTraceIn.senderQueries_cut_prefix prior block cut later]
   exact List.mem_append_right _ member
 
-/-- The full raw-frame list has the exact original mid list as an ordered suffix. -/
-theorem MidHistoryTraceIn.rawFrames_cut_prefix
-    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint pre completed future : BlockChain}
-    (prior : ConfiguredHistoryTraceIn F cfg checkpoint pre)
-    (block : ConfiguredBlockTraceIn F cfg pre completed) {i : Nat}
-    (cut : block.bodyTrace.transactions.TxSplit i)
-    (later : ConfiguredHistoryTraceIn F cfg completed future) :
-    ((prior.step block).append later).rawFrames =
-      (prior.rawFrames ++ block.bodyTrace.beacon.rawFrames ++
-        block.bodyTrace.history.rawFrames ++ cut.before.rawFrames ++ cut.head.rawFrames) ++
-        ((MidHistoryTraceIn.tail block cut).append later).rawFrames := by
-  rw [ConfiguredHistoryTraceIn.rawFrames_append, MidHistoryTraceIn.append_rawFrames]
-  change (prior.rawFrames ++ block.rawFrames) ++ later.rawFrames = _
-  rw [block.rawFrames_txSplit cut]
-  simp only [List.append_assoc]
-
-/-- The same retained frames, with their original derivations, embed in the full history. -/
-theorem MidHistoryTraceIn.settledFrames_cut_prefix
-    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint pre completed future : BlockChain}
-    (prior : ConfiguredHistoryTraceIn F cfg checkpoint pre)
-    (block : ConfiguredBlockTraceIn F cfg pre completed) {i : Nat}
-    (cut : block.bodyTrace.transactions.TxSplit i)
-    (later : ConfiguredHistoryTraceIn F cfg completed future) :
-    ((prior.step block).append later).settledFrames =
-      (prior.settledFrames ++ block.bodyTrace.beacon.settledFrames ++
-        block.bodyTrace.history.settledFrames ++ cut.before.settledFrames ++
-        cut.head.settledFrames) ++
-        ((MidHistoryTraceIn.tail block cut).append later).settledFrames := by
-  rw [ConfiguredHistoryTraceIn.settledFrames_append, MidHistoryTraceIn.append_settledFrames]
-  change (prior.settledFrames ++ block.settledFrames) ++ later.settledFrames = _
-  rw [block.settledFrames_txSplit cut]
-  simp only [List.append_assoc]
-
-/-- Mid raw roots retain membership in the original full history for node/world facts. -/
-theorem MidHistoryTraceIn.rawFrames_subset_full
-    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint pre completed future : BlockChain}
-    (prior : ConfiguredHistoryTraceIn F cfg checkpoint pre)
-    (block : ConfiguredBlockTraceIn F cfg pre completed) {i : Nat}
-    (cut : block.bodyTrace.transactions.TxSplit i)
-    (later : ConfiguredHistoryTraceIn F cfg completed future) :
-    ((MidHistoryTraceIn.tail block cut).append later).rawFrames ⊆
-      ((prior.step block).append later).rawFrames := by
-  intro root member
-  rw [MidHistoryTraceIn.rawFrames_cut_prefix prior block cut later]
-  exact List.mem_append_right _ member
-
-/-- Mid retained frames remain the same retained frames of the original full history. -/
-theorem MidHistoryTraceIn.settledFrames_subset_full
-    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint pre completed future : BlockChain}
-    (prior : ConfiguredHistoryTraceIn F cfg checkpoint pre)
-    (block : ConfiguredBlockTraceIn F cfg pre completed) {i : Nat}
-    (cut : block.bodyTrace.transactions.TxSplit i)
-    (later : ConfiguredHistoryTraceIn F cfg completed future) :
-    ((MidHistoryTraceIn.tail block cut).append later).settledFrames ⊆
-      ((prior.step block).append later).settledFrames := by
-  intro frame member
-  rw [MidHistoryTraceIn.settledFrames_cut_prefix prior block cut later]
-  exact List.mem_append_right _ member
-
 /-- Actual admitted-query exclusion and a distinct system address exclude all mid roots. -/
 theorem MidHistoryTraceIn.settledRoots_caller_ne_of_senderQueries
     {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {future : BlockChain}

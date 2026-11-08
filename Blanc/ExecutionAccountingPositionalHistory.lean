@@ -1,5 +1,8 @@
 import Blanc.ExecutionAccountingPositional
-import Blanc.ExecutionWholeFrameAccountingIn
+import Blanc.Lift.RetainedTargetCompleteness
+import Blanc.ExecutionWholeFrameAccounting
+import Blanc.ExecutionAccountingCoreIn
+import Blanc.ExecutionAccountingMidHistoryIn
 
 /-!
 # Positional history: the replay at the entry of every settled frame
@@ -165,69 +168,7 @@ theorem configuredHistory_atPos (L : PositionalLadder c ca entry) {cfg : ChainCo
   obtain ⟨steps, replay, observed⟩ := L.frames.configuredHistory history admitted inv
   exact (framesCarrier_read replay observed).2
 
-/-- **Positional history.**  In a configured history admitted at `ca` from a state-invariant
-checkpoint, the boundary at the entry of every settled frame not enclosed by an opaque earlier
-frame is the replay, from the checkpoint, of the observations of exactly the settled frames
-before it. -/
-theorem configuredHistory_at (L : PositionalLadder c ca entry) {cfg : ChainConfig}
-    {checkpoint future : BlockChain}
-    (history : ConfiguredHistoryTrace cfg checkpoint future)
-    (admitted : history.FrameAdmitted ca entry)
-    (inv : c.StateInv ca checkpoint.state) :
-    ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
-      history.settledFrames = before ++ f :: after →
-      (∀ A ∈ before, A.Encloses f → ¬ L.Opaque A) →
-      ∃ steps, L.carrier.Replay (L.carrier.ofState checkpoint.state) steps
-          (L.carrier.frameEntry f.sevm f.pre.state) ∧
-        L.view.obs steps = before.flatMap L.view.frameObs :=
-  fun before f after split noOpaque =>
-    L.configuredHistory_atPos history admitted inv before f after split
-      (Exec.NoOpaqueAbove.of_encloses noOpaque)
-
 end PositionalLadder
-
-/-- The accounting ladder over `F` of a whole-frame contract, over its frame carrier: the same
-arguments as `wholeFrameLadderIn`. Non-static target frames are opaque. -/
-def wholeFramePositionalLadderIn {F : Fork → Prop}
-    (hsgF : ∀ {f : Fork}, F f → (Fork.ruleSet f).stateGas = none)
-    {c : ContractSpecSem} {ca : Adr} {entry : Sevm → Devm → Prop}
-    (C : ReplayCarrier ca) (V : ReplayObservation C)
-    (append : ∀ {a b c xs ys}, C.Replay a xs b → C.Replay b ys c → C.Replay a (xs ++ ys) c)
-    (tag : Nat → Option Nat → C.Tag) (frameTag : Sevm → Devm → C.Tag)
-    (entryOfState : ∀ (sevm : Sevm) (state : State), C.frameEntry sevm state = C.ofState state)
-    (ofStateGet : ∀ {s s' : State},
-      (∀ k, (s.getStor ca).get k = (s'.getStor ca).get k) → C.ofState s = C.ofState s')
-    (obsStatic : ∀ f : Exec.Frame, f.sevm.isStatic = true → V.frameObs f = [])
-    (obsForeign : ∀ f : Exec.Frame, f.sevm.currentTarget ≠ ca → V.frameObs f = [])
-    (whole : Exec.CoreAccounting.WholeFrameReplayIn F ca c.sem entry C V)
-    (preserves : c.PreservesAdmittedIn F ca entry) : AccountingLadderAdmittedIn F c ca entry where
-  carrier := framesCarrier C V fun A => A.sevm.currentTarget = ca ∧ A.sevm.isStatic = false
-  append := framesCarrier_append append
-  tag := tag
-  preserves := preserves
-  view := framesObservation C V _
-  root := by
-    intro _ _ msg entryBenv pc sevm pre out run transfer evmEq committed admitted ready _ fork bound
-    obtain ⟨installed, entryBound⟩ :=
-      Exec.CoreAccounting.messageRoot_facts transfer evmEq ready bound
-    have core := Exec.coreAccountingIn F ca c.sem entry C V append frameTag
-      (fun sevm state _ => entryOfState sevm state) obsForeign hsgF
-      (fun hrun target _ =>
-        Exec.CoreAccounting.wholeFrameTargetIn hsgF entryOfState ofStateGet obsStatic whole hrun
-          target)
-    have positional := Exec.positionalAccountingIn hsgF
-      (Opaque := fun A => A.sevm.currentTarget = ca ∧ A.sevm.isStatic = false) entryOfState
-      ofStateGet obsForeign append (fun _ op => op.1) core
-      (fun _ target _ => Exec.PositionalAccounting.wholeFrameTarget hsgF ofStateGet core target)
-    refine framesRoot (core pc sevm pre out run installed run committed fork installed admitted |>.2
-      entryBound) ?_
-    intro before f after split noOpaque
-    obtain ⟨steps, replay, observed⟩ := positional pc sevm pre out run installed run committed fork
-      installed admitted entryBound before f after split noOpaque
-    refine ⟨steps, ?_, observed⟩
-    show C.Replay (C.frameEntry sevm pre.state) steps (C.frameEntry f.sevm f.pre.state)
-    rw [entryOfState, entryOfState]
-    exact replay
 
 end ExecutionAccountingReplay
 

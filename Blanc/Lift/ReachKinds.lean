@@ -96,27 +96,6 @@ theorem Reach.execs_of_set {E : List Nat} (hE : ExecsSet p fs E = true) {d : Dev
       obtain ⟨hb, hbK⟩ := execsIn_step hE step ha hK
       exact ih hb hbK
 
-/-- **Every external instruction a certified frame's chain decodes satisfies `p`**, when every reach
-from the certificate's root tree stands only at such. Any outcome. -/
-theorem execs_of_reach {code : ByteArray} {c : Cert} {f0 : SFunc} (checked : Cert.check code c = true)
-    (hf0 : (Cursor.start c).f = f0) (hK : (Cursor.start c).K = [])
-    {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec 0 sevm pre out)
-    (hcode : sevm.code = code) (hsg : sevm.benvStat.rules.stateGas = none)
-    (hr : ∀ T, Reach (StepIn ⟨0, sevm, pre, out, run⟩) c.prog sevm
-      ⟨St pre pre.stack pre.memory pre.gasLeft, f0, []⟩ T → AtExec T →
-      ∀ x g, T.f = .next (.exec x) g → p x = true) :
-    ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, out, run⟩ N →
-      ∀ x, Ninst.At N.sevm.code N.pc (.exec x) → p x = true := by
-  intro N hN x hat
-  obtain ⟨κ, reach, okN⟩ := reach_of_parentPrefix_noStateGas checked rfl hcode hsg hN
-  obtain ⟨g, hg, -⟩ := okN.tree_of_exec hat
-  refine hr (κ.conf N.devm) ?_ ⟨x, g, hg⟩ x g hg
-  rw [← St.self rfl rfl]
-  have e : (Cursor.start c).conf pre = ⟨pre, f0, []⟩ := by
-    simp only [Cursor.conf, hf0, hK, List.map_nil]
-  rw [← e]
-  exact reach
-
 /-- A conditional jump of a reach: an arm inside the region `hE` closes the goal `p x = true`. -/
 macro "rbranchK " h:ident t:ident hx:ident hE:term : tactic => `(tactic| first
   | (have h' := rr_branch $h $t; clear $h; rcases h' with ⟨_, _, $h:ident⟩ | ⟨_, _, $h:ident⟩ <;>

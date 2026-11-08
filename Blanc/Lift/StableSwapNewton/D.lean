@@ -243,11 +243,6 @@ theorem getD_lower {x : Fin 3 → Nat} {amp : Nat} (hx : ∀ i, 0 < x i) (hamp :
   simp only [h0, ↓reduceIte]
   exact (loopD_lower (fuel := 254) hP hS (by omega) hS hU).1
 
-/-- `get_D ≥ ⌊D*⌋` stated with the floor root. -/
-theorem floorRoot_le_getD {x : Fin 3 → Nat} {amp : Nat} (hx : ∀ i, 0 < x i) (hamp : 1 ≤ amp)
-    (tol : Nat) : floorRoot x (amp * 3) ≤ getD x amp tol :=
-  floorRoot_le_of_aboveRoot_succ (getD_lower hx hamp tol)
-
 /-- The lower bound for a non-reverting checked `get_D`. -/
 theorem getDChk_lower {x : Fin 3 → Nat} {amp tol v : Nat} (h : getDChk x amp tol = some v)
     (hx : ∀ i, 0 < x i) (hamp : 1 ≤ amp) : aboveRoot x (amp * 3) (v + 1) :=

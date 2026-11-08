@@ -273,28 +273,12 @@ theorem lstep {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} 
   cases run with
   | next w run => exact ⟨_, w, L.trans fun Q hQ o r => .next (hQ w hs) r, run⟩
 
-/-- A jumpdest of a `Lifts` walk over the walk state. -/
-theorem ldest {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm}
-    {d0 : Devm} {f0 f : SFunc} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {o : Outcome}
-    (L : Lifts P fs sevm d0 f0 (St b S M G) (.dest f))
-    (run : SFunc.RunP P fs sevm (St b S M G) (.dest f) o) :
-    ∃ G', Lifts P fs sevm d0 f0 (St b S M G') f ∧ SFunc.RunP P fs sevm (St b S M G') f o := by
-  cases run with
-  | dest burn run =>
-    have e := St.of_burn burn
-    rw [e] at run burn
-    exact ⟨_, L.trans fun Q _ o r => .dest burn r, run⟩
-
 variable {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm} {b : Devm}
   {T : List B256} {M : Mem} {G : Nat} {k : SFunc} {out : Outcome}
 
 private theorem lit20 : Bytes.toB256 [0x20] = (32 : B256) := by decide
 private theorem lit1f : Bytes.toB256 [0x1f] = (31 : B256) := by decide
 private theorem lit40 : (Bytes.toB256 [0x40]).toNat = 64 := by decide
-
-/-- Length of a zero-padded calldata window. -/
-theorem sliceD_length (xs : Bytes) (m n : Nat) : (xs.sliceD m n 0).length = n :=
-  List.takeD_length _ _ _
 
 /-- The fragment's memory, in the code's literal and operand order, is
 `allocMem` at the free pointer it read. -/

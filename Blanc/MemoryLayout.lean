@@ -199,17 +199,6 @@ theorem applyMemory_size_of_covered
 def words (writes : List (Nat × B256)) : MemoryStage :=
   writes.map fun write => (write.1, write.2.toBytes)
 
-theorem footprint_words (writes : List (Nat × B256)) :
-    (words writes).footprint = writes.map fun write => (write.1, 32) := by
-  simp only [footprint, words, List.map_map, Function.comp_def, B256.length_toBytes]
-
-/-- Word stages expose allocation directly as 32-byte windows. -/
-theorem applyMemory_words_size (writes : List (Nat × B256)) (memory : Mem)
-    (haligned : memory.size % 32 = 0) :
-    ((words writes).applyMemory memory).size =
-      memExtsSize memory.size (writes.map fun write => (write.1, 32)) := by
-  rw [applyMemory_size _ _ haligned, footprint_words]
-
 /-- Symbolic image length for a word stage has exact 32-byte footprints. -/
 theorem applyImage_words_length
     (writes : List (Nat × B256)) (image : Bytes) :
@@ -224,18 +213,6 @@ theorem applyImage_words_length
         applyImage_cons, ih, Bytes.length_writeAt,
         B256.length_toBytes]
       rfl
-
-/-- Word-sized read-back specialization used by fixed ABI and scratch layouts. -/
-theorem read_written_word
-    (initial suffix : List (Nat × B256))
-    (image : Bytes) (offset : Nat) (word : B256)
-    (h : (words suffix).avoids offset 32 = true) :
-    ((words (initial ++ (offset, word) :: suffix)).applyImage image).sliceD
-        offset 32 0 = word.toBytes := by
-  have read := read_written (words initial) (words suffix)
-    image word.toBytes offset (by simpa only [B256.length_toBytes] using h)
-  simpa only [words, List.map_append, List.map_cons,
-    B256.length_toBytes] using read
 
 /-- Stages confined below a boundary compose with the existing suffix frame. -/
 theorem wordFrameFrom

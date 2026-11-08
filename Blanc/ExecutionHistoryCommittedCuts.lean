@@ -15,41 +15,6 @@ namespace Blanc.ExecutionTrace
 
 open Jaune
 
-/-- Every retained index after dropping `i` from an indexed list is at
-least the indexing offset plus `i`. -/
-theorem putIndex_aux_mem_drop_index_ge {α : Type} (xs : List α) (offset i : Nat) :
-    ∀ item ∈ (Jaune.List.putIndex.aux offset xs).drop i, offset + i ≤ item.1 := by
-  induction xs generalizing offset i with
-  | nil =>
-      intro item member
-      simp only [Jaune.List.putIndex.aux, List.drop_nil, List.not_mem_nil] at member
-  | cons x xs ih =>
-      cases i with
-      | zero =>
-          intro item member
-          simp only [Jaune.List.putIndex.aux, List.drop_zero, List.mem_cons] at member
-          rcases member with rfl | member
-          · omega
-          · have bound := ih (offset + 1) 0 item member
-            omega
-      | succ i =>
-          intro item member
-          simp only [Jaune.List.putIndex.aux, List.drop_succ_cons] at member
-          have bound := ih (offset + 1) i item member
-          omega
-
-/-- On a decoded indexed block list, every actual suffix index is strictly
-later than this cut's selected index. This discharges receipt persistence order. -/
-theorem ApplyTransactionsTrace.TxSplit.later_indices
-    {xs : List Tx} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
-    {trace : ApplyTransactionsTrace xs.putIndex benv bout finalBenv finalBout} {i : Nat}
-    (cut : trace.TxSplit i) :
-    ∀ item ∈ xs.putIndex.drop (i + 1), cut.index < item.1 := by
-  intro item member
-  have bound := putIndex_aux_mem_drop_index_ge xs 0 (i + 1) item member
-  rw [cut.putIndex_eq.1]
-  omega
-
 /-- The canonical positional cut splits complete-settlement roots exactly. -/
 theorem ApplyTransactionsTrace.splitAt_settledRoots_eq
     {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
@@ -335,49 +300,6 @@ theorem MidHistoryTraceIn.settledFrames_eq
       simp only [MidHistoryTraceIn.settledFrames, MidHistoryTraceIn.settledRoots,
         ih, block.settledFrames_eq, rootFrames, List.flatMap_append]
 
-/-- For a positive small block position, the same selected transaction receipt
-survives its actual indexed suffix. The cumulative gas is the head's own value. -/
-theorem ApplyTransactionsTrace.TxSplit.receipt_of_settledRoots_after_suffix
-    {xs : List Tx} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
-    {trace : ApplyTransactionsTrace xs.putIndex benv bout finalBenv finalBout} {i : Nat}
-    (cut : trace.TxSplit i)
-    (hsg : benv.stat.rules.stateGas = none) (positive : 0 < i) (small : i < 128) :
-    finalBout.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? =
-      some (makeReceipt cut.tx cut.head.messageOut.error cut.txBout.cumulativeGasUsed
-        (cut.head.settledRoots.flatMap (fun R => R.post.logs))) := by
-  have headSg : cut.benv.stat.rules.stateGas = none := by
-    rw [cut.before.stat_eq]
-    exact hsg
-  exact cut.head.receipt_of_settledRoots_after_later_indices cut.after headSg
-    (by rw [cut.putIndex_eq.1]; exact positive)
-    (by rw [cut.putIndex_eq.1]; exact small) cut.later_indices
-
-/-- The exact indexed transaction's retained-root receipt reaches the actual
-final body output through its suffix and the actual post-transaction stages. -/
-theorem StagedBodyTrace.receipt_of_txSplit_settledRoots
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (body : StagedBodyTrace benv txs ommers wds state bout) {i : Nat}
-    (cut : body.transactions.TxSplit i)
-    (hsg : benv.stat.rules.stateGas = none) (positive : 0 < i) (small : i < 128) :
-    bout.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? =
-      some (makeReceipt cut.tx cut.head.messageOut.error cut.txBout.cumulativeGasUsed
-        (cut.head.settledRoots.flatMap (fun R => R.post.logs))) := by
-  rw [body.receiptsTrie_eq_transactionBout]
-  exact cut.receipt_of_settledRoots_after_suffix hsg positive small
-
-/-- The same actual receipt at the configured block's final output. This
-supplies no independent block/transaction inclusion or commitment witness. -/
-theorem ConfiguredBlockTraceIn.receipt_of_txSplit_settledRoots
-    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
-    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
-    (cut : block.bodyTrace.transactions.TxSplit i)
-    (hsg : block.fork.ruleSet.stateGas = none) (positive : 0 < i) (small : i < 128) :
-    block.blockOutput.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? =
-      some (makeReceipt cut.tx cut.head.messageOut.error cut.txBout.cumulativeGasUsed
-        (cut.head.settledRoots.flatMap (fun R => R.post.logs))) := by
-  exact block.bodyTrace.receipt_of_txSplit_settledRoots cut hsg positive small
-
 /-- Equality compatibility instance of predicate transport. -/
 theorem ApplyTransactionsTrace.splitAt_cell_boundaries
     {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
@@ -525,23 +447,5 @@ theorem MidHistoryTraceIn.cell_rel_before_txSplit
   exact mid.cell_property_before_txSplit block cut k stateGas hC hCne hCdel notDeleted
     (fun value => rel ((start.state.getStor wa).get k) value)
     (fun R member known => transitive known (roots R member)) (reflexive _)
-
-/-- Conditional root-zero laws preserve an actual initial zero cell. -/
-theorem MidHistoryTraceIn.cell_zero_before_txSplit
-    {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {pre post : BlockChain}
-    (mid : MidHistoryTraceIn F cfg start pre)
-    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
-    (cut : block.bodyTrace.transactions.TxSplit i) (k : B256)
-    (stateGas : ∀ fork, F fork → fork.ruleSet.stateGas = none)
-    {wa : Adr} {C : ByteArray} (hC : start.state.getCode wa = C)
-    (hCne : C.toList ≠ []) (hCdel : ¬ isValidDelegation C)
-    (notDeleted : mid.OutputNotDeleted wa ∧ cut.before.OutputNotDeleted wa)
-    (roots : ∀ R ∈ mid.settledRoots ++ block.rootsBeforeTxSplit cut,
-      (R.pre.getStor wa).get k = 0 → (R.post.getStor wa).get k = 0)
-    (initial : ((start.state.getStor wa).get k) = 0) :
-    (cut.benv.state.getStor wa).get k = 0 ∧
-      cut.benv.state.getCode wa = C := by
-  exact mid.cell_property_before_txSplit block cut k stateGas hC hCne hCdel notDeleted
-    (fun value => value = 0) roots initial
 
 end Blanc.ExecutionTrace

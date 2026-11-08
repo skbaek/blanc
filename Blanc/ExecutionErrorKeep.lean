@@ -257,44 +257,6 @@ macro "err_walk " pre:term : tactic =>
       | focus (with_reducible refine applyBinary_errKeep _ _ ?_; err_keep; done)
       | focus (with_reducible refine applyTernary_errKeep _ _ ?_; err_keep; done)))
 
-theorem liftMachMetaExecution_errKeep (core : Mach → Meta → Footprint.Outcome (Mach × Meta) Unit)
-    {pre d : Devm} (h : Devm.ErrKeep pre d)
-    (hcore : ∀ m v m' v', core m v = .ok ((), (m', v')) → v'.error = v.error) :
-    Except.OkOn (Devm.ErrKeep pre) (liftMachMetaExecution core d) := by
-  intro r hr
-  unfold liftMachMetaExecution liftMachMeta Footprint.liftOutcome Footprint.toExecution at hr
-  split at hr
-  · cases hr
-  · rename_i out hcase
-    split at hcase
-    · cases hcase
-    · rename_i heq
-      cases hcase
-      obtain ⟨⟩ := hr
-      exact (hcore _ _ _ _ heq).trans h
-
-theorem Rinst.balanceCore_err (rules : ForkRules) (world : World) (mach : Mach) (view : Meta)
-    (m' : Mach) (v' : Meta)
-    (h : Rinst.balanceCore rules world mach view = .ok ((), (m', v'))) :
-    v'.error = view.error := by
-  unfold Rinst.balanceCore at h
-  rcases hp : mach.pop with ⟨err, m1⟩ | ⟨x, m1⟩
-  · rw [hp] at h; cases h
-  · rw [hp] at h
-    dsimp only at h
-    split at h
-    · cases h
-    · split at h
-      · cases h
-      · simp only [Except.ok.injEq, Prod.mk.injEq] at h
-        obtain ⟨-, -, rfl⟩ := h
-        split <;> split <;> (try split) <;> rfl
-
-theorem Rinst.balance_errKeep (rules : ForkRules) (devm : Devm) :
-    Except.OkOn (Devm.ErrKeep devm) (liftMachMetaWorldExecution (Rinst.balanceCore rules) devm) :=
-  liftMachMetaExecution_errKeep _ Devm.ErrKeep.rfl
-    (fun _ _ _ _ h => Rinst.balanceCore_err _ _ _ _ _ _ h)
-
 /-- The fork-selected delegation access keeps the error field. -/
 theorem Devm.ErrKeep.forkAccessDelegation {pre d : Devm} (h : Devm.ErrKeep pre d)
     (rules : ForkRules) (adr : Adr) :
@@ -332,29 +294,6 @@ macro_rules
   | `(tactic| err_keep1) => `(tactic| with_reducible apply Devm.ErrKeep.creditBeneficiary)
 macro_rules
   | `(tactic| err_keep1) => `(tactic| with_reducible apply Devm.ErrKeep.selfdestructRefund)
-
-theorem Rinst.runCore_errKeep (pc : Nat) (sevm : Sevm) (devm : Devm) (r : Rinst)
-    (hsg : sevm.benvStat.rules.stateGas = none) :
-    Except.OkOn (Devm.ErrKeep devm) (Rinst.runCore pc devm sevm r) := by
-  have h : Devm.ErrKeep devm devm := Devm.ErrKeep.rfl
-  cases r
-  case keccak256 => simp only [Rinst.runCore_keccak256_eq_reference]; err_walk devm
-  all_goals simp only [Rinst.runCore, hsg]
-  case balance => exact Rinst.balance_errKeep _ _
-  all_goals err_walk devm
-
-theorem Jinst.runCore_errKeep (pc : Nat) (sevm : Sevm) (devm : Devm) (j : Jinst) :
-    Except.OkOn (fun r : Nat × Devm => Devm.ErrKeep devm r.2) (Jinst.runCore pc devm sevm j) := by
-  have h : Devm.ErrKeep devm devm := Devm.ErrKeep.rfl
-  cases j <;> simp only [Jinst.runCore]
-  all_goals err_walk devm
-
-theorem Linst.run_errKeep (sevm : Sevm) (devm : Devm) (l : Linst)
-    (hsg : sevm.benvStat.rules.stateGas = none) :
-    Except.OkOn (Devm.ErrKeep devm) (Linst.run sevm devm l) := by
-  have h : Devm.ErrKeep devm devm := Devm.ErrKeep.rfl
-  cases l <;> simp only [Linst.run, hsg]
-  all_goals err_walk devm
 
 /-! ### Spawned frames and their resumption -/
 
@@ -454,109 +393,8 @@ theorem genericCreate.step_errKeep {devm d : Devm} (h : Devm.ErrKeep devm d)
 macro_rules | `(tactic| err_keep1) => `(tactic| with_reducible apply genericCall.step_errKeep)
 macro_rules | `(tactic| err_keep1) => `(tactic| with_reducible apply genericCreate.step_errKeep)
 
-theorem Xinst.step_errKeep (sevm : Sevm) (devm : Devm) (x : Xinst)
-    (hsg : sevm.benvStat.rules.stateGas = none) :
-    XStep.ErrKeep devm (Xinst.step sevm devm x) := by
-  have h : Devm.ErrKeep devm devm := Devm.ErrKeep.rfl
-  cases x <;> simp only [Xinst.step, hsg]
-  all_goals first
-    | with_reducible apply XStep.ErrKeep.ofExcept
-    | (split <;> with_reducible apply XStep.ErrKeep.ofExcept)
-  all_goals err_walk devm
-
 /-! ### One interpreter step -/
 
-/-- The error field across one interpreter step, success-only. -/
-def Step.ErrKeep (devm : Devm) : Step → Prop
-  | .halt ex => Except.OkOn (Devm.ErrKeep devm) ex
-  | .cont _ d => Devm.ErrKeep devm d
-  | .spawn _ rsm _ => ∀ r, Except.OkOn (Devm.ErrKeep devm) (rsm.run r)
-
-theorem Step.ErrKeep.ofExecution {devm : Devm} {pc : Nat} {e : Execution}
-    (h : Except.OkOn (Devm.ErrKeep devm) e) : Step.ErrKeep devm (Step.ofExecution pc e) := by
-  cases e with
-  | error e => exact Except.OkOn.error
-  | ok d => exact h d rfl
-
-theorem Step.ErrKeep.ofJump {devm : Devm} {j : Except (EvmError × Devm) (Nat × Devm)}
-    (h : Except.OkOn (fun r : Nat × Devm => Devm.ErrKeep devm r.2) j) :
-    Step.ErrKeep devm (Step.ofJump j) := by
-  cases j with
-  | error e => exact Except.OkOn.error
-  | ok r => exact h r rfl
-
-theorem Step.ErrKeep.toStep {devm : Devm} {pc : Nat} {s : XStep}
-    (h : XStep.ErrKeep devm s) : Step.ErrKeep devm (XStep.toStep pc s) := by
-  cases s with
-  | done ex => exact Step.ErrKeep.ofExecution h
-  | spawn f rsm => exact h
-
-theorem Ninst.step_errKeep (evm : Evm) (n : Ninst)
-    (hsg : evm.sta.benvStat.rules.stateGas = none) :
-    Step.ErrKeep evm.dyna (Ninst.step evm n) := by
-  have h : Devm.ErrKeep evm.dyna evm.dyna := Devm.ErrKeep.rfl
-  cases n with
-  | reg r =>
-    simp only [Ninst.step]
-    exact Step.ErrKeep.ofExecution (Rinst.runCore_errKeep _ _ _ r hsg)
-  | exec x =>
-    simp only [Ninst.step]
-    exact Step.ErrKeep.toStep (Xinst.step_errKeep _ _ x hsg)
-  | push xs hxs =>
-    simp only [Ninst.step]
-    split <;> apply Step.ErrKeep.ofExecution <;> err_walk evm.dyna
-  | dupn imm =>
-    simp only [Ninst.step]
-    apply Step.ErrKeep.ofExecution
-    err_walk evm.dyna
-  | swapn imm =>
-    simp only [Ninst.step]
-    apply Step.ErrKeep.ofExecution
-    err_walk evm.dyna
-  | exchange imm =>
-    simp only [Ninst.step]
-    apply Step.ErrKeep.ofExecution
-    err_walk evm.dyna
-
-theorem Evm.step_errKeep (evm : Evm) (hsg : evm.sta.benvStat.rules.stateGas = none) :
-    Step.ErrKeep evm.dyna (Evm.step evm) := by
-  unfold Evm.step
-  split
-  · exact Except.OkOn.error
-  · exact Ninst.step_errKeep evm _ hsg
-  · exact Step.ErrKeep.ofJump (Jinst.runCore_errKeep _ _ _ _)
-  · exact Linst.run_errKeep _ _ _ hsg
-
 /-! ### A successful execution keeps its error field -/
-
-/-- **A frame's execution that ends `.ok post` ends with the error field it started with.** -/
-theorem Exec.ok_error_eq {pc : Nat} {sevm : Sevm} {pre post : Devm}
-    (run : Exec pc sevm pre (.ok post)) (hsg : sevm.benvStat.rules.stateGas = none) :
-    post.error = pre.error := by
-  revert hsg
-  generalize hout : (Except.ok post : Execution) = out at run
-  induction run with
-  | @halt p e d ex hstep =>
-      intro hsg
-      have hg := Evm.step_errKeep ⟨p, e, d⟩ hsg
-      rw [hstep] at hg
-      exact hg post hout.symm
-  | @cont p e d p' d' ex hstep next ih =>
-      intro hsg
-      have hg := Evm.step_errKeep ⟨p, e, d⟩ hsg
-      rw [hstep] at hg
-      exact Eq.trans (ih hout hsg) hg
-  | doneErr hstep henter hresume => intro _; cases hout
-  | @doneOk p e d f rsm p' r d' ex hstep henter hresume next ih =>
-      intro hsg
-      have hg := Evm.step_errKeep ⟨p, e, d⟩ hsg
-      rw [hstep] at hg
-      exact Eq.trans (ih hout hsg) (hg _ _ hresume)
-  | runErr hstep henter child hresume ih => intro _; cases hout
-  | @runOk p e d f rsm p' cevm raw d' ex hstep henter child hresume next ihChild ihNext =>
-      intro hsg
-      have hg := Evm.step_errKeep ⟨p, e, d⟩ hsg
-      rw [hstep] at hg
-      exact Eq.trans (ihNext hout hsg) (hg _ _ hresume)
 
 end Blanc

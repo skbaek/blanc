@@ -38,10 +38,6 @@ open Jaune Blanc
 
 variable {observe : Conf → Conf → Prop}
 
--- Structural equality of synthetic trees, so a shape equation over a whole certificate entry
--- is a kernel decision.
-deriving instance DecidableEq for SFunc
-
 /-! ## One straight-line step -/
 
 /-- The successor stack and memory of a straight-line, storage-free instruction over the
@@ -195,19 +191,6 @@ section CallRet
 variable {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm}
   {b : Devm} {S : List B256} {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
 
-/-- A `.ret` on a reach to an `SSTORE` pops the return tag into the innermost pending
-continuation. -/
-theorem rs_ret {t : B256} (run : Reach P fs sevm ⟨St b (t :: S) M G, .ret, K⟩ T)
-    (hT : AtSstore T) :
-    ∃ f K' b' M' G', K = f :: K' ∧ Reach P fs sevm ⟨St b' S M' G', f, K'⟩ T := by
-  rcases Relation.ReflTransGen.cases_head run with rfl | ⟨c, step, rest⟩
-  · obtain ⟨f', hx⟩ := hT
-    cases hx
-  · cases step with
-    | ret t' pop =>
-      obtain ⟨-, e⟩ := St.of_pop1 pop
-      exact ⟨_, _, _, _, _, rfl, e ▸ rest⟩
-
 /-- Return through the pending continuation with the same walk base and memory. -/
 theorem ObservedReach.rs_retBase {t : B256}
     (run : ObservedReach P observe fs sevm ⟨St b (t :: S) M G, .ret, K⟩ T)
@@ -260,20 +243,6 @@ theorem rs_callIn {k : Nat} {f : SFunc} {t : B256}
     ∃ g G', fs[k]? = some g ∧ Reach P fs sevm ⟨St b S M G', g, f :: K⟩ T := by
   obtain ⟨g, G', lookup, rest⟩ := ObservedReach.rs_callIn (ObservedReach.of_reach run) hT
   exact ⟨g, G', lookup, rest.forget⟩
-
-/-- A `callNext` into an `SSTORE`-free callee on a reach to an `SSTORE`, from any machine:
-the callee returns and the reach continues from the continuation. -/
-theorem rs_callOverAny {E : List Nat} (hE : SstoreFreeSet fs E = true) {k : Nat} {f g : SFunc}
-    {d : Devm} (hk : fs[k]? = some g) (hkE : k ∈ E)
-    (run : Reach P fs sevm ⟨d, .callNext k f, K⟩ T) (hT : AtSstore T) :
-    ∃ D, Reach P fs sevm ⟨D, f, K⟩ T := by
-  obtain ⟨t, g', d', hk', pop, inside | ⟨D, -, rest⟩⟩ := Reach.callS run hT
-  · rw [hk] at hk'
-    cases hk'
-    obtain ⟨T', r', rfl⟩ := inside
-    exact (Reach.false_of_sstoreFree hE r' hT (SstoreFreeSet.lookup hE hkE hk)
-      (fun _ h => by cases h)).elim
-  · exact ⟨D, rest⟩
 
 end CallRet
 
@@ -343,40 +312,6 @@ theorem rs_cmp_eq_either (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n
   · exact .inl ⟨zero, G', rest.forget⟩
   · exact .inr ⟨nonzero, g, G', lookup, rest.forget⟩
 
-theorem ObservedReach.selWalk_inlS (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {c : B256}
-    {f : SFunc} {j : Nat} (hw : f.selWalk σ = .inl (c, j))
-    (run : ObservedReach P observe fs sevm ⟨St b (σ :: S) M G, f, K⟩ T) (hT : AtSstore T) :
-    σ = c ∧ ∃ g G', fs[j]? = some g ∧ ObservedReach P observe fs sevm ⟨St b (σ :: S) M G', g, K⟩ T := by
-  fun_induction SFunc.selWalk σ f generalizing G with
-  | case1 f ih =>
-      obtain ⟨G', r⟩ := ObservedReach.rs_dest run hT
-      exact ih hw r
-  | case2 c0 c1 c2 c3 _ _ _ _ f g h ih =>
-      obtain ⟨G', r⟩ := ObservedReach.rs_cmp_gt erase run hT
-      rw [ite_eq_left h] at r
-      exact ih hw r
-  | case3 c0 c1 c2 c3 _ _ _ _ f g h ih =>
-      obtain ⟨G', r⟩ := ObservedReach.rs_cmp_gt erase run hT
-      rw [ite_eq_right h] at r
-      exact ih hw r
-  | case4 c0 c1 c2 c3 _ _ _ _ f j h ih =>
-      rcases ObservedReach.rs_cmp_eq_either erase run hT with ⟨-, G', r⟩ | ⟨ne, -⟩
-      · exact ih hw r
-      · exact absurd h ne
-  | case5 c0 c1 c2 c3 _ _ _ _ f j h =>
-      obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Sum.inl.inj hw)
-      rcases ObservedReach.rs_cmp_eq_either erase run hT with ⟨zero, -⟩ | ⟨ne, r⟩
-      · exact absurd zero h
-      · exact ⟨(B256.eq_of_eqCheck_ne_zero ne).symm, r⟩
-  | case6 => cases hw
-
-theorem Reach.selWalk_inlS (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {c : B256}
-    {f : SFunc} {j : Nat} (hw : f.selWalk σ = .inl (c, j))
-    (run : Reach P fs sevm ⟨St b (σ :: S) M G, f, K⟩ T) (hT : AtSstore T) :
-    σ = c ∧ ∃ g G', fs[j]? = some g ∧ Reach P fs sevm ⟨St b (σ :: S) M G', g, K⟩ T := by
-  obtain ⟨same, g, G', lookup, rest⟩ := ObservedReach.selWalk_inlS erase hw (ObservedReach.of_reach run) hT
-  exact ⟨same, g, G', lookup, rest.forget⟩
-
 end Dispatch
 
 /-! ## Scratch hashes -/
@@ -397,15 +332,6 @@ def packedBoolHashLead : List Ninst :=
     .reg .exp, .reg (.dup 1), .reg .sload, .reg (.dup 1), .push [0xff] (by decide +kernel),
     .reg .mul, .reg .not, .reg .and, .reg (.swap 0), .reg (.dup 3), .reg .iszero,
     .reg .iszero, .reg .mul, .reg .or, .reg (.swap 0)]
-
-theorem packedBoolHashLead_size : (packedBoolHashLead.map Ninst.size).sum = 22 := by
-  decide +kernel
-
-/-- The literal hash-to-store lead for a whole mapping word. -/
-def wordStoreHashLead : List Ninst := [.reg .keccak256, .reg (.dup 1), .reg (.swap 0)]
-
-theorem wordStoreHashLead_size : (wordStoreHashLead.map Ninst.size).sum = 3 := by
-  decide +kernel
 
 /-- solc's mapping slot from its two scratch words, with the offsets as any closed words of the
 right value: `mstore(0, key); mstore(32, base); keccak256(0, 64)`. -/
@@ -473,61 +399,6 @@ theorem reach_loop_index {head : SFunc} {K : List SFunc} {T : Conf} {Q : Prop}
 end Loop
 
 /-! ## Memory potential along a reach -/
-
-/-- **A reach from a state of bounded potential records it at every step.** -/
-theorem Reach.withPot {P : Sevm → Devm → Ninst → Devm → Prop}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
-    {fs : List SFunc} {sevm : Sevm} (hsg : sevm.benvStat.rules.stateGas = none)
-    {a T : Conf} (h : Reach P fs sevm a T) (pot : FreePtr.Pot a.d) :
-    Reach (FreePtr.PotStep P) fs sevm a T ∧ FreePtr.Pot T.d := by
-  induction h with
-  | refl => exact ⟨.refl, pot⟩
-  | tail _ step ih =>
-    obtain ⟨r, p⟩ := ih
-    cases step with
-    | next hp =>
-      have p' := FreePtr.Pot.step hsg (hP hp) p
-      exact ⟨.tail r (.next ⟨hp, p, p'⟩), p'⟩
-    | dest hb => exact ⟨.tail r (.dest hb), FreePtr.Pot.burn hb p⟩
-    | zero t h => exact ⟨.tail r (.zero t h), FreePtr.Pot.popBurn h p⟩
-    | succ t w hw h => exact ⟨.tail r (.succ t w hw h), FreePtr.Pot.popBurn h p⟩
-    | toZero t h => exact ⟨.tail r (.toZero t h), FreePtr.Pot.popBurn h p⟩
-    | toSucc t w hw hk h => exact ⟨.tail r (.toSucc t w hw hk h), FreePtr.Pot.popBurn h p⟩
-    | jump t hk h => exact ⟨.tail r (.jump t hk h), FreePtr.Pot.popBurn h p⟩
-    | call t hk h => exact ⟨.tail r (.call t hk h), FreePtr.Pot.popBurn h p⟩
-    | ret t h => exact ⟨.tail r (.ret t h), FreePtr.Pot.popBurn h p⟩
-    | pcAt hp hr =>
-      have p' := FreePtr.Pot.step hsg (hP hp) p
-      exact ⟨.tail r (.pcAt ⟨hp, p, p'⟩ hr), p'⟩
-
-/-- **A raw `SSTORE` node of a certified frame, as a reach under the potential.** A node `N`
-under a frame `R` entered at pc `0` of certified bytes, without state gas, with empty stack and
-memory and gas below `2 ^ 256`, at an `SSTORE` is the end of a `PotStep (StepIn R)` reach from
-the entry tree over the entry walk state, at an `SSTORE`, holding `N`'s machine. -/
-theorem Reach.sstoreNode_pot {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
-    {R N : Exec.Deriv} (hpc : R.pc = 0) (hcode : R.sevm.code = code)
-    (hsg : R.sevm.benvStat.rules.stateGas = none) (stack : R.devm.stack = [])
-    (memory : R.devm.memory = Mem.empty) (gas : R.devm.gasMeasure < 2 ^ 256)
-    (chain : Exec.Deriv.ParentPrefix R N) (hat : Ninst.At N.sevm.code N.pc (.reg .sstore)) :
-    ∃ T, Reach (FreePtr.PotStep (StepIn R)) c.prog R.sevm
-      ⟨St R.devm [] Mem.empty R.devm.gasLeft, (Cursor.start c).f, []⟩ T ∧ AtSstore T ∧
-      T.d = N.devm := by
-  obtain ⟨κ, reach, ok⟩ := reach_of_parentPrefix_noStateGas hc hpc hcode hsg chain
-  obtain ⟨g, hf, -⟩ := ok.tree_of_sstore hat
-  have pot : FreePtr.Pot R.devm := by
-    unfold FreePtr.Pot
-    rw [memory]
-    exact gas
-  obtain ⟨r, -⟩ := Reach.withPot (fun h => StepIn.toRun h) hsg reach pot
-  have hK : (Cursor.start c).K = [] := by
-    unfold Cursor.start
-    split <;> rfl
-  have e : (Cursor.start c).conf R.devm =
-      ⟨St R.devm [] Mem.empty R.devm.gasLeft, (Cursor.start c).f, []⟩ := by
-    rw [← stack, ← memory, ← St.self' R.devm]
-    simp only [Cursor.conf, hK, List.map_nil]
-  rw [e] at r
-  exact ⟨_, r, ⟨g, hf⟩, rfl⟩
 
 /-! ## The payload copy loop -/
 
@@ -631,21 +502,6 @@ theorem body_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   · omega
   · simp only [St.stack]
     rw [key_succ base0 (by omega), cursor_succ hwin]
-
-/-- `MLOAD` as the copy loop's read, under the potential: one word in place of the cursor,
-with room for the next cursor. -/
-theorem mload_rdStep (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
-    {b : Devm} {S : List B256} {M : Mem} {G : Nat} {d : Devm} {c : B256}
-    (h : FreePtr.PotStep P sevm (St b (c :: S) M G) (.reg .mload) d) :
-    ∃ v b' M' G', d = St b' (v :: S) M' G' ∧ SolcStorageReturn.Keeps M M' := by
-  obtain ⟨G', rfl⟩ := ri_mload (erase h.1)
-  exact ⟨_, _, _, _, rfl, SolcStorageReturn.Keeps.read _ _ _⟩
-
-theorem mload_win (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
-    {b : Devm} {S : List B256} {M : Mem} {G : Nat} {d : Devm} {c : B256}
-    (h : FreePtr.PotStep P sevm (St b (c :: S) M G) (.reg .mload) d) (_ : c.toNat < fin.toNat) :
-    c.toNat + 32 < 2 ^ 256 :=
-  SolcStoragePayload.readWindow_of_potStep erase rfl h
 
 /-- `CALLDATALOAD` as the copy loop's read: one word in place of the cursor; the room for
 the next cursor comes from the end word. -/

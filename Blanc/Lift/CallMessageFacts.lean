@@ -39,12 +39,6 @@ end Msg
 theorem callSpawnParent_memory_data (d : Devm) (c ii is oi os : Nat) :
     (callSpawnParent d c ii is oi os).memory.data = d.memory.data := rfl
 
-theorem callChildMsg_zero (sevm : Sevm) (P : Devm) (f : Nat) (callee dadr : Adr) (ii is : Nat)
-    (code : ByteArray) (dp : Bool) (stmid : Jaune.State) :
-    callChildMsg sevm P f 0 callee dadr ii is code dp stmid =
-      valueCallSpawnMsg sevm P f 0 callee dadr ii is code dp := by
-  simp only [callChildMsg, ite_true]
-
 theorem addAccessedAddress_setMach_memory (W : Devm) (m : Mach) (a : Adr) :
     (addAccessedAddress (W.setMach m) a).memory = m.memory := rfl
 

@@ -157,77 +157,6 @@ theorem Exec.targetLogEventsFrom_frames (ca : Adr) (path : List Nat) (counter : 
 
 /-! ## Storage of `ca` across one foreign step -/
 
-/-- A same-frame step of a frame other than `ca` keeps `ca`'s storage. -/
-theorem Evm.step_cont_getStor_foreign_noStateGas {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
-    {ca : Adr} (hsg : sevm.benvStat.rules.stateGas = none)
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post)
-    (foreign : sevm.currentTarget ≠ ca) :
-    Devm.getStor post ca = Devm.getStor pre ca := by
-  cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
-  | none =>
-      unfold Evm.step at step
-      rw [decoded] at step
-      cases step
-  | some instruction =>
-      cases instruction with
-      | last last =>
-          rw [Evm.step_last decoded] at step
-          cases step
-      | jump jumpInst =>
-          rw [Evm.step_jump decoded] at step
-          cases jumpEq : Jinst.run ⟨pc, sevm, pre⟩ jumpInst with
-          | error error =>
-              rw [jumpEq] at step
-              cases step
-          | ok pair =>
-              rcases pair with ⟨actualPc, actualPost⟩
-              rw [jumpEq] at step
-              cases step
-              have frame := Jinst.run_instructionFrame ⟨pc, sevm, pre⟩ jumpInst
-              rw [jumpEq] at frame
-              exact (frame.getStor ca).symm
-      | next instruction =>
-          have nstep : Ninst.step ⟨pc, sevm, pre⟩ instruction = .cont pc' post := by
-            rw [← Evm.step_next decoded]
-            exact step
-          have pcEq : pc' = pc + instruction.size := Ninst.step_cont_pc nstep
-          subst pc'
-          have nrun : Ninst.StepRun pc sevm pre instruction .none (.ok post) := by
-            unfold Ninst.StepRun
-            rw [nstep]
-            exact ⟨rfl, rfl⟩
-          cases instruction with
-          | exec executable =>
-              simp only [Ninst.step_exec, XStep.toStep] at nstep
-              cases actual : Xinst.step sevm pre executable with
-              | spawn frame resume => rw [actual] at nstep; cases nstep
-              | done out =>
-                  rw [actual] at nstep
-                  cases out with
-                  | error error => cases nstep
-                  | ok actualPost =>
-                      cases nstep
-                      exact Xinst.step_done_getStor_noStateGas hsg actual ca
-          | reg regular =>
-              have run : Rinst.run ⟨pc, sevm, pre⟩ regular = .ok post :=
-                (Step.run_ofExecution.mp nrun).2.symm
-              by_cases store : regular = .sstore
-              · subst regular
-                exact sstore_preserves_getStor_ne run foreign
-              · exact (congrFun (Rinst.preserves_stor store run) ca).symm
-          | push bytes bound =>
-              exact ((Ninst.push_instructionFrame_effectRec
-                (hxs := bound) (xl := .none) trivial nrun).getStor ca).symm
-          | dupn imm =>
-              exact ((Ninst.dupn_instructionFrame_effectRec
-                (xl := .none) trivial nrun).getStor ca).symm
-          | swapn imm =>
-              exact ((Ninst.swapn_instructionFrame_effectRec
-                (xl := .none) trivial nrun).getStor ca).symm
-          | exchange imm =>
-              exact ((Ninst.exchange_instructionFrame_effectRec
-                (xl := .none) trivial nrun).getStor ca).symm
-
 /-- A childless message preserves storage at each structurally protected owner. -/
 theorem Evm.step_done_getStor {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
     {frame : Jaune.Frame} {resume : Resume}
@@ -549,80 +478,6 @@ theorem Exec.committedFrame_log_mem_noStateGas
   rw [Exec.committed_logs_noStateGas run committed hsg rfl rfl]
   exact List.mem_append_right _ (Exec.committedFrame_ownLogs_subset run member logged)
 
-theorem Exec.committed_logs_at
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
-    (fork : CoveredFork sevm.benvStat.fork) (path : List Nat) (counter : Nat) :
-    (Execution.committedPost out committed).logs =
-      pre.logs ++ (Exec.stateBoundariesOfCommits path counter run committed).flatMap
-        Exec.boundaryOwnLogs :=
-  Exec.committed_logs_at_noStateGas run committed fork.rules_stateGas_none
-    (fork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
-      rfl rfl rfl rfl)
-    fork.rules_access path counter
-
-/-- One same-frame step appends exactly its own successful LOG, if any. -/
-theorem Exec.cont_logs_eq_noStateGas {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm} {out : Execution}
-    {b : Bool} {a : AccessSchedule}
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (hdel : sevm.benvStat.rules.delegationEnabled = b)
-    (hacc : sevm.benvStat.rules.access = a)
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' inter) (next : Exec pc' sevm inter out)
-    (committed : Execution.commits out = true) :
-    inter.logs = pre.logs ++ (Exec.logAt? pc sevm pre).toList := by
-  have whole := Exec.committed_logs_at_noStateGas (.cont step next) committed hsg hdel hacc [] 0
-  have rest := Exec.committed_logs_at_noStateGas next committed hsg hdel hacc [] 0
-  simp only [Exec.stateBoundariesOfCommits, List.flatMap_cons, Exec.boundaryOwnLogs,
-    Exec.stateBoundary, Exec.Frame.rootDeriv, Exec.Frame.ofRun,
-    Exec.Deriv.successfulLog?] at whole
-  rw [whole, ← List.append_assoc] at rest
-  exact (List.append_cancel_right rest).symm
-
-theorem Exec.cont_logs_eq {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm} {out : Execution}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' inter) (next : Exec pc' sevm inter out)
-    (committed : Execution.commits out = true) :
-    inter.logs = pre.logs ++ (Exec.logAt? pc sevm pre).toList :=
-  Exec.cont_logs_eq_noStateGas fork.rules_stateGas_none
-    (fork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
-      rfl rfl rfl rfl)
-    fork.rules_access step next committed
-
-/-- A childless message adds no log. -/
-theorem Exec.doneOk_logs_eq_noStateGas {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
-    {frame : Jaune.Frame} {resume : Resume}
-    {result : Except (EvmError × State × AdrSet × Tra) Devm} {out : Execution}
-    {b : Bool} {a : AccessSchedule}
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (hdel : sevm.benvStat.rules.delegationEnabled = b)
-    (hacc : sevm.benvStat.rules.access = a)
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
-    (entered : frame.enter = .done result)
-    (resumed : resume.run result = .ok inter) (next : Exec pc' sevm inter out)
-    (committed : Execution.commits out = true) :
-    inter.logs = pre.logs := by
-  have whole := Exec.committed_logs_at_noStateGas (.doneOk step entered resumed next) committed
-    hsg hdel hacc [] 0
-  have rest := Exec.committed_logs_at_noStateGas next committed hsg hdel hacc [] 1
-  simp only [Exec.stateBoundariesOfCommits, List.flatMap_cons, Exec.boundaryOwnLogs,
-    Exec.stateBoundary, List.nil_append] at whole
-  rw [whole] at rest
-  exact (List.append_cancel_right rest).symm
-
-theorem Exec.doneOk_logs_eq {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
-    {frame : Jaune.Frame} {resume : Resume}
-    {result : Except (EvmError × State × AdrSet × Tra) Devm} {out : Execution}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
-    (entered : frame.enter = .done result)
-    (resumed : resume.run result = .ok inter) (next : Exec pc' sevm inter out)
-    (committed : Execution.commits out = true) :
-    inter.logs = pre.logs :=
-  Exec.doneOk_logs_eq_noStateGas fork.rules_stateGas_none
-    (fork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
-      rfl rfl rfl rfl)
-    fork.rules_access step entered resumed next committed
-
 /-- An entered child adds exactly its own committed logs when it settles, and none when
 it rolls back. -/
 theorem Exec.runOk_logs_eq_noStateGas {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
@@ -668,24 +523,6 @@ theorem Exec.runOk_logs_eq_noStateGas {pc pc' : Nat} {sevm : Sevm} {pre inter : 
       List.nil_append] at whole
     rw [whole] at rest
     exact (List.append_cancel_right rest).symm
-
-theorem Exec.runOk_logs_eq {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
-    {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm} {raw out : Execution}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
-    (entered : frame.enter = .run childEvm)
-    (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
-    (resumed : resume.run (frame.settle raw) = .ok inter)
-    (next : Exec pc' sevm inter out)
-    (committed : Execution.commits out = true) :
-    (∀ settles : Frame.settlementCommits frame raw = true, ∃ L,
-      (Execution.committedPost raw (Frame.raw_commits_of_settlementCommits settles)).logs =
-        childEvm.dyna.logs ++ L ∧ inter.logs = pre.logs ++ L) ∧
-    (¬ Frame.settlementCommits frame raw = true → inter.logs = pre.logs) :=
-  Exec.runOk_logs_eq_noStateGas fork.rules_stateGas_none
-    (fork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
-      rfl rfl rfl rfl)
-    fork.rules_access step entered child resumed next committed
 
 /-! ## The installed image across foreign steps and into children -/
 
@@ -894,25 +731,6 @@ theorem Xinst.call_spawn_ofCall {sevm : Sevm} {pre : Devm} {x : Xinst}
     (fork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
       rfl rfl rfl rfl)
     fork.rules_access callFamily spawn
-
-/-- A child entered by an executable instruction starts with no logs. -/
-theorem Xinst.spawn_child_logs_noStateGas {sevm : Sevm} {pre : Devm} {x : Xinst}
-    {frame : Jaune.Frame} {resume : Resume} {child : Evm}
-    (fork : sevm.benvStat.rules.stateGas = none)
-    (spawn : Xinst.step sevm pre x = .spawn frame resume)
-    (entered : frame.enter = .run child) : child.dyna.logs = [] := by
-  obtain ⟨benv, transfer, rfl⟩ := Jaune.Frame.enter_run_inv entered
-  apply Lift.initDevm_logs
-  change benv.stat.rules.stateGas = none
-  rw [benvAfterTransfer_stat transfer, Xinst.step_spawn_benvStat spawn]
-  exact fork
-
-theorem Xinst.spawn_child_logs {sevm : Sevm} {pre : Devm} {x : Xinst}
-    {frame : Jaune.Frame} {resume : Resume} {child : Evm}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (spawn : Xinst.step sevm pre x = .spawn frame resume)
-    (entered : frame.enter = .run child) : child.dyna.logs = [] :=
-  Xinst.spawn_child_logs_noStateGas fork.rules_stateGas_none spawn entered
 
 /-- A CALL or STATICCALL step whose pushed success flag is nonzero committed its entered
 child. -/

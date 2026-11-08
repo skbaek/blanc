@@ -37,87 +37,6 @@ open Jaune
 
 /-! ## Direct children keep the code at an address no CREATE frame targets -/
 
-/-- **Every committed direct child of an execution keeps the code at `a`**, when the execution
-enters no CREATE frame targeting `a` (`Exec.codeAt_avoid` on each child). -/
-theorem Exec.childFrames_codeAt_keepH {a : Adr} :
-    ∀ {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec pc sevm pre out),
-      sevm.benvStat.rules.stateGas = none →
-      (∀ root ∈ Exec.rawFrameRoots run,
-        root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a) →
-      ∀ c ∈ Exec.childFrames run, c.post.getCode a = c.pre.getCode a := by
-  intro pc sevm pre out run
-  induction run with
-  | halt _ =>
-    intro _ _ c member
-    simp only [Exec.childFrames, List.not_mem_nil] at member
-  | @cont pc sevm devm pc' devm' ex step next ih =>
-    intro hfork avoid
-    have hself := avoid _ (List.mem_cons_self ..)
-    refine ih hfork ?_
-    intro root member
-    simp only [Exec.rawFrameRoots, List.mem_cons] at member
-    rcases member with rfl | member
-    · exact hself
-    · exact avoid root (by
-        simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons, member, or_true])
-  | doneErr _ _ _ =>
-    intro _ _ c member
-    simp only [Exec.childFrames, List.not_mem_nil] at member
-  | @doneOk pc sevm devm frame resume pc' result devm' ex step enter resumed next ih =>
-    intro hfork avoid
-    have hself := avoid _ (List.mem_cons_self ..)
-    refine ih hfork ?_
-    intro root member
-    simp only [Exec.rawFrameRoots, List.mem_cons] at member
-    rcases member with rfl | member
-    · exact hself
-    · exact avoid root (by
-        simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons, member, or_true])
-  | runErr _ _ _ _ =>
-    intro _ _ c member
-    simp only [Exec.childFrames, List.not_mem_nil] at member
-  | @runOk pc sevm devm frame resume pc' cevm raw devm' ex step enter child resumed next
-      childIh nextIh =>
-    intro hfork avoid c member
-    have hself := avoid _ (List.mem_cons_self ..)
-    simp only [Exec.childFrames, List.mem_append] at member
-    rcases member with here | later
-    · split at here
-      · rename_i committed
-        rw [List.mem_singleton] at here
-        subst here
-        have forkc := (ExecutionTrace.Evm.step_spawn_child_data_noStateGas hfork step enter).2
-        have keep := (ExecutionTrace.Exec.codeAt_avoid_noStateGas child forkc (by
-          intro root member
-          exact avoid root (by
-            simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
-              List.mem_append] at member ⊢
-            rcases member with h | h
-            · exact Or.inr (Or.inl h)
-            · exact Or.inr (Or.inr (Or.inl h))))).1
-        cases raw with
-        | error _ =>
-          have raw := Frame.raw_commits_of_settlementCommits committed
-          simp only [Execution.commits, Bool.false_eq_true] at raw
-        | ok childPost => exact keep
-      · simp only [List.not_mem_nil] at here
-    · refine nextIh hfork ?_ c later
-      intro root member
-      simp only [Exec.rawFrameRoots, List.mem_cons] at member
-      rcases member with rfl | member
-      · exact hself
-      · exact avoid root (by
-          simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
-            List.mem_append, member, or_true])
-
-/-- The covered-fork form of `Exec.childFrames_codeAt_keepH`. -/
-theorem Exec.childFrames_codeAt_keep {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
-    {out : Execution} (run : Exec pc sevm pre out) (hfork : CoveredFork sevm.benvStat.fork)
-    (avoid : ∀ root ∈ Exec.rawFrameRoots run,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a) :
-    ∀ c ∈ Exec.childFrames run, c.post.getCode a = c.pre.getCode a :=
-  Exec.childFrames_codeAt_keepH run hfork.rules_stateGas_none avoid
-
 /-- No entered frame of an execution starts with more gas than the execution's own root. -/
 theorem Exec.rawFrameRoots_gas_le {pc : Nat} {sevm : Sevm} {pre : Devm}
     {out : Execution} (run : Exec pc sevm pre out) :
@@ -379,49 +298,6 @@ theorem ConfiguredHistoryTrace.frameAdmitted_gas {cfg : ChainConfig}
   have bound := trace.gas_bound root member
   omega
 
-/-- An address whose installed code has a size no canonical system code has is not a system
-address. -/
-theorem not_mem_systemTargets_of_size {w : State} {ca : Adr} {c : ByteArray}
-    (installed : w.getCode ca = c) (system : SystemCodeInstalled w)
-    (size : ∀ p ∈ systemContracts, p.2.size ≠ c.size) :
-    ca ∉ systemTargets := by
-  intro hmem
-  have hsize : ∀ p ∈ systemContracts, p.1 = ca → False := by
-    intro p hp hca
-    have h := system p hp
-    rw [hca, installed] at h
-    exact size p hp (congrArg ByteArray.size h).symm
-  simp only [systemTargets, List.mem_cons, List.not_mem_nil, or_false] at hmem
-  rcases hmem with rfl | rfl | rfl | rfl
-  · exact hsize (beaconRootsAddress, beaconRootsCode) (by simp only [systemContracts,
-    List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or]) rfl
-  · exact hsize (historyStorageAddress, historyStorageCode) (by simp only [systemContracts,
-    List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or, or_true]) rfl
-  · exact hsize (withdrawalRequestPredeployAddress, withdrawalRequestCode)
-      (by simp only [systemContracts, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
-        true_or, or_true]) rfl
-  · exact hsize (consolidationRequestPredeployAddress, consolidationRequestCode)
-      (by simp only [systemContracts, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
-        or_true]) rfl
-
-/-- **No system frame targets a contract whose installed code differs in size from every
-canonical system code**, under the canonical system code installed at the checkpoint and the
-trace-local system exclusions. -/
-theorem ConfiguredHistoryTrace.system_ne_of_size {cfg : ChainConfig}
-    {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future) {ca : Adr} {c : ByteArray}
-    (systemInstalled : SystemCodeInstalled checkpoint.state)
-    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
-    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
-    (installed : checkpoint.state.getCode ca = c)
-    (size : ∀ p ∈ systemContracts, p.2.size ≠ c.size) :
-    ∀ root ∈ trace.systemRawFrames, root.sevm.currentTarget ≠ ca := by
-  intro root member h
-  obtain ⟨hframes, -⟩ := trace.systemFrames_of_installed systemInstalled systemNoAuthority
-    systemNoFrame
-  exact not_mem_systemTargets_of_size installed systemInstalled size (h ▸ hframes root member)
-
 /-! ## The raw frames of a history are closed under descent
 
 Every frame a raw frame enters is itself a raw frame of the history.  So a trace-local premise over
@@ -467,55 +343,6 @@ theorem ApplyTransactionsTrace.rawFrames_closed
   induction trace with
   | nil => exact RawFramesClosed.nil
   | cons head tail ih => exact RawFramesClosed.append head.message.rawFrames_closed ih
-
-theorem AppliedBodyTrace.rawFrames_closed {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs ommers wds state bout) : RawFramesClosed trace.rawFrames :=
-  RawFramesClosed.append (RawFramesClosed.append (RawFramesClosed.append
-    trace.beacon.message.rawFrames_closed trace.history.message.rawFrames_closed)
-    trace.transactions.rawFrames_closed)
-    (RawFramesClosed.append trace.requests.withdrawal.message.rawFrames_closed
-      trace.requests.consolidation.message.rawFrames_closed)
-
-/-- **The raw frames of a configured history are closed under descent.** -/
-theorem ConfiguredHistoryTrace.rawFrames_closed {cfg : ChainConfig}
-    {checkpoint future : BlockChain} (trace : ConfiguredHistoryTrace cfg checkpoint future) :
-    RawFramesClosed trace.rawFrames := by
-  induction trace with
-  | refl => exact RawFramesClosed.nil
-  | step prior block ih => exact RawFramesClosed.append ih block.bodyTrace.rawFrames_closed
-
-/-- **Children keep the code at an address no CREATE frame of the history targets**: every
-committed direct child of every raw frame of the history leaves the code at `a` as it found it. -/
-theorem ConfiguredHistoryTrace.childFrames_codeAt_keep {cfg : ChainConfig}
-    {checkpoint future : BlockChain} (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    {a : Adr}
-    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ a) :
-    ∀ root ∈ trace.rawFrames, ∀ c ∈ Exec.childFrames root.exc,
-      c.post.getCode a = c.pre.getCode a := by
-  intro root member
-  exact Exec.childFrames_codeAt_keep root.exc (trace.rootEntry root member).2
-    (fun d hd => noFrame d (trace.rawFrames_closed root member d hd))
-
-/-- **A precompile is ready at every transaction frame**: warm (the transaction pre-warm) and
-without an EIP-7702 delegation designator (empty code, from empty code at the checkpoint, no
-authorization recovering to it and no CREATE frame targeting it). -/
-theorem ConfiguredHistoryTrace.precompileReady {cfg : ChainConfig}
-    {checkpoint future : BlockChain} (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    {a : Adr} (precompile : ∀ f, CoveredFork f → a ∈ (Fork.ruleSet f).precompiles)
-    (checkpointEmpty : checkpoint.state.getCode a = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt a)
-    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ a) :
-    ∀ root ∈ trace.txRawFrames, getDelegatedCodeAddress (root.devm.getCode a) = none ∧
-      a ∈ root.devm.accessedAddresses := by
-  intro root member
-  obtain ⟨hcode, -⟩ := trace.codeAt_empty noAuthority noFrame checkpointEmpty
-  refine ⟨?_, trace.txRawFrames_warm precompile root member⟩
-  have hnot : ¬ isValidDelegation ByteArray.empty := fun h => absurd h.1 (by decide)
-  rw [hcode root member]
-  simp only [getDelegatedCodeAddress, hnot, ↓reduceIte]
 
 end ExecutionTrace
 

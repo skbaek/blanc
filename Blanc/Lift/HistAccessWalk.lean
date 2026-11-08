@@ -141,10 +141,6 @@ theorem afterSstoreH_logs (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstoreH sevm base key value).logs = base.logs :=
   (storageAccessH_state sevm base key).2.1
 
-theorem afterSstoreH_output (sevm : Sevm) (base : Devm) (key value : B256) :
-    (afterSstoreH sevm base key value).output = base.output :=
-  (storageAccessH_state sevm base key).2.2.1
-
 theorem afterSstoreH_error (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstoreH sevm base key value).error = base.error :=
   (storageAccessH_state sevm base key).2.2.2.1
@@ -152,10 +148,6 @@ theorem afterSstoreH_error (sevm : Sevm) (base : Devm) (key value : B256) :
 theorem afterSstoreH_createdAccounts (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstoreH sevm base key value).createdAccounts = base.createdAccounts :=
   (storageAccessH_state sevm base key).2.2.2.2.1
-
-theorem afterSstoreH_accessedAddresses (sevm : Sevm) (base : Devm) (key value : B256) :
-    (afterSstoreH sevm base key value).accessedAddresses = base.accessedAddresses :=
-  (storageAccessH_state sevm base key).2.2.2.2.2.1
 
 theorem afterSstoreH_stateGas (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstoreH sevm base key value).stateGas = base.stateGas :=
@@ -194,38 +186,6 @@ theorem afterSloadH_stateGas (sevm : Sevm) (base : Devm) (key : B256) :
   split
   · simp only [afterSload_stateGas]
   · rfl
-
-theorem afterSloadH_output (sevm : Sevm) (base : Devm) (key : B256) :
-    (afterSloadH sevm base key).output = base.output := by
-  unfold afterSloadH
-  split
-  · exact afterSload_output sevm base key
-  · rfl
-
-theorem getStorVal_afterSloadH {sevm : Sevm} {b : Devm} {k : B256} {a : Adr} {x : B256} :
-    (afterSloadH sevm b k).getStorVal a x = b.getStorVal a x := by
-  show (Devm.getStor _ _).get _ = (Devm.getStor _ _).get _
-  rw [afterSloadH_getStor]
-
-theorem getStorVal_afterStoreH {sevm : Sevm} {b : Devm} {k v key : B256} :
-    (afterSstoreH sevm (afterSloadH sevm b k) k v).getStorVal sevm.currentTarget key =
-      ((Devm.getStor b sevm.currentTarget).set k v).get key := by
-  show (Devm.getStor _ _).get _ = _
-  rw [afterSstoreH_getStor_self, afterSloadH_getStor]
-
-theorem getStor_afterStoreH {sevm : Sevm} {b : Devm} {k v : B256} :
-    Devm.getStor (afterSstoreH sevm (afterSloadH sevm b k) k v) sevm.currentTarget =
-      (Devm.getStor b sevm.currentTarget).set k v := by
-  rw [afterSstoreH_getStor_self, afterSloadH_getStor]
-
-theorem getStor_afterStore_neH {sevm : Sevm} {b : Devm} {k v : B256} {a : Adr}
-    (ha : a ≠ sevm.currentTarget) :
-    Devm.getStor (afterSstoreH sevm (afterSloadH sevm b k) k v) a = Devm.getStor b a := by
-  rw [afterSstoreH_getStor_ne _ _ _ _ _ (Ne.symm ha), afterSloadH_getStor]
-
-theorem logs_afterStoreH {sevm : Sevm} {b : Devm} {k v : B256} :
-    (afterSstoreH sevm (afterSloadH sevm b k) k v).logs = b.logs := by
-  rw [afterSstoreH_logs, afterSloadH_logs]
 
 /-- `StorStep.sload` under the actual access schedule. -/
 theorem StorStep.sloadH {sevm : Sevm} {b b' : Devm} {s : Stor} (h : StorStep sevm b b' s)
@@ -272,13 +232,6 @@ theorem extcodesizeCostH_of_covered {sevm : Sevm} {base : Devm} {a : Adr}
   rw [hfork.rules_access, hfork.rules_codeReadSurcharge, hfork.rules_coldAccountAccess,
     Nat.add_zero]
 
-theorem accountAccessH_state (sevm : Sevm) (base : Devm) (a : Adr) :
-    (accountAccessH sevm base a).state = base.state := by
-  unfold accountAccessH
-  split
-  · exact temporalAccountAccessBase_state base a
-  · rfl
-
 theorem accountAccessH_logs (sevm : Sevm) (base : Devm) (a : Adr) :
     (accountAccessH sevm base a).logs = base.logs := by
   unfold accountAccessH
@@ -292,11 +245,6 @@ theorem accountAccessH_output (sevm : Sevm) (base : Devm) (a : Adr) :
   split
   · exact temporalAccountAccessBase_output base a
   · rfl
-
-theorem accountAccessH_getStor (sevm : Sevm) (base : Devm) (a address : Adr) :
-    Devm.getStor (accountAccessH sevm base a) address = Devm.getStor base address := by
-  unfold Devm.getStor Devm.getAcct
-  rw [accountAccessH_state]
 
 section World
 
@@ -385,29 +333,6 @@ theorem ri_sstoreH_covered {k v : B256} {d : Devm} (hfork : CoveredFork sevm.ben
   rw [← afterSstoreH_of_eip2929 hfork.rules_access
     (by rw [hfork.rules_sstore])]
   exact ri_sstoreH hfork.rules_stateGas_none hfork.rules_bal_none h
-
-/-- A successful `SSTORE` runs in a non-static frame, under `rules.stateGas = none` alone:
-both legacy-lane bodies end with `assertDynamic` before their only successful exit. -/
-theorem ri_sstore_nonstaticH {k v : B256} {d : Devm}
-    (stateGas : sevm.benvStat.rules.stateGas = none)
-    (h : Ninst.Run sevm (St b (k :: v :: S) M G) (.reg .sstore) d) :
-    sevm.isStatic = false := by
-  cases hs : sevm.isStatic with
-  | false => rfl
-  | true =>
-    exfalso
-    rcases of_run_reg h with ⟨pc, run⟩
-    rcases hss : sevm.benvStat.rules.sstore with ⟨nm, ss⟩
-    cases access : sevm.benvStat.rules.access <;> cases nm <;> cases ss <;>
-    · simp only [Rinst.run, Rinst.runCore, stateGas, hss, access] at run
-      rw [show (St b (k :: v :: S) M G).pop = .ok (k, St b (v :: S) M G) from rfl] at run
-      simp only [Except.bind_ok] at run
-      rw [show (St b (v :: S) M G).pop = .ok (v, St b S M G) from rfl] at run
-      simp only [Except.bind_ok] at run
-      rcases Except.bind_eq_ok run with ⟨_, -, run₃⟩
-      rcases Except.bind_eq_ok run₃ with ⟨_, -, run₇⟩
-      simp only [bind, Except.bind, assertDynamic, Except.assert, hs, Bool.not_true,
-        Bool.false_eq_true, ↓reduceIte, reduceCtorEq] at run₇
 
 /-- `EXTCODESIZE`, inverted under the actual access schedule: the successor is over
 `accountAccessH`. Only `rules.bal = none` is assumed; the charge stays existential. -/
@@ -545,15 +470,6 @@ def sstoreCostH (sevm : Sevm) (devm : Devm) (key value : B256) : Nat :=
     (storageAccessCostH sevm devm key) value
     (devm.getOrigStorVal sevm sevm.currentTarget key) (devm.getStorVal sevm.currentTarget key)
 
-/-- `sstoreCostH` is the modern `sstoreCost` under EIP-2929 net metering. -/
-theorem sstoreCostH_of_eip2929 {sevm : Sevm} {devm : Devm} {key value : B256}
-    (access : sevm.benvStat.rules.access = .eip2929)
-    (netMetering : sevm.benvStat.rules.sstore.netMetering = true) :
-    sstoreCostH sevm devm key value = sstoreCost sevm devm key value := by
-  unfold sstoreCostH storageAccessCostH sstoreRegimeGasCost sstoreCost
-  simp only [access, netMetering, ↓reduceIte]
-  exact sstoreValueCost_add
-
 /-- One exact `SLOAD` under the frame's actual access schedule, from `rules.stateGas = none`. -/
 theorem Ninst.runCompiled_sload_selectedH
     {sevm : Sevm} {base : Devm} {key value : B256}
@@ -649,19 +565,6 @@ theorem Ninst.runCompiled_sstore_selectedH
       simp only [assertDynamic, Except.assert, hstatic, Bool.not_false, ↓reduceIte, hG, hG',
         Nat.add_sub_cancel]
       rfl
-
-/-- `SLOAD` of any key in an exact run, under the frame's actual access schedule. -/
-theorem rx_sload_selH {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {o : Outcome}
-    {S : List B256} {M : Mem} {G : Nat} {k' : B256}
-    (hsg : sevm.benvStat.rules.stateGas = none) (hroom : S.length < 1024)
-    (k : SFunc.RunExact fs sevm
-      (St (afterSloadH sevm b k') (b.getStorVal sevm.currentTarget k' :: S) M G) f o) :
-    SFunc.RunExact fs sevm (St b (k' :: S) M (G + sloadCostH sevm b k'))
-      (.next (.reg .sload) f) o := by
-  refine .next ?_ k
-  have h := Ninst.runCompiled_sload_selectedH (sevm := sevm) (base := b) (key := k') (stack := S)
-    (memory := M) (G := G) hsg rfl hroom
-  simpa only [St, afterSloadH_stateGas] using h
 
 /-- `SSTORE` in an exact run, under the frame's actual access schedule and `SSTORE` regime. -/
 theorem rx_sstoreH {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {o : Outcome}

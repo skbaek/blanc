@@ -124,14 +124,6 @@ theorem ri_shr {x y : B256} {d : Devm}
   · exact St.of_diff (v := fun x y => y >>> x.toNat) (Devm.diffBurn_of_applyBinary run)
   · cases run
 
-/-- `BYTE`, inverted. -/
-theorem ri_byte {x y : B256} {d : Devm}
-    (h : Ninst.Run sevm (St b (x :: y :: S) M G) (.reg .byte) d) :
-    ∃ G', d = St b ((List.getD y.toBytes x.toNat 0).toB256 :: S) M G' := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact St.of_diff (v := fun x y => (List.getD y.toBytes x.toNat 0).toB256) (Devm.diffBurn_of_applyBinary run)
-
 /-- `EXP`, inverted. -/
 theorem ri_exp {x y : B256} {d : Devm}
     (h : Ninst.Run sevm (St b (x :: y :: S) M G) (.reg .exp) d) :
@@ -306,33 +298,6 @@ theorem ri_calldatacopy {di si sz : B256} {d : Devm}
   obtain ⟨rfl, rfl, rfl, hs₄⟩ := St.of_pop3 hpb
   rw [hs₄] at eq
   exact ⟨_, eq.symm⟩
-
-/-- `RETURNDATACOPY`, inverted with its actual range guard and complete raw successor. -/
-theorem ri_returndatacopy {di ri sz : B256} {d : Devm}
-    (h : Ninst.Run sevm (St b (di :: ri :: sz :: S) M G) (.reg .returndatacopy) d) :
-    ri.toNat + sz.toNat <= b.returnData.length ∧
-      ∃ G', d = St b S (M.write di.toNat (b.returnData.sliceD ri.toNat sz.toNat 0)) G' := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨di', s₁⟩, h1, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨⟨ri', s₂⟩, h2, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨⟨sz', s₃⟩, h3, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨s₄, h4, h5⟩
-  rcases Devm.pop_of_popToNat_val h1 with ⟨x, p1, rfl⟩
-  rcases Devm.pop_of_popToNat_val h2 with ⟨y, p2, rfl⟩
-  rcases Devm.pop_of_popToNat_val h3 with ⟨z, p3, rfl⟩
-  have hb := Devm.burn_of_chargeGas h4
-  have hpb := Devm.popBurn_of_pop_of_burn (Devm.pop_append p1 (Devm.pop_append p2 p3)) hb
-  obtain ⟨rfl, rfl, rfl, hs₄⟩ := St.of_pop3 hpb
-  rw [hs₄] at h5
-  split at h5
-  · cases h5
-  · rename_i bound
-    have fit : ri.toNat + sz.toNat ≤ b.returnData.length := by
-      change ¬ ri.toNat + sz.toNat > b.returnData.length at bound
-      omega
-    injection h5 with eq
-    exact ⟨fit, _, eq.symm⟩
 
 /-- `CODECOPY`, inverted. -/
 theorem ri_codecopy {di ci sz : B256} {d : Devm}

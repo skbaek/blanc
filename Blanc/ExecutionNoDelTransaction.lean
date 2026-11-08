@@ -262,26 +262,6 @@ theorem MessageCallTrace.noDel_of_installedCert {wa : Adr} {C : ByteArray} {c : 
 
 /-! ## One selected transaction -/
 
-/-- **Protected-account survival across one selected transaction**, under `stateGas = none`
-with no fork premise. If `wa` holds a code `C` checked by a certificate without SELFDESTRUCT
-terminals that spawns only by `CALL`/`STATICCALL`, `C` is nonempty and undesignated, and `wa` was
-not created in the block, then the transaction never schedules `wa` for deletion, and `wa` holds
-`C` after the message and in the final state: the deletion fold and the touched sweep keep it. -/
-theorem TransactionTrace.noDel_of_installedCert {wa : Adr} {C : ByteArray} {c : Lift.Cert}
-    (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
-    (noSelfdestruct : c.noSelfdestruct = true) (hCdel : ¬ isValidDelegation C)
-    (hCne : C.toList ≠ [])
-    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    {state : State} {bout' : BlockOutput}
-    (trace : TransactionTrace benv bout tx index state bout')
-    (hsg : benv.stat.rules.stateGas = none)
-    (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
-    wa ∉ trace.messageOut.accountsToDelete ∧ trace.messageState.getCode wa = C ∧
-      state.getCode wa = C := by
-  exact trace.noDel_of_safe hCdel hCne hsg installed notCreated
-    (trace.safeRawFrames_of_installedCert hc callOnly noSelfdestruct hCdel hCne hsg
-      installed notCreated)
-
 end ExecutionTrace
 
 end Blanc

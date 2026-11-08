@@ -139,26 +139,10 @@ theorem pwalkH_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
   | n + 1, c => by
     simp only [pwalkH, pstepH_withFork hf hg hx, pwalkH_withFork hf hg hx pol T ok n]
 
-theorem pwalk_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
-    (hx : s.benvStat.excessBlobGas = 0) {code : ByteArray} {dd : Nat}
-    (T : CodeTries code dd) (ok : Nat → Bool) (n : Nat) (c : PCfg) :
-    pwalk T (s.withFork g) ok n c = pwalk T s ok n c :=
-  pwalkH_withFork hf hg hx .refuse T ok n c
-
 /-! ## Spawns and entries -/
 
 /-- A call preparation with its frame's fork changed. -/
 def _root_.Blanc.Lift.Witness.CallPrep.withFork (cp : CallPrep) (g : Fork) : CallPrep := { cp with f := cp.f.withFork g }
-
-/-- Changing a call preparation's fork preserves its accessed-address shadow. -/
-theorem _root_.Blanc.Lift.Witness.CallPrep.withFork_adrs (cp : CallPrep) (g : Fork) :
-    (cp.withFork g).adrs = cp.adrs := rfl
-
-/-- Changing a call preparation's fork preserves the parent and output window used to resume. -/
-theorem resumeCallB_withFork (cp : CallPrep) (g : Fork)
-    (ex : Except (EvmError × State × AdrSet × Tra) Devm) :
-    resumeCallB (cp.withFork g).p (cp.withFork g).oi (cp.withFork g).os ex =
-      resumeCallB cp.p cp.oi cp.os ex := rfl
 
 theorem scallPrep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
     (d : Devm) (adrs : List Adr) (acs : AcctShadow) :
@@ -282,19 +266,6 @@ theorem childCfg_withFork (cevm : Evm) (f : Frame) (keys : List (Adr × B256)) (
     childCfg (cevm.withFork g) (f.withFork g) keys adrs stor acs =
       childCfg cevm f keys adrs stor acs := rfl
 
-/-- Normalize a transported child's node view without unfolding its concrete entry machine. -/
-theorem nodeAt_withFork_entry (cevm : Evm) (cp : CallPrep) (g : Fork)
-    (keys : List (Adr × B256)) (stor : StorShadow) (acs : AcctShadow) (x : Exec.Deriv) :
-    NodeAt (cevm.withFork g).sta
-        (childCfg (cevm.withFork g) (cp.withFork g).f keys (cp.withFork g).adrs stor acs) x =
-      NodeAt (cevm.sta.withFork g) (childCfg cevm cp.f keys cp.adrs stor acs) x := rfl
-
-/-- Normalize a transported child's agreement view without unfolding its concrete preparation. -/
-theorem pagree_withFork_entry (cevm : Evm) (cp : CallPrep) (g : Fork)
-    (keys : List (Adr × B256)) (stor : StorShadow) (acs : AcctShadow) :
-    PAgree (childCfg (cevm.withFork g) (cp.withFork g).f keys (cp.withFork g).adrs stor acs) =
-      PAgree (childCfg cevm cp.f keys cp.adrs stor acs) := rfl
-
 /-! ## What a spawned or entered machine inherits -/
 
 /-- A `STATICCALL` preparation's frame carries the caller's block environment. -/
@@ -363,49 +334,6 @@ theorem callPrepP_stat {c : PCfg} {cp : CallPrep} (h : callPrepP s c = some cp) 
     cp.f.outer.benv.stat = s.benvStat ∧ cp.f.inner.benv.stat = s.benvStat :=
   callPrep_stat h
 
-/-- A `DELEGATECALL` preparation's frame carries the caller's transaction environment. -/
-theorem dcallPrep_tenvStat {d : Devm} {adrs : List Adr} {acs : AcctShadow} {cp : CallPrep}
-    (h : dcallPrep s d adrs acs = some cp) :
-    cp.f.outer.tenv.stat = s.tenvStat ∧ cp.f.inner.tenv.stat = s.tenvStat := by
-  unfold dcallPrep at h
-  generalize d.stack = st at h
-  match st, h with
-  | _ :: _ :: _ :: _ :: _ :: _ :: _, h =>
-    simp only at h
-    split at h
-    · split at h
-      · simp only [reduceCtorEq] at h
-      · split at h
-        · simp only [Option.some.injEq] at h
-          subst h
-          exact ⟨rfl, rfl⟩
-        · simp only [reduceCtorEq] at h
-    · simp only [reduceCtorEq] at h
-
-/-- A `CALL` preparation's frame carries the caller's transaction environment. -/
-theorem callPrep_tenvStat {c : Cfg} {cp : CallPrep} (h : callPrep s c = some cp) :
-    cp.f.outer.tenv.stat = s.tenvStat ∧ cp.f.inner.tenv.stat = s.tenvStat := by
-  unfold callPrep at h
-  generalize c.devm.stack = st at h
-  match st, h with
-  | _ :: _ :: _ :: _ :: _ :: _ :: _ :: _, h =>
-    simp only at h
-    split at h
-    · split at h
-      · simp only [reduceCtorEq] at h
-      · split at h
-        · split at h
-          · simp only [Option.some.injEq] at h
-            subst h
-            exact ⟨rfl, rfl⟩
-          · simp only [reduceCtorEq] at h
-        · split at h
-          · simp only [Option.some.injEq] at h
-            subst h
-            exact ⟨rfl, rfl⟩
-          · simp only [reduceCtorEq] at h
-    · simp only [reduceCtorEq] at h
-
 theorem executeCode_enter_stat {m : Msg} {e : Evm} (h : executeCode.enter m = .inl e) :
     e.sta.benvStat = m.benv.stat := by
   unfold executeCode.enter at h
@@ -427,13 +355,6 @@ theorem frameEnterS_stat {f : Frame} {acs : AcctShadow} {e : Evm}
       cases h
       exact (executeCode_enter_stat he).trans (benvAfterTransferS_stat hb)
     · cases h
-
-/-- An entered machine carries its frame's transaction environment. -/
-theorem frameEnterS_tenvStat {f : Frame} {acs : AcctShadow} {e : Evm}
-    (h : frameEnterS f acs = .run e) : e.sta.tenvStat = f.inner.tenv.stat := by
-  obtain ⟨benv, hb, he⟩ := frameEnterS_run h
-  rw [he]
-  rfl
 
 /-! ## A spawn under any covered fork -/
 
@@ -487,85 +408,5 @@ theorem dcallSpawn_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork
   rw [frameEnterS_withFork_of_stat hf hg (dcallPrep_stat hp) hN, he]; rfl
 
 /-! ## The interpreter under any covered fork -/
-
-theorem precompNeutral_of_frameEntryForkFree {f : Frame} (h : frameEntryForkFree f = true) :
-    f.PrecompNeutral := by
-  refine Or.inr fun a ha => ?_
-  unfold frameEntryForkFree at h
-  rw [ha] at h
-  simpa only [ne_eq, Bool.and_eq_true, bne_iff_ne] using h
-
-/-- **A synchronous precompile `CALL` is unchanged by the fork.**  The interpreter runs only
-frames that avoid `MODEXP` and `P256VERIFY` (`frameEntryForkFree`). -/
-theorem callStep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g) (c : Cfg)
-    (k : SFunc) : callStep (s.withFork g) c k = callStep s c k := by
-  unfold callStep
-  rw [callPrep_withFork hf hg]
-  cases hp : callPrep s c with
-  | none => rfl
-  | some cp =>
-    simp only [Option.map_some]
-    by_cases hN : frameEntryForkFree cp.f = true
-    · have hfe : frameEnterS (cp.withFork g).f c.acs = (frameEnterS cp.f c.acs).withFork g :=
-        frameEnterS_withFork_of_stat hf hg (callPrep_stat hp)
-          (precompNeutral_of_frameEntryForkFree hN) _
-      rw [hfe]
-      cases hr : frameEnterS cp.f c.acs with
-      | run e => rfl
-      | done r => cases r <;> rfl
-    · have h1 : frameEntryForkFree cp.f = false := by simpa only [Bool.not_eq_true] using hN
-      have h2 : frameEntryForkFree (cp.withFork g).f = false := h1
-      simp only [h1, h2, Bool.false_eq_true, and_false, ↓reduceIte]
-      split <;> split <;> rfl
-
-/-- **One interpreter step is unchanged by the fork** between covered forks, when the block
-carries no excess blob gas. -/
-theorem wstep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
-    (hx : s.benvStat.excessBlobGas = 0) (fs : List SFunc) (c : Cfg) :
-    wstep fs (s.withFork g) c = wstep fs s c := by
-  rcases c with ⟨d, f, K, keys, adrs, stor, acs⟩
-  cases f with
-  | dest _ => rfl
-  | jump _ => rfl
-  | branch _ _ => rfl
-  | branchTo _ _ => rfl
-  | callNext _ _ => rfl
-  | ret => rfl
-  | undefined => rfl
-  | pcAt p k =>
-    simp only [wstep]
-    rw [ninst_step_reg_withFork hf hg hx p d (by decide : Rinst.pc ≠ .clz)]
-  | last l =>
-    cases l <;> simp only [wstep, linst_run_withFork hf hg]
-  | next n k =>
-    cases n with
-    | push xs h =>
-      simp only [wstep, ninstAccKeeps, Ninst.step,
-        CoveredFork.rules_push0 hf,
-        CoveredFork.rules_push0 (s := (s.withFork g).benvStat) hg,
-        Bool.not_true, Bool.and_false, Bool.false_eq_true, ↓reduceIte]
-    | dupn _ => rfl
-    | swapn _ => rfl
-    | exchange _ => rfl
-    | exec x =>
-      cases x <;> first | rfl | simp only [wstep, callStep_withFork hf hg]
-    | reg r =>
-      by_cases hc : r = .clz
-      · subst hc; rfl
-      · cases r <;> first
-          | exact absurd rfl hc
-          | simp only [wstep, sloadStep_withFork hf hg, sstoreStep_withFork hf hg,
-              calldatacopyStep_withFork, logStep_withFork,
-              ninst_step_reg_withFork hf hg hx _ _ hc]
-
-/-- **A run of the certificate interpreter is unchanged by the fork** between covered forks,
-when the block carries no excess blob gas: every kernel fact `wrun fs s n c = r` is the same
-fact for `s.withFork g`. -/
-theorem wrun_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
-    (hx : s.benvStat.excessBlobGas = 0) (fs : List SFunc) :
-    ∀ (n : Nat) (c : Cfg), wrun fs (s.withFork g) n c = wrun fs s n c
-  | 0, _ => rfl
-  | n + 1, c => by
-    simp only [wrun, wstep_withFork hf hg hx, wrun_withFork hf hg hx fs n]
 
 end Blanc.Lift.NodeWalk

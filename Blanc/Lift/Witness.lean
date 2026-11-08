@@ -135,15 +135,6 @@ theorem storAgree_nil {st : State} (h : ∀ a k, storOf st a k = 0) :
 
 theorem storOf_empty (a : Adr) (k : B256) : storOf (default : State) a k = 0 := rfl
 
-/-- Setting an account with empty storage preserves storage-emptiness. -/
-theorem storOf_set_empty (st : State) (p a : Adr) (ac : Acct) (k : B256)
-    (h_st : storOf st a k = 0) (h_ac : ac.stor.get k = 0) :
-    storOf (st.set p ac) a k = 0 := by
-  unfold storOf
-  by_cases h : p = a
-  · subst h; rw [State.get_set_self]; exact h_ac
-  · rw [State.get_set_ne _ h]; exact h_st
-
 /-- Writing `(ct, k, v)` into a state (`State.setStorVal`) and prepending to the shadow
 preserves storage agreement. -/
 theorem storOf_setStorVal_cons {st : State} {l : StorShadow} {ct : Adr} {k v : B256}
@@ -441,45 +432,6 @@ def ChildAgree (child : Devm) (ckeys : List (Adr × B256)) (cadrs : List Adr) (c
     (∀ k, k ∈ child.accessedStorageKeys ↔ k ∈ ckeys) ∧
     (∀ a k, storOf child.state a k = lookupS cstor a k) ∧ AcctAgree child.state cacs
 
-/-- **A `CALL` into code.**  The child's execution `raw` is supplied with its
-`Exec` derivation from the machine the frame enters with; a successful child
-contributes its accessed sets, and its world, described by the shadows
-`ckeys`/`cadrs`/`cstor`/`cacs`. -/
-theorem callRun_cont {fs : List SFunc} {sevm : Sevm} {c : Cfg} {g : SFunc} {cp : CallPrep}
-    {cevm : Evm} {raw : Execution} {child d : Devm}
-    {ckeys : List (Adr × B256)} {cadrs : List Adr} {cstor : StorShadow} {cacs : AcctShadow}
-    (hf : c.f = .next (.exec .call) g) (hp : callPrep sevm c = some cp)
-    (he : frameEnterS cp.f c.acs = .run cevm) (hx : Nonempty (Exec cevm.pc cevm.sta cevm.dyna raw))
-    (hs : cp.f.settle raw = .ok child) (hce : child.error.isSome = false)
-    (hr : resumeCallB cp.p cp.oi cp.os (.ok child) = some d)
-    (hca : ChildAgree child ckeys cadrs cstor cacs) :
-    StepOk fs sevm c ⟨d, g, c.K, c.keys ++ ckeys, cp.adrs ++ cadrs, cstor, cacs⟩ := by
-  refine StepOk.of ?_ rfl ?_
-  · intro hc
-    obtain ⟨_, hpa, hpk, -⟩ := callPrep_spec hp hc.2.1 hc.2.2.2
-    obtain ⟨hda, hdk⟩ := resumeCallB_acc hr
-    refine ⟨fun x => ?_, fun a => ?_, fun a k => ?_, fun a => ?_⟩
-    · show x ∈ d.accessedStorageKeys ↔ x ∈ c.keys ++ ckeys
-      rw [hdk x, hce, hpk, hc.1 x, hca.2.1 x, List.mem_append]
-      simp only [true_and]
-    · show a ∈ d.accessedAddresses ↔ a ∈ cp.adrs ++ cadrs
-      rw [hda a, hce, hpa a, hca.1 a, List.mem_append]
-      simp only [true_and]
-    · show storOf d.state a k = lookupS cstor a k
-      rw [resumeCallB_state hr]; exact hca.2.2.1 a k
-    · show acctView (d.state.get a) = lookupA cacs a
-      rw [resumeCallB_state hr]; exact hca.2.2.2 a
-  · intro hc o r'
-    obtain ⟨hstep, -, -, -, -, -, -, hst⟩ := callPrep_spec hp hc.2.1 hc.2.2.2
-    have hC : AcctAgree cp.f.inner.benv.state c.acs := by rw [hst]; exact hc.2.2.2
-    rw [hf]
-    refine .next ⟨.some ⟨cevm, raw⟩, hx, fun pc => ?_⟩ r'
-    apply XStep.run_toStep.mpr
-    show XStep.Run (Xinst.step sevm c.devm .call) _ _
-    rw [hstep]
-    refine ⟨_, RunFrame.of_run (by rw [frame_enter_eq_B, frameEnterB_eq_S hC]; exact he), ?_⟩
-    rw [hs]; exact (resumeCallB_sound hr).symm
-
 theorem wstep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg}
     (h : wstep fs sevm c = .cont c') : StepOk fs sevm c c' := by
   rcases c with ⟨devm, f, K, keys, adrs, stor, acs⟩
@@ -679,22 +631,6 @@ theorem wstep_done {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {o : Outcome}
   | pcAt p g => simp only [wstep] at h; split at h <;> cases h
   | undefined => simp only [wstep, reduceCtorEq] at h
 
-/-- A chunk of `n` steps to a configuration. -/
-theorem wrun_cont {fs : List SFunc} {sevm : Sevm} :
-    ∀ {n : Nat} {c c' : Cfg}, wrun fs sevm n c = .cont c' → StepOk fs sevm c c'
-  | 0, c, c', h => by
-    simp only [wrun, Res.cont.injEq] at h; subst h
-    exact ⟨id, fun _ _ r => r⟩
-  | n + 1, c, c', h => by
-    simp only [wrun] at h
-    split at h
-    · rename_i c1 h1
-      have s1 := wstep_cont h1
-      have s2 := wrun_cont h
-      exact ⟨fun hc => s2.1 (s1.1 hc), fun o hc r => s1.2 o hc (s2.2 o (s1.1 hc) r)⟩
-    · rename_i r hr
-      exact absurd h (hr _)
-
 /-- A chunk of at most `n` steps to an outcome: a run, agreement at the
 configuration that produced it, and (halted) that configuration's world. -/
 theorem wrun_done {fs : List SFunc} {sevm : Sevm} :
@@ -731,49 +667,6 @@ def stateFoldAcct (st : State) (accts : List (Adr × Acct)) : State :=
 def acctShadowOf (accts : List (Adr × Acct)) : AcctShadow :=
   accts.foldl (fun s (a, ac) => (a, acctView ac) :: s) []
 
-theorem acctAgree_foldAcct (accts : List (Adr × Acct)) :
-    ∀ (st : State) (acs : AcctShadow), AcctAgree st acs →
-      AcctAgree (accts.foldl (fun s (a, ac) => State.set s a (acctView ac)) st)
-        (accts.foldl (fun s (a, ac) => (a, acctView ac) :: s) acs) := by
-  induction accts with
-  | nil => intro st acs h; exact h
-  | cons x xs ih =>
-    intro st acs h
-    rcases x with ⟨a, ac⟩
-    exact ih _ _ (acctAgree_set h a (acctView ac))
-
-theorem acctAgree_stateFoldAcct (accts : List (Adr × Acct)) :
-    AcctAgree (stateFoldAcct default accts) (acctShadowOf accts) :=
-  acctAgree_foldAcct accts default [] fun _ => rfl
-
-theorem storOf_foldAcct (accts : List (Adr × Acct)) :
-    ∀ (st : State), (∀ a k, storOf st a k = 0) →
-      ∀ a k, storOf (accts.foldl (fun s (a, ac) => State.set s a (acctView ac)) st) a k = 0 := by
-  induction accts with
-  | nil => intro st h; exact h
-  | cons x xs ih =>
-    intro st h
-    rcases x with ⟨b, ac⟩
-    exact ih _ fun a k => storOf_set_empty st b a (acctView ac) k (h a k) rfl
-
-theorem storOf_stateFoldAcct (accts : List (Adr × Acct)) (a : Adr) (k : B256) :
-    storOf (stateFoldAcct default accts) a k = 0 :=
-  storOf_foldAcct accts default storOf_empty a k
-
-theorem acctAgree_foldStor (writes : List ((Adr × B256) × B256)) :
-    ∀ (st : State) (acs : AcctShadow), AcctAgree st acs →
-      AcctAgree (writes.foldl (fun st ((a, k), v) => State.setStorVal st a k v) st) acs := by
-  induction writes with
-  | nil => intro st acs h; exact h
-  | cons w ws ih =>
-    intro st acs h
-    rcases w with ⟨⟨a, k⟩, v⟩
-    exact ih _ _ (acctAgree_setStorVal h a k v)
-
-theorem acctAgree_stateFoldStor (writes : List ((Adr × B256) × B256)) {st : State}
-    {acs : AcctShadow} (h : AcctAgree st acs) : AcctAgree (stateFoldStor st writes) acs :=
-  acctAgree_foldStor writes st acs h
-
 /-! ## Code children supplied as data
 
 A code child's execution is not run by the interpreter: its settled machine is
@@ -799,49 +692,6 @@ def callResume (sevm : Sevm) (c : Cfg) (child : Devm) (ckeys : List (Adr × B256
       | .done _ => none
     | none => none
   | _ => none
-
-/-- A settled machine is the child of the code `CALL` at `c`: the settlement of an
-`Exec` from the machine that `CALL`'s frame enters with. -/
-def ChildOk (sevm : Sevm) (c : Cfg) (child : Devm) : Prop :=
-  ∀ cp cevm, callPrep sevm c = some cp → frameEnterS cp.f c.acs = .run cevm →
-    ∃ raw, Nonempty (Exec cevm.pc cevm.sta cevm.dyna raw) ∧ cp.f.settle raw = .ok child
-
-theorem callResume_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {child : Devm}
-    {ckeys : List (Adr × B256)} {cadrs : List Adr} {cstor : StorShadow} {cacs : AcctShadow}
-    (h : callResume sevm c child ckeys cadrs cstor cacs = some c') (hk : ChildOk sevm c child)
-    (ha : ChildAgree child ckeys cadrs cstor cacs) : StepOk fs sevm c c' := by
-  unfold callResume at h
-  split at h
-  · rename_i g hf
-    split at h
-    · rename_i cp hp
-      split at h
-      · rename_i cevm he
-        split at h
-        · rename_i hce'
-          have hce : child.error.isSome = false := hce'.1
-          split at h
-          · rename_i d hr
-            cases h
-            obtain ⟨raw, hx, hs⟩ := hk cp cevm hp he
-            exact callRun_cont hf hp he hx hs hce hr ha
-          · cases h
-        · cases h
-      · cases h
-    · cases h
-  · cases h
-
-/-- `d` with its gas, output and error replaced: the parts of a settled child the
-parent's continuation inspects, as literals. -/
-def childObs (g : Nat) (out : Bytes) (d : Devm) : Devm :=
-  ⟨{ d.mach with gasLeft := g }, { d.meta with output := out, error := none }, d.world⟩
-
-theorem childObs_eq {d : Devm} {g : Nat} {out : Bytes} (hg : d.gasLeft = g) (ho : d.output = out)
-    (he : d.error = none) : childObs g out d = d := by
-  rcases d with ⟨⟨_, _, _, _⟩, ⟨_, _, _, _, _, _, _, _, _, _, _⟩, _⟩
-  simp only [Devm.gasLeft, Devm.output, Devm.error] at hg ho he
-  subst hg ho he
-  rfl
 
 open _root_.Lean _root_.Lean.Meta _root_.Lean.Elab _root_.Lean.Elab.Tactic in
 /-- Close `∀ xs, a xs = b xs` with `fun xs => Eq.refl (a xs)`, checked by the kernel

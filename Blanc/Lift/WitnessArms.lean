@@ -26,8 +26,6 @@ def AccKeep (d d' : Devm) : Prop :=
   d'.accessedAddresses = d.accessedAddresses ∧ d'.accessedStorageKeys = d.accessedStorageKeys ∧
     d'.state = d.state
 
-theorem AccKeep.refl (d : Devm) : AccKeep d d := ⟨rfl, rfl, rfl⟩
-
 theorem AccKeep.trans {d d' d'' : Devm} (h1 : AccKeep d d') (h2 : AccKeep d' d'') :
     AccKeep d d'' := ⟨h2.1.trans h1.1, h2.2.1.trans h1.2.1, h2.2.2.trans h1.2.2⟩
 
@@ -326,21 +324,6 @@ def acsSetBal (acs : AcctShadow) (a : Adr) (v : B256) : AcctShadow :=
 /-- The world's account views agree with an account shadow. -/
 def AcctAgree (st : State) (acs : AcctShadow) : Prop :=
   ∀ a, acctView (st.get a) = lookupA acs a
-
-theorem acctView_get_set (st : State) (a b : Adr) (ac : Acct) :
-    acctView ((State.set st a ac).get b) = if a = b then acctView ac else acctView (st.get b) := by
-  by_cases h : a = b
-  · subst h; rw [State.get_set_self]; simp only [↓reduceIte]
-  · rw [State.get_set_ne _ h]; simp only [h, ↓reduceIte]
-
-theorem acctAgree_set {st : State} {acs : AcctShadow} (h : AcctAgree st acs) (a : Adr)
-    (ac : Acct) : AcctAgree (State.set st a ac) ((a, acctView ac) :: acs) := by
-  intro b
-  rw [acctView_get_set]
-  simp only [lookupA]
-  split
-  · rfl
-  · exact h b
 
 /-- A storage write keeps every account view. -/
 theorem acctView_setStorVal (w : State) (adr : Adr) (k v : B256) (b : Adr) :
@@ -969,14 +952,6 @@ theorem benvAfterTransferS_stor {m : Msg} {benv : Benv} {acs : AcctShadow} {stor
     rw [ite_eq_right transfer]
     exact hS
 
-/-- Successful entry agrees with the exact storage transfer, including deletion. -/
-theorem benvAfterTransferB_stor {m : Msg} {benv : Benv} {acs : AcctShadow} {stor : StorShadow}
-    (h : benvAfterTransferB m = .ok benv) (hC : AcctAgree m.benv.state acs)
-    (hS : ∀ a k, storOf m.benv.state a k = lookupS stor a k) :
-    ∀ a k, storOf benv.state a k = lookupS (storTransfer m stor acs) a k := by
-  rw [benvAfterTransfer_eq_S hC] at h
-  exact benvAfterTransferS_stor h hC hS
-
 /-- A precompile child leaves the accessed sets it was given. -/
 theorem frameEnterB_done_acc {f : Frame} {child : Devm} (hf : f.isCreate = false)
     (hsg : f.inner.benv.stat.rules.stateGas = none)
@@ -1156,28 +1131,5 @@ def wrun (fs : List SFunc) (sevm : Sevm) : Nat → Cfg → Res
     match wstep fs sevm c with
     | .cont c' => wrun fs sevm n c'
     | r => r
-
-/-- Composition of runs: running `n + m` steps is running `n` steps, then `m`
-steps from the intermediate configuration if it continued. -/
-theorem wrun_add (fs : List SFunc) (sevm : Sevm) :
-    ∀ (n m : Nat) (c : Cfg),
-      wrun fs sevm (n + m) c =
-        match wrun fs sevm n c with
-        | .cont c' => wrun fs sevm m c'
-        | r => r
-  | 0, m, c => by simp only [zero_add, wrun]
-  | n + 1, m, c => by
-    simp only [Nat.succ_add, wrun]
-    cases h : wstep fs sevm c with
-    | cont c' => exact wrun_add fs sevm n m c'
-    | done o => rfl
-    | stuck => rfl
-
-/-- Step composition when the first chunk continues. -/
-theorem wrun_add_cont {fs : List SFunc} {sevm : Sevm} {n m : Nat} {c c' : Cfg} {r : Res}
-    (h1 : wrun fs sevm n c = .cont c') (h2 : wrun fs sevm m c' = r) :
-    wrun fs sevm (n + m) c = r := by
-  rw [wrun_add, h1]
-  exact h2
 
 end Blanc.Lift.Witness

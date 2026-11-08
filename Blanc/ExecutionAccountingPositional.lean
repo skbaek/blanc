@@ -501,31 +501,6 @@ theorem nextSome
     · refine ⟨[], C.nilOfEq (ofStateGet fun k => seamB settles ca k), ?_⟩
       rw [V.obs_nil, List.flatMap_nil]
 
-/-- **A static run is positional with nothing replayed.**  Its storage at the target is the same at
-every committed frame entry and its frames observe nothing (`core`'s static clause). -/
-theorem static
-    (hsgF : ∀ {f : Fork}, F f → (Fork.ruleSet f).stateGas = none)
-    (ofStateGet : ∀ {s s' : State},
-      (∀ k, (s.getStor ca).get k = (s'.getStor ca).get k) → C.ofState s = C.ofState s')
-    (core : Exec.Fa (Exec.WknSem ca sem
-      (fun pc s d e _ => Exec.CoreAccountingIn F ca sem entry C V pc s d e)))
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution} (hs : sevm.isStatic = true) :
-    Exec.PositionalAccountingIn F ca sem entry C V Opaque pc sevm pre out := by
-  intro run committed fork installed admitted _ before f after split _
-  have obsNil := (core _ _ _ _ run installed run committed fork installed admitted).1 hs
-  rw [split, List.flatMap_append] at obsNil
-  have codeNe : (pre.getCode ca).toList ≠ [] := fun empty =>
-    (sem.ne_nil (installed.1.symm.trans (congrArg some empty))) rfl
-  have member : f ∈ Exec.committedFrames run := by
-    rw [split]; exact List.mem_append_right _ (List.mem_cons_self ..)
-  rw [Exec.committedFrames, dite_eq_left committed] at member
-  have stor : f.pre.state.getStor ca = pre.state.getStor ca := by
-    rcases List.mem_cons.mp member with rfl | member
-    · rfl
-    · exact Exec.descendantFrames_getStor_of_static_noStateGas run hs committed (hsgF fork) codeNe f member
-  refine ⟨[], C.nilOfEq (ofStateGet fun k => congrArg (fun t => Stor.get t k) stor), ?_⟩
-  rw [V.obs_nil, (List.append_eq_nil_iff.mp obsNil).1]
-
 /-- **The settled children of a frame's spawning nodes are positional** (a child provider): at
 every `runOk` node of the frame's own chain, a committed child entered under the world word bound
 replays, from its entry storage, to the entry of each of its committed frames not enclosed by an
@@ -665,30 +640,6 @@ theorem modelFrameAt
   exact modelFrameAtNoStateGas ofStateGet append run committed fork.rules_stateGas_none rootNonempty
     bound children own hown c12 P rest f after hP hdesc (Exec.NoOpaqueAbove.tail noOpaque)
 
-/-- **The whole-frame target handler.**  A non-static target frame is opaque, so only its own
-entry is selected; a static target frame replays nothing. -/
-theorem wholeFrameTarget
-    (hsgF : ∀ {f : Fork}, F f → (Fork.ruleSet f).stateGas = none)
-    (ofStateGet : ∀ {s s' : State},
-      (∀ k, (s.getStor ca).get k = (s'.getStor ca).get k) → C.ofState s = C.ofState s')
-    (core : Exec.Fa (Exec.WknSem ca sem
-      (fun pc s d e _ => Exec.CoreAccountingIn F ca sem entry C V pc s d e)))
-    {sevm : Sevm} {pre post : Devm} (target : sevm.currentTarget = ca) :
-    Exec.PositionalAccountingIn F ca sem entry C V
-      (fun A => A.sevm.currentTarget = ca ∧ A.sevm.isStatic = false) 0 sevm pre (.ok post) := by
-  by_cases hs : sevm.isStatic = true
-  · exact static hsgF ofStateGet core hs
-  intro run committed _ _ _ _ before f after split noOpaque
-  rw [Exec.committedFrames, dite_eq_left committed] at split
-  cases before with
-  | nil => exact head split
-  | cons P rest =>
-  rw [List.cons_append] at split
-  obtain ⟨hP, hdesc⟩ := List.cons.inj split
-  subst hP
-  have hs' : sevm.isStatic = false := by simpa only [Bool.not_eq_true] using hs
-  exact (noOpaque [] _ rest after rfl hdesc ⟨target, hs'⟩).elim
-
 end Exec.PositionalAccounting
 
 /-- **Positional accounting of every admitted derivation**, from a target handler at the
@@ -787,44 +738,5 @@ structure PositionalLadder (c : ContractSpecSem) (ca : Adr) (entry : Sevm → De
       ∃ steps, carrier.Replay (carrier.frameEntry sevm pre.state) steps
           (carrier.frameEntry f.sevm f.pre.state) ∧
         view.obs steps = before.flatMap view.frameObs
-
-/-- The whole-frame ladder is positional outside its own non-static target frames.  Same
-arguments as `wholeFrameLadder`. -/
-noncomputable def wholeFramePositionalLadder {c : ContractSpecSem} {ca : Adr}
-    {entry : Sevm → Devm → Prop}
-    (C : ReplayCarrier ca) (V : ReplayObservation C)
-    (append : ∀ {a b c xs ys}, C.Replay a xs b → C.Replay b ys c → C.Replay a (xs ++ ys) c)
-    (tag : Nat → Option Nat → C.Tag) (frameTag : Sevm → Devm → C.Tag)
-    (entryOfState : ∀ (sevm : Sevm) (state : State), C.frameEntry sevm state = C.ofState state)
-    (ofStateGet : ∀ {s s' : State},
-      (∀ k, (s.getStor ca).get k = (s'.getStor ca).get k) → C.ofState s = C.ofState s')
-    (obsStatic : ∀ f : Exec.Frame, f.sevm.isStatic = true → V.frameObs f = [])
-    (obsForeign : ∀ f : Exec.Frame, f.sevm.currentTarget ≠ ca → V.frameObs f = [])
-    (kinds : SpawnKinds ca c.sem) (whole : Exec.CoreAccounting.WholeFrameReplay ca c.sem entry C V)
-    (preserves : c.PreservesAdmitted ca entry) : PositionalLadder c ca entry :=
-  { wholeFrameLadder C V append tag frameTag entryOfState ofStateGet obsStatic obsForeign kinds
-      whole preserves with
-    Opaque := fun A => A.sevm.currentTarget = ca ∧ A.sevm.isStatic = false
-    rootAt := by
-      intro _ _ msg entryBenv pc sevm pre out run transfer evmEq committed admitted ready _ fork
-        bound before f after split noOpaque
-      obtain ⟨installed, entryBound⟩ :=
-        Exec.CoreAccounting.messageRoot_facts transfer evmEq ready bound
-      have core := Exec.coreAccounting ca c.sem entry C V append frameTag
-        (fun sevm state _ => entryOfState sevm state) obsForeign
-        (fun hrun target deeper =>
-          Exec.CoreAccounting.wholeFrameTarget entryOfState ofStateGet obsStatic kinds whole hrun
-            target deeper)
-      have pos := Exec.positionalAccounting
-        (Opaque := fun A => A.sevm.currentTarget = ca ∧ A.sevm.isStatic = false) entryOfState
-        ofStateGet obsForeign append (fun _ op => op.1) core
-        (fun _ target _ => Exec.PositionalAccounting.wholeFrameTarget (F := CoveredFork)
-          CoveredFork.stateGas_none ofStateGet core target)
-      obtain ⟨steps, replay, observed⟩ := pos pc sevm pre out run installed run committed fork
-        installed admitted entryBound before f after split noOpaque
-      refine ⟨steps, ?_, observed⟩
-      show C.Replay (C.frameEntry sevm pre.state) steps (C.frameEntry f.sevm f.pre.state)
-      rw [entryOfState, entryOfState]
-      exact replay }
 
 end Blanc.ExecutionAccountingReplay

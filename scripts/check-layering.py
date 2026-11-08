@@ -136,36 +136,30 @@ import tomllib
 SHARED = ["Basic", "BytePattern", "Semantics", "HistoricalFork", "ShanghaiOnwards", "CommonCore", "MachineDataFacts", "RlpConcrete", "RlpListEncode", "RlpBytesInjective", "RlpRoundTrip",
           "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs.Base", "CommonProofs.Frames", "CommonProofs.MemImage", "CommonProofs.Messages", "CommonProofs.Walk", "CommonProofs.Hinv", "CommonProofs.NoDel", "CommonProofs.Balance", "Ladder", "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "SlotFootprint", "FakeExponential", "FakeExponentialGrowth", "FakeExponentialEval", "WordFakeExponential", "WordFakeExponentialBound", "WordFakeExponentialEval", "FakeExponentialWordCorrespondence", "FakeExponentialWordDomain", "WordArithmetic", "WordByteCodecs", "WordByteRoundtrip", "MemoryImage", "BytesWrite", "MemoryLayout", "MemoryStageGas",
           "Compiled", "DeploymentMessage", "DeploymentTouch", "Forward", "ForwardFlatAccess",
-          "Reverts", "ForwardCall", "ForwardStorageAccess", "StorageAccessGas", "StorageRefund", "StorageRefundPotential", "ForwardSha256",
+          "Reverts", "ForwardCall", "ForwardStorageAccess", "StorageAccessGas", "StorageRefund", "ForwardSha256",
           "StaticPrecompileMessage", "StaticStorage", "TerminalStorage",
           "CompiledStackSafety", "AbstractStackSafety",
           "AbstractStackTransfer", "CodeTrie", "GasErasure", "RunPrefix", "PrefixTransport",
           "RevertPayload", "CompiledWalkInversion", "CompiledFixedInvariance", "ExecDeterminism", "ExecIdentification", "ExecutionSettlement", "ExecutionPath",
           "ExecutionStateTrace", "ExecutionTrace", "ExecutionStagedBodyTrace", "ExecutionStagedBodyStateTrace", "RequestsOutput", "ExecutionMessageStateTrace",
-          "ExecutionTransactionStateTrace", "ExecutionSelectedTransactionStateTrace", "ExecutionTransactionGas", "ExecutionBodyGas", "ExecutionBodyStateTrace", "ExecutionHistory", "ExecutionBlockCommitments", "ExecutionHistoryExtension",
+          "ExecutionTransactionStateTrace", "ExecutionSelectedTransactionStateTrace", "ExecutionTransactionGas", "ExecutionBodyGas", "ExecutionBodyStateTrace", "ExecutionHistory", "ExecutionHistoryExtension",
           "ExecutionHistoryStateTrace", "ExecutionHistoryInStateTrace", "ExecutionOccurrence", "ExecutionNoninterference", "TransientSettlement", "TransientInvariance", "ExecutionCreateGuard",
                                  "ExecutionDeletionProvenance",
                                  "ExecutionEmptyContext",
                                  "ExecutionNonceKeep",
-                                 "ExecutionHistoryInAssociativity",
                                  "ExecutionHistoryInSystemEnvironment",
                                  "ExecutionHistoryInSystemOpenings",
-                                 "ExecutionHistoryReceiptCensus",
                                  "ExecutionMidHistoryCallers",
                                  "ExecutionMidHistoryInCallerExclusion",
                                  "ExecutionNonceCode",
                                  "ExecutionRetainedCodeSettlement",
-                                 "Lift.ConstructorTransaction",
                                  "Lift.CreateSettlementMeta",
-                                 "Lift.SolcLibraryConstructor",
-                                 "Lift.StaticOnlyFramesIn",
-                                 "TransactionAdmissionProjection",
-                                 "TransactionHistoricalForward"]
+                                 ]
 # Newly extracted common modules live in a separate additive row so concurrent
 # contract branches can extend the historical table cleanly.
 SHARED += ["MessageExecution", "MessageExecutionInversion",
-           "LogBloom", "ExecutionBlockLogExclusion",
-           "ExecutionSenderOccurrences", "ExecutionSenderRootCallers", "CodeReadInversion",
+           "LogBloom", 
+           "ExecutionSenderOccurrences", "ExecutionSenderRootCallers", 
            "AddressSlot", "AddressSlotProofs", "MessageResult",
            "DelegatecallEnvelope",
            "ExecutionFrames", "ExecutionCommittedGas", "ExecutionMessageGas", "ExecutionFrameEntry", "ExecutionCallerExclusion", "ExecutionTraceCallerExclusion", "ExecutionFrameTime", "ExecutionHistoryFrameTime", "ExecutionAdmission", "ContractAdmission",
@@ -173,12 +167,12 @@ SHARED += ["MessageExecution", "MessageExecutionInversion",
            "ExecutionTransactionPrefix", "ExecutionTransactionPrefixAdmission",
            "ExecutionBodyAdmission", "ExecutionBodyPrefixAdmission", "ExecutionHistoryAdmission",
            "ExecutionTraceFresh", "ExecutionTraceEntered", "ExecutionImmutableCode",
-           "ExecutionMessageEffects", "ExecutionTransactionEffects", "ExecutionTraceCreateResult", "ExecutionParentLogAttribution", "ExecutionSettledReceiptLogs",
+           "ExecutionMessageEffects", "ExecutionTransactionEffects", "ExecutionParentLogAttribution", "ExecutionSettledReceiptLogs",
            "ExecutionBodyEffects", "ExecutionRewardCredits", "ExecutionHistoryEffects",
            "ExecutionAccountingReplay", "ExecutionAccountingSignedBalance", "ExecutionAccountingStorageFold",
            "ExecutionAccountingStoragePrefix",
            "ExecutionAccountingLadder", "CallSpawnExact", "StaticcallObservation", "StaticCallStorage",
-           "ChargeGas", "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceSettledOrigin", "ExecutionTraceSettledFresh", "ExecutionStagedFrames", "ExecutionStagedAdmission", "ExecutionStagedFrameEnv", "ExecutionStagedRootFacts", "ExecutionStagedSstoreAttribution", "ExecutionTraceRootFrame", "ExecutionRequestSegments", "ExecutionTraceEntry", "ExecutionExistingAccount", "ExecutionDeletionSafety", "ExecutionRetainedDeletionSafety", "ExecutionNoDelProducer", "ExecutionNoDelSafeHistory", "ExecutionRetainedNoDelTransaction", "ExecutionRetainedNoDelHistory", "ExecutionTraceDeterminism", "ExecutionNoDelTransaction", "ExecutionNoDelHistory", "ExecutionHistoricalAdmission", "ExecutionHistoricalLadder",
+           "ChargeGas", "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceSettledOrigin", "ExecutionStagedFrames", "ExecutionStagedAdmission", "ExecutionStagedFrameEnv", "ExecutionStagedRootFacts", "ExecutionStagedSstoreAttribution", "ExecutionTraceRootFrame", "ExecutionRequestSegments", "ExecutionTraceEntry", "ExecutionExistingAccount", "ExecutionDeletionSafety", "ExecutionRetainedDeletionSafety", "ExecutionNoDelProducer", "ExecutionNoDelSafeHistory", "ExecutionRetainedNoDelTransaction", "ExecutionRetainedNoDelHistory", "ExecutionTraceDeterminism", "ExecutionNoDelTransaction", "ExecutionNoDelHistory", "ExecutionHistoricalAdmission", "ExecutionHistoricalLadder",
            "ExecutionAccountingObserved", "ExecutionAccountingAdmission", "ExecutionAccountingCore", "ExecutionEntryAccounting", "ExecutionModelAccounting", "ExecutionWholeFrameAccounting", "ExecutionDirectCode", "ExecutionAccountingStepsIn", "ExecutionAccountingCoreIn", "ExecutionAccountingAdmissionIn", "ExecutionAccountingHistoryIn"]
 # The ladder over arbitrary code images and the generic bytecode lift
 # (solc-bytecode-v1): contract-neutral, no WETH9 name in any of them.
@@ -187,14 +181,14 @@ SHARED += ["LadderBase", "LadderReached", "MessageDelegationGas", "LadderSem", "
            "Lift.ExactWalk", "Lift.Silent", "Lift.BalSilent"]
 # Loops, kernel-economical checking, walk kits and solc idioms (beacon-deposit-bytecode-v1):
 # contract-neutral, no contract name in any of them.
-SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.CheckAssembly", "Lift.ExactWalkOps",
+SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.ExactWalkOps",
            "Lift.ExactWalkCut", "Lift.ExactWalkCutOps", "Lift.CopyLoop", "Lift.PackedSha",
            "Lift.PackedShaCovered", "Lift.Quiet", "Lift.InvWalk", "Lift.InvWalkOps",
-           "Lift.InvWalkWorld", "Lift.InvWalkGas", "Lift.ExactMustRun", "Lift.InvWalkSha", "Lift.InvWalkDispatch", "Lift.InvWalkProvenance", "Lift.CodeSizeWalk", "Lift.HistAccessWalk", "Lift.HistStaticCall", "Lift.HistCursorCuts", "Lift.HistCursorReturn", "Lift.HistAccessFacts", "Lift.HistEcrecover", "Lift.HistCreate", "Lift.HistAccessMeta", "Lift.HistAccessWalkFacts"]
+           "Lift.InvWalkWorld", "Lift.InvWalkGas", "Lift.ExactMustRun", "Lift.InvWalkSha", "Lift.InvWalkDispatch", "Lift.InvWalkProvenance", "Lift.CodeSizeWalk", "Lift.HistAccessWalk", "Lift.HistStaticCall", "Lift.HistCursorCuts", "Lift.HistCursorReturn", "Lift.HistEcrecover", "Lift.HistCreate", "Lift.HistAccessMeta", "Lift.HistAccessWalkFacts"]
 # Creation code (deploy-init-v1): the size-optimised packed-hash site and the CREATE bridge
 # for lifted creation code; contract-neutral.
 SHARED += ["RequestFeeWord", "RequestFeeWordDomain", "RequestFeeWordBound", "Lift.RequestFee.Window", "Lift.RequestFee.Getter"]
-SHARED += ["Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckRange", "Lift.WitnessShadow"]
+SHARED += ["Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckRange"]
 # Solc-0.4 scratch-memory walk kit and the value-bearing CALL to a code-free recipient
 # (weth9-liveness-v1): contract-neutral.
 SHARED += ["Lift.ExactWalkSolc", "Lift.ExactCallProfile", "Lift.CallProfileTransport", "Lift.StaticGasTransport", "Lift.StaticGasMessage"]
@@ -207,7 +201,7 @@ SHARED += ["Lift.MemPotential", "Lift.FreePtr", "Lift.SymTransfer", "Lift.FreePt
            "Lift.HistoryGas", "Lift.StepMemory", "Lift.FreePtrMem",
            "Lift.NodeRet", "Lift.FreePtrSoundStep", "Lift.FreePtrSound",
            "Lift.MemWrites", "Lift.StepTops", "Lift.WriteSiteStep", "Lift.WriteSiteJoin",
-           "Lift.WriteSiteSound", "Lift.WriteSiteRows", "Lift.WriteSiteSelector", "Lift.WriteSiteZero",
+           "Lift.WriteSiteSound", "Lift.WriteSiteZero",
            "Lift.WriteSiteReach", "Lift.WriteSiteReachHistory", "Lift.ReachWalkSstore"]
 # The shared symbol-interval reading of the bound checkers (ns-h1b): imports
 # nothing but core Lean, so it is contract-neutral.
@@ -230,7 +224,7 @@ SHARED += ["LedgerUpdate"]
 # StableSwap (n = 3) Newton loops for D and y, plain and checked: contract-neutral.
 SHARED += ["Lift.StableSwapNewton.Defs", "Lift.StableSwapNewton.Root",
            "Lift.StableSwapNewton.D", "Lift.StableSwapNewton.Y",
-           "Lift.StableSwapNewton.Fuel"]
+           ]
 # Fuel-bounded loop heads (Newton loops) walked to a fuel-loop model: contract-neutral.
 SHARED += ["Lift.FuelLoopWalk"]
 # Vyper 0.2.x walk kit (array slots, identity copies, raw_call tails, balance differences):
@@ -238,7 +232,7 @@ SHARED += ["Lift.FuelLoopWalk"]
 SHARED += ["Lift.VyperArraySlot", "Lift.IdentityCall", "Lift.BalanceDiffCall",
            "Lift.VyperRawCall", "Lift.RunEx", "Lift.WalkKit", "Lift.WalkInvKit", "Lift.FrameWalkAligned"]
 # Internal calls through the PC idiom and unrolled Vyper frame save/restore chains: contract-neutral.
-SHARED += ["Lift.InvWalkCallNext", "Lift.VyperFrameLoop"]
+SHARED += ["Lift.VyperFrameLoop"]
 SHARED += ["Lift.ThreeWordFrame"]
 # Vyper 0.2.x internal-callee walks: memory windows, load-only bases, checked arithmetic.
 SHARED += ["Lift.VyperCallee", "Lift.VyperCheckedArith"]
@@ -254,21 +248,21 @@ SHARED += ["Lift.ReturnDataBound", "Lift.PrecompileOutputBound"]
 SHARED += ["Lift.CommittedLogs", "Lift.CommittedFrameLogs", "Lift.SegmentedReplay", "Lift.SegmentedHistory"]
 # Walk steps for arbitrary static calls, CALLER/KECCAK256/LOG3/SSTORE, hashed slots and the
 # Vyper 0.2.x front end (vyper-3crv-bytecode-v1): contract-neutral.
-SHARED += ["Lift.StaticCall", "Lift.StaticCallGuard", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper", "Lift.VyperDispatchWalk", "Lift.VyperDispatchExact", "Lift.PackedWord"]
+SHARED += ["Lift.StaticCall", "Lift.StaticCallGuard", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper", "Lift.PackedWord"]
 # Spawn kinds from code bytes (curve-3pool-stableswap-v1): contract-neutral.
 SHARED += ["Lift.SpawnKindsM"]
 SHARED += ["Lift.GuardedCalls"]
-SHARED += ["Lift.ChildFrameCode"]
-SHARED += ["Lift.ChildFrameDepth"]
-SHARED += ["Lift.LogAddresses"]
+SHARED += []
+SHARED += []
+SHARED += []
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
-SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.ReachDispatch", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorCheckPrefix", "Lift.ObservedReach", "Lift.ObservedReachSplit", "Lift.CursorKeccak", "Lift.CursorKeccakOrder", "Lift.CursorObservedCut", "Lift.CursorOccurrence", "Lift.CursorOccurrenceToward", "Lift.CursorCutsToward", "Lift.CursorStateToward", "Lift.CursorReturnToward", "Lift.CursorOccurrenceNoStateGas", "Lift.CursorTreeNinst", "Lift.CursorExact", "Lift.CursorExactLine", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "Lift.StaticOnlyRoots", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
+SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.ReachDispatch", "Lift.Cursor", "Lift.CursorCuts", "Lift.ObservedReach", "Lift.CursorKeccak", "Lift.CursorKeccakOrder", "Lift.CursorOccurrence", "Lift.CursorCutsToward", "Lift.CursorStateToward", "Lift.CursorTreeNinst", "Lift.CursorExact", "Lift.CursorExactLine", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
            "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow", "Lift.CursorStateCuts", "Lift.CursorNoExecSuffix", "Lift.CursorSourceRun", "Lift.CursorSourceRunReturn", "Lift.CursorBalanceReply", "Lift.CursorQuietReturn", "Lift.CursorJump"]
 # The constant memory map and its checker, code tries as data, and the executable-witness
 # engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): contract-neutral.
 SHARED += ["Lift.MemMap", "Lift.CheckMem", "Lift.CodeTriesData", "Lift.CodeTriesBuild", "Lift.WitnessArms", "Lift.Witness",
-           "Lift.WitnessChild", "Lift.WitnessSpawn", "Lift.NodeWalk", "Lift.NodeWalkFrames", "Lift.KernelBatch", "Lift.KernelNat", "Lift.WitnessChildMeta"]
+           "Lift.WitnessChild", "Lift.WitnessSpawn", "Lift.NodeWalk", "Lift.KernelBatch"]
 # Chunk boundaries and stage composition of a witness run, the literal-free scaffolding the
 # V- witness's heavy frames instantiate (vminus-tx-v1): contract-neutral.
 SHARED += ["Lift.WitnessBoundary", "TransactionForward", "TransactionForwardH"]
@@ -283,16 +277,16 @@ SHARED += ["ExecutionReachable", "SystemContracts", "ExecutionTraceCodeKeep", "E
 # Call-only executions enter no CREATE frame (eip7002-withdrawal-predeploy-v1).
 SHARED += ["ExecutionTraceCallOnly"]
 # Generic per-frame calldata-length bound of a configured history (calldata-bound-v1): contract-neutral.
-SHARED += ["ExecutionTraceCalldata", "ForkUniform", "Lift.NodeWalkFork", "Lift.WitnessFork", "TransactionFork", "Lift.NodeWalkPrecomp", "Lift.ShadowCanon", "Lift.NodeWalkOrig"]
+SHARED += ["ExecutionTraceCalldata", "ForkUniform", "Lift.NodeWalkFork", "Lift.WitnessFork", "Lift.NodeWalkOrig"]
 # A gas-exact lifted run as a node-walk leaf child (vyper-reachable-reentrancy-v1).
 SHARED += ["Lift.ExactLeaf"]
 # A forall kernel batch (vyper-minus-reachable-reentrancy-v1).
-SHARED += ["Lift.KernelBatchForall", "Lift.ShadowTail", "Lift.OrigKeys"]
+SHARED += ["Lift.KernelBatchForall", "Lift.ShadowTail"]
 # Generic entry-gas bound, child code-at keep and system-size exclusion of a configured history
 # (curve-3pool-stableswap-v1 packet G): contract-neutral.
 SHARED += ["ExecutionTraceFrameEnv"]
 
-SHARED += ["Lift.GasErasureRun", "Lift.MutableCallPost", "Lift.WordWindowMemory"]
+SHARED += ["Lift.GasErasureRun", "Lift.MutableCallPost"]
 
 
 SHARED += ["Lift.CallChildren", "Lift.CallSite", "Lift.CallSiteChildren", "Lift.CallerProvenance"]
@@ -312,7 +306,6 @@ SHARED += [
     "Lift.Token.Core",
     "Lift.Token.Holder",
     "Lift.Token.SelfCaller",
-    "CodeDelegation",
 ]
 # The minter/supply facet of the token core (curve-3pool-stableswap-v1 U8a): contract-neutral.
 SHARED += ["Lift.Token.Supply"]
@@ -333,15 +326,11 @@ SHARED += [
     "ExecutionOwnerFamily",
     "ExecutionOwnerFamilyPositional",
     "ExecutionRawFramesCodeImage",
-    "ExecutionSettledCodeImage",
     "ExecutionInCodeImage",
     "ExecutionInOwnCode",
     "ExecutionInCodeImageSafe",
-    "ExecutionSafeRawFramesCodes",
     "ExecutionInRawNodes",
     "ExecutionCellProvenance",
-    "ExecutionRetainedCellZero",
-    "ExecutionRetainedCellAt",
     "ExecutionKeptFrames",
     "ExecutionKeptFacts",
     "ExecutionKeptTop",
@@ -353,28 +342,15 @@ SHARED += [
     "ExecutionHistoryCommittedCell",
     "ExecutionHistoryInEraBounds",
     "ExecutionHistoryCommittedCuts",
-    "ExecutionIndexedReceipts",
     "ExecutionTrieBinding",
-    "ExecutionReceiptRanges",
-    "ExecutionHistoryReceiptLogs",
     "ExecutionHistoryCellProvenance",
     "ExecutionInRawNodeOrigin",
     "ExecutionInRootOwnCode",
-    "ExecutionRetainedNodeOrigin",
     "ExecutionHistoryCellProvenanceFrom",
-    "ExecutionInRawNodeOriginFrom",
-    "ExecutionSpawnFrames",
-    "Lift.CertRefine",
-    "Lift.CursorFrames",
     "Lift.DelegatecallControl",
     "Lift.FrameSkip",
     "Lift.InvWalkStep",
-    "Lift.QuietDelegateSkip",
-    "Lift.ReachFirstExec",
-    "Lift.ReachPreExec",
-    "Lift.ReachSilentTail",
     "Lift.ReachSkip",
-    "Lift.RegionStor",
     "Lift.RunPWalk",
     "Lift.SolcStorageClear",
     "Lift.SolcStoragePayload",
@@ -383,10 +359,7 @@ SHARED += [
     "Lift.SolcStorageReturn",
     "Lift.ReachSstoreLoops",
     "Lift.ReachSolcStringStore",
-    "Lift.SelectorRoute", "Lift.SettledFramePositions", "Lift.ShuffleSkip",
-    "Lift.SpawnExact",
-    "Lift.HistSpawnExact",
-    "Lift.StaticOnlyPrefix",
+    "Lift.SelectorRoute", "Lift.ShuffleSkip",
     "Lift.Token.CoreW",
     "Lift.Token.FamilyReplay",
     "Lift.Token.HolderLaws",
@@ -514,7 +487,7 @@ SHARED += ["Lift.LegacyRecover"]
 
 # Finite hash separation, the kernel trie-root twin with its node-hash certificate, and header
 # binding (weth9-observation-binding-v1): contract-neutral.
-SHARED += ["Separated", "TrieKernel", "HeaderBinding"]
+SHARED += ["Separated", "TrieKernel"]
 
 
 
@@ -526,60 +499,37 @@ SHARED += ["Lift.AccumulatedWalk", "Lift.GasField"]
 SHARED += ["SyntheticSystemWorld", "SyntheticBpo2Envelope"]
 
 
-SHARED += ["ExecutionTraceMessageRoots"]
+SHARED += []
 
-SHARED += ["Lift.CallMessageFacts", "Lift.CalldataWords", "Lift.ExactWalkStaticCallChild"]
+SHARED += ["Lift.CallMessageFacts"]
 
 SHARED += ["ExecutionTargetPrefix"]
 
 # Fixed synthetic 299-byte token fixture, shared without V± instance worlds.
-SHARED += ['Lift.Token20.Cert', 'Lift.Token20.Check', 'Lift.Token20.Creation.Cert', 'Lift.Token20.Creation.Check', 'Lift.Token20.Creation.Deploy', 'Lift.Token20.Creation.Input', 'Lift.Token20.Frame', 'Lift.Token20.Run', 'Lift.Token20.RunBalance', 'Lift.Token20.RunTransfer', 'Lift.Token20.RunTransferFrom']
+SHARED += ['Lift.Token20.Cert', 'Lift.Token20.Check', 'Lift.Token20.Creation.Cert', 'Lift.Token20.Creation.Check', 'Lift.Token20.Creation.Input', 'Lift.Token20.Run', 'Lift.Token20.RunBalance']
 
 # Execution facts over selected-domain histories, transaction-item transport and the block-hash
 # binding, and the frame-chain, coin-frame, root-standing, write-site and walk-cost kits
 # (curve-3pool-flagship-v1): contract-neutral. `Lift.CodeImage` keeps a pinned `Lift.Usdc`
 # constant name, moved here because a shared kit needs it; the definition names no contract.
 SHARED += [
-    "BlockHashBinding",
     "ExecutionHistoryInFrameEnv",
-    "ExecutionHistoryInPreCancun",
-    "ExecutionHistoryInSystemConfined",
-    "ExecutionHistoryMuirCut",
-    "ExecutionMidHistoryInFrameTime",
     "ExecutionMidHistoryInOwnCode",
-    "ExecutionMidHistoryInRootCallers",
-    "ExecutionMidWindowIn",
     "ExecutionReceiptLogLink",
-    "ExecutionWholeFrameAccountingIn",
-    "TransactionItemTransport",
-    "Lift.ApprovalLog",
     "Lift.BalanceLocality",
-    "Lift.ChainNoExec",
-    "Lift.ChainStatic",
-    "Lift.ChildCell",
     "Lift.CodeImage",
-    "Lift.CoinFrame",
-    "Lift.CoinKeys",
-    "Lift.ExactCallFloor",
-    "Lift.ExecFreeLogs",
     "Lift.ForeignKeep",
     "Lift.FrameChain",
-    "Lift.HistFrameWalk",
     "Lift.HistIdentityCall",
     "Lift.InvWalkLegacy",
     "Lift.LinearRuntimeSafety",
-    "Lift.LogFilterPremises",
-    "Lift.PoolCoinSel",
     "Lift.ReachKinds",
     "Lift.RootChain",
-    "Lift.RootReady",
     "Lift.RootStanding",
     "Lift.ViewChain",
     "Lift.WalkCost",
     "Lift.WalkCostExact",
-    "Lift.WalkFpMove",
     "Lift.WriteSiteMapping",
-    "Lift.WriteSiteRowClass",
 ]
 
 # EIP-8282 builder request contracts (deposit and exit): the lifted runtimes and init codes, their

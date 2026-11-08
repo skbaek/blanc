@@ -86,118 +86,11 @@ theorem gas_run {pc pc' : Nat} {sevm : Sevm} {d d' : Devm} {f : Frame} {rsm : Re
 
 variable {sevm : Sevm} {post : Devm} {pc : Nat} {d : Devm} {L : List Exec.Frame}
 
-/-- A step that continues in the same frame keeps the remaining children. -/
-theorem XAt.cont {pc' : Nat} {d' : Devm} (hs : Evm.step ⟨pc, sevm, d⟩ = .cont pc' d')
-    (h : XAt sevm post pc d L) : XAt sevm post pc' d' L := by
-  obtain ⟨exc, rfl, hg⟩ := h
-  cases exc with
-  | halt h => cases hs.symm.trans h
-  | cont h next =>
-    have e := hs.symm.trans h
-    cases e
-    exact ⟨next, rfl, lt_of_lt_of_le (gas_cont h) (le_of_lt hg)⟩
-  | doneOk h _ _ _ => cases hs.symm.trans h
-  | runOk h _ _ _ _ => cases hs.symm.trans h
-
-/-- **A non-spawning instruction**: one `Ninst.Run` step, keeping the remaining children. -/
-theorem xa_next {n : Ninst} (hat : Ninst.At sevm.code pc n) (hn : ∀ x, n ≠ .exec x)
-    (h : XAt sevm post pc d L) :
-    ∃ d', Ninst.Run sevm d n d' ∧ XAt sevm post (pc + n.size) d' L := by
-  have hstep : Evm.step ⟨pc, sevm, d⟩ = Ninst.step ⟨pc, sevm, d⟩ n := Evm.step_next hat
-  obtain ⟨exc, rfl, hg⟩ := h
-  cases exc with
-  | halt h => cases Ninst.step_ne_halt_ok (hstep.symm.trans h)
-  | cont h next =>
-    have hs := hstep.symm.trans h
-    cases Ninst.step_cont_pc hs
-    refine ⟨_, ⟨.none, trivial, pc, ?_⟩, next, rfl, lt_trans (gas_cont h) hg⟩
-    simp only [Ninst.StepRun, hs, Step.Run]
-    exact ⟨trivial, trivial⟩
-  | doneOk h _ _ _ =>
-    obtain ⟨x, rfl, -⟩ := Ninst.step_spawn_inv (hstep.symm.trans h)
-    exact absurd rfl (hn x)
-  | runOk h _ _ _ _ =>
-    obtain ⟨x, rfl, -⟩ := Ninst.step_spawn_inv (hstep.symm.trans h)
-    exact absurd rfl (hn x)
-
-/-- A jump instruction's step never spawns. -/
-private theorem XAt.ofJump {j : Jinst} (hat : Jinst.At sevm.code pc j)
-    {pc' : Nat} {d' : Devm} (hrun : j.run ⟨pc, sevm, d⟩ = .ok ⟨pc', d'⟩)
-    (h : XAt sevm post pc d L) : XAt sevm post pc' d' L := by
-  apply XAt.cont _ h
-  rw [Evm.step_jump hat, hrun]
-  rfl
-
-/-- **A jump instruction**: its exact run, keeping the remaining children. -/
-theorem xa_jinst {j : Jinst} (hat : Jinst.At sevm.code pc j) (h : XAt sevm post pc d L) :
-    ∃ pc' d', Jinst.Run ⟨pc, sevm, d⟩ j (.ok ⟨pc', d'⟩) ∧ XAt sevm post pc' d' L := by
-  obtain ⟨exc, hL, hg⟩ := h
-  obtain ⟨pc', d', -, run, -⟩ := Jinst.run_of_at exc hat
-  exact ⟨pc', d', run, XAt.ofJump hat run ⟨exc, hL, hg⟩⟩
-
-theorem xa_jumpdest (hat : Jinst.At sevm.code pc .jumpdest) (h : XAt sevm post pc d L) :
-    ∃ d', Devm.Burn d d' ∧ XAt sevm post (pc + 1) d' L := by
-  obtain ⟨pc', d', run, h'⟩ := xa_jinst hat h
-  obtain ⟨rfl, burn⟩ := of_jumpdest_run run
-  exact ⟨d', burn, h'⟩
-
-theorem xa_jump (hat : Jinst.At sevm.code pc .jump) (h : XAt sevm post pc d L) :
-    ∃ x d', Devm.PopBurn [x] d d' ∧ XAt sevm post x.toNat d' L := by
-  obtain ⟨pc', d', run, h'⟩ := xa_jinst hat h
-  obtain ⟨x, rfl, pop, -⟩ := of_jump_run run
-  exact ⟨x, d', pop, h'⟩
-
-theorem xa_jumpi (hat : Jinst.At sevm.code pc .jumpi) (h : XAt sevm post pc d L) :
-    (∃ x d', Devm.PopBurn [x, 0] d d' ∧ XAt sevm post (pc + 1) d' L) ∨
-      (∃ x y d', y ≠ 0 ∧ Devm.PopBurn [x, y] d d' ∧ XAt sevm post x.toNat d' L) := by
-  obtain ⟨pc', d', run, h'⟩ := xa_jinst hat h
-  rcases of_jumpi_run run with ⟨x, rfl, pop⟩ | ⟨x, y, rfl, pop, -, hy⟩
-  · exact .inl ⟨x, d', pop, h'⟩
-  · exact .inr ⟨x, y, d', hy, pop, h'⟩
-
-/-- **A successful frame halting at a `Linst`** ends there, with no further children. -/
-theorem xa_halt {l : Linst} (hat : Linst.At sevm.code pc l) (h : XAt sevm post pc d L) :
-    Linst.Run sevm d l (.ok post) ∧ L = [] := by
-  obtain ⟨exc, rfl, hg⟩ := h
-  refine ⟨Linst.run_of_at exc hat, ?_⟩
-  have hs := Evm.step_last (devm := d) hat
-  cases exc with
-  | halt _ => rfl
-  | cont h _ => cases hs.symm.trans h
-  | doneOk h _ _ _ => cases hs.symm.trans h
-  | runOk h _ _ _ _ => cases hs.symm.trans h
-
-/-- A successful frame never executes `REVERT`. -/
-theorem xa_revert (hat : Linst.At sevm.code pc .revert) (h : XAt sevm post pc d L) : False :=
-  Linst.not_run_revert_ok (xa_halt hat h).1
-
 /-! ## The jump instructions over `St` states -/
 
 section St
 
 variable {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-
-theorem xa_jumpdest_St (hat : Jinst.At sevm.code pc .jumpdest)
-    (h : XAt sevm post pc (St b S M G) L) : ∃ G', XAt sevm post (pc + 1) (St b S M G') L := by
-  obtain ⟨d', burn, h'⟩ := xa_jumpdest hat h
-  exact ⟨_, (St.of_burn burn) ▸ h'⟩
-
-theorem xa_jump_St {dd : B256} (hat : Jinst.At sevm.code pc .jump)
-    (h : XAt sevm post pc (St b (dd :: S) M G) L) :
-    ∃ G', XAt sevm post dd.toNat (St b S M G') L := by
-  obtain ⟨x, d', pop, h'⟩ := xa_jump hat h
-  obtain ⟨rfl, e⟩ := St.of_pop1 pop
-  exact ⟨_, e ▸ h'⟩
-
-theorem xa_jumpi_St {dd w : B256} (hat : Jinst.At sevm.code pc .jumpi)
-    (h : XAt sevm post pc (St b (dd :: w :: S) M G) L) :
-    (w = 0 ∧ ∃ G', XAt sevm post (pc + 1) (St b S M G') L) ∨
-      (w ≠ 0 ∧ ∃ G', XAt sevm post dd.toNat (St b S M G') L) := by
-  rcases xa_jumpi hat h with ⟨x, d', pop, h'⟩ | ⟨x, y, d', hy, pop, h'⟩
-  · obtain ⟨-, rfl, e⟩ := St.of_pop2 pop
-    exact .inl ⟨rfl, _, e ▸ h'⟩
-  · obtain ⟨rfl, rfl, e⟩ := St.of_pop2 pop
-    exact .inr ⟨hy, _, e ▸ h'⟩
 
 end St
 

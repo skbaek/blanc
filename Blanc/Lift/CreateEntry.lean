@@ -18,18 +18,4 @@ and nonce incremented. The retained caller parameter does not affect zero-value 
 def entryState (W : State) (caller tgt : Adr) : State :=
   (W.setStor tgt .empty).incrNonce tgt
 
-/-- **The entry world, exactly.** -/
-theorem entry_state {msg : Msg} {benv : Benv} (hzero : msg.value = 0)
-    (hstv : msg.shouldTransferValue = true)
-    (h : (processCreateMessage.msg msg).benvAfterTransfer = .ok benv) :
-    benv.state = entryState msg.benv.state msg.caller msg.currentTarget := by
-  rw [Msg.benvAfterTransfer_of_value_zero (show (processCreateMessage.msg msg).value = 0 from hzero)] at h
-  cases h
-  rfl
-
-/-- The settled world of a lifted CREATE as a term: the constructor's world with the returned
-code installed at the target. -/
-theorem liftCreatePost_state (target : Adr) (raw : Devm) :
-    (liftCreatePost target raw).state = raw.state.setCode target ⟨⟨raw.output⟩⟩ := rfl
-
 end Blanc.Lift.CreateEntry

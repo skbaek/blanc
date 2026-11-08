@@ -75,28 +75,6 @@ theorem Reach.silentTo {ok : Ninst → Bool} {Ψ : Devm → Prop}
 
 end Silent
 
-/-- A frame none of whose chain nodes decodes an external instruction has no raw descendants. -/
-theorem Exec.rawFrameDescendants_eq_nil_of_noExec {pc : Nat} {sevm : Sevm} {d : Devm}
-    {out : Execution} (run : Exec pc sevm d out)
-    (h : ∀ N, Exec.Deriv.ParentPrefix ⟨pc, sevm, d, out, run⟩ N →
-      ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x)) :
-    Exec.rawFrameDescendants run = [] := by
-  induction run with
-  | halt step => simp only [Exec.rawFrameDescendants]
-  | cont step next ih =>
-      have := ih (fun N hN x => h N (.step (.cont step next) hN) x)
-      simpa only [Exec.rawFrameDescendants] using this
-  | doneErr step enter resume => simp only [Exec.rawFrameDescendants]
-  | doneOk step enter resume next ih =>
-      obtain ⟨x, instruction, -, -⟩ := Evm.step_spawn_inv step
-      exact (h _ (.refl _) x instruction).elim
-  | runErr step enter child resume ih =>
-      obtain ⟨x, instruction, -, -⟩ := Evm.step_spawn_inv step
-      exact (h _ (.refl _) x instruction).elim
-  | runOk step enter child resume next childIH nextIH =>
-      obtain ⟨x, instruction, -, -⟩ := Evm.step_spawn_inv step
-      exact (h _ (.refl _) x instruction).elim
-
 /-! ## Between two chain nodes -/
 
 /-- The raw descendants of a later node of a same-frame prefix are raw descendants of the earlier one. -/
@@ -150,29 +128,6 @@ theorem reach_between {code : ByteArray} {c : Cert} (hc : Cert.check code c = tr
     ∃ κ, Reach (StepIn R) c.prog R.sevm (κ₀.conf F.devm) (κ.conf N.devm) ∧
       CursorOK code c N κ :=
   reach_betweenH hc hF hp hfork.rules_stateGas_none ok
-
-/-- `noExec_after_of_cursor` from `rules.stateGas = none` alone. -/
-theorem noExec_after_of_cursorH {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
-    {R F N : Exec.Deriv} (hF : Exec.Deriv.ParentPrefix R F) (hp : Exec.Deriv.ParentPrefix F N)
-    (hsg : R.sevm.benvStat.rules.stateGas = none) {κ : Cursor} (ok : CursorOK code c F κ)
-    {E : List Nat} (hE : ExecFreeSet c.prog E = true) (hf : κ.f.execFreeIn E = true)
-    (hK : ∀ s ∈ κ.K.map Cont.f, s.execFreeIn E = true) :
-    ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x) := by
-  intro x hat
-  obtain ⟨κ', reach, okN⟩ := reach_betweenH hc hF hp hsg ok
-  obtain ⟨g, hg, -⟩ := okN.tree_of_exec hat
-  exact Reach.false_of_execFree hE reach ⟨x, g, hg⟩ hf hK
-
-/-- **No later external instruction.**  From a cursor-placed node of a certified frame whose remaining
-tree, and the trees pending below it, make no external call within a closed exec-free set, no later
-node of the frame decodes an external instruction. -/
-theorem noExec_after_of_cursor {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
-    {R F N : Exec.Deriv} (hF : Exec.Deriv.ParentPrefix R F) (hp : Exec.Deriv.ParentPrefix F N)
-    (hfork : CoveredFork R.sevm.benvStat.fork) {κ : Cursor} (ok : CursorOK code c F κ)
-    {E : List Nat} (hE : ExecFreeSet c.prog E = true) (hf : κ.f.execFreeIn E = true)
-    (hK : ∀ s ∈ κ.K.map Cont.f, s.execFreeIn E = true) :
-    ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x) :=
-  noExec_after_of_cursorH hc hF hp hfork.rules_stateGas_none ok hE hf hK
 
 /-! ## The halt of a frame -/
 

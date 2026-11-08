@@ -128,30 +128,4 @@ theorem ConfiguredBlockTraceIn.code_before_txSplit_of_installedCert
     cut.benv.state.getCode wa = C :=
   block.code_before_txSplit_of_runtimeSafety K.runtimeSafety cut capabilities installed
 
-/-- Compose a genuine source-cut mid history with the actual target block
-prefix. The installed runtime at the source cut remains a producer output. -/
-theorem MidHistoryTraceIn.code_before_txSplit_of_runtimeSafety
-    {wa : Adr} {C : ByteArray} (K : InstalledRuntimeSafety C)
-    {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {pre post : BlockChain}
-    (history : MidHistoryTraceIn F cfg start pre)
-    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
-    (cut : block.bodyTrace.transactions.TxSplit i)
-    (capabilities : BodyStageCapabilities F)
-    (installed : start.state.getCode wa = C) :
-    cut.benv.state.getCode wa = C := by
-  exact block.code_before_txSplit_of_runtimeSafety K cut capabilities
-    (history.code_of_runtimeSafety K capabilities installed)
-
-/-- Compatibility wrapper for the original call-only certificate API. -/
-theorem MidHistoryTraceIn.code_before_txSplit_of_installedCert
-    {wa : Adr} {C : ByteArray} (K : InstalledCert C)
-    {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {pre post : BlockChain}
-    (history : MidHistoryTraceIn F cfg start pre)
-    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
-    (cut : block.bodyTrace.transactions.TxSplit i)
-    (capabilities : BodyStageCapabilities F)
-    (installed : start.state.getCode wa = C) :
-    cut.benv.state.getCode wa = C :=
-  history.code_before_txSplit_of_runtimeSafety K.runtimeSafety block cut capabilities installed
-
 end Blanc.ExecutionTrace

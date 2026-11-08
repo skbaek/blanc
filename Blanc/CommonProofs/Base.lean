@@ -667,14 +667,6 @@ lemma Devm.addLog_getStor (devm : Devm) (log : Log) :
     Devm.getStor (devm.addLog log) = Devm.getStor devm := by
   rfl
 
-/-- A machine whose created-account set is `E` is itself with that set replaced by `E`. -/
-theorem Devm.withCreatedAccounts_of_eq {d : Devm} {E : AdrSet} (h : d.createdAccounts = E) :
-    d.withCreatedAccounts E = d := by
-  rcases d with ⟨_, ⟨_, _, _, _, _, _, _, _, _, _, _⟩, _⟩
-  simp only [Devm.createdAccounts] at h
-  subst h
-  rfl
-
 lemma Devm.WorldEq.getStor {d d' : Devm} (h : Devm.WorldEq d d') (a : Adr) :
     Devm.getStor d a = Devm.getStor d' a := by
   unfold Devm.getStor Devm.getAcct

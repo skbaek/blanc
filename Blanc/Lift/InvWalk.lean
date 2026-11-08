@@ -215,14 +215,6 @@ theorem ric_branch {dd w : B256}
       obtain ⟨-, hw', e⟩ := St.of_pop2 h
       exact .inr ⟨hw' ▸ hw, _, e ▸ k⟩
 
-theorem ric_jumpCut {k : Nat} {dd : B256} (hk : k ∈ C)
-    (run : SFunc.RunCut fs sevm C (St b (dd :: S) M G) (.jump k) r) :
-    ∃ G', r = .at k (St b S M G') := by
-  cases run with
-  | jumpCut d0 _ h =>
-      exact ⟨_, congrArg _ (St.of_pop1 h).2⟩
-  | jump _ hkC _ _ _ => exact absurd hk hkC
-
 theorem ric_jump {k : Nat} {dd : B256} (hkC : k ∉ C) (hk : fs[k]? = some g)
     (run : SFunc.RunCut fs sevm C (St b (dd :: S) M G) (.jump k) r) :
     ∃ G', SFunc.RunCut fs sevm C (St b S M G') g r := by
@@ -239,9 +231,6 @@ theorem ric_ret {dd : B256}
   cases run with
   | ret d0 h =>
       exact ⟨_, congrArg (fun x => Seg.done (Outcome.returned x)) (St.of_pop1 h).2⟩
-
-theorem ric_undefined {devm : Devm} (run : SFunc.RunCut fs sevm C devm .undefined r) : False := by
-  cases run
 
 theorem ric_revert {devm : Devm} (run : SFunc.RunCut fs sevm C devm (.last .revert) r) : False := by
   cases run with

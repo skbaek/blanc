@@ -23,66 +23,6 @@ namespace Blanc.ExecutionTrace
 
 open Jaune
 
-/-- A committed frame's raw outcome is a success. -/
-theorem _root_.Jaune.Exec.Frame.exists_ok (frame : Exec.Frame) : ∃ post, frame.out = .ok post := by
-  rcases frame with ⟨pc, sevm, pre, out, run, committed⟩
-  cases out with
-  | ok post => exact ⟨post, rfl⟩
-  | error e => simp only [Execution.commits, Bool.false_eq_true] at committed
-
-/-- A clean settlement of an entered call retains exactly its actual root.
-The successful raw execution follows from settlement; it is not an input. -/
-theorem ProcessMessageTrace.exists_root_of_entered_clean {msg : Msg} {post : Devm}
-    (trace : ProcessMessageTrace msg (.ok post)) {cevm : Evm}
-    (henter : (Frame.ofCall msg).enter = .run cevm)
-    (clean : post.error = none) :
-    ∃ root, trace.settledRoots = [root] ∧ root.pc = cevm.pc ∧
-      root.sevm = cevm.sta ∧ root.pre = cevm.dyna := by
-  rcases trace with ⟨slot, retained, process⟩
-  cases retained with
-  | none =>
-      change RunFrame (Frame.ofCall msg) none (.ok post) at process
-      simp only [RunFrame, henter, reduceCtorEq, false_and, exists_false] at process
-  | @some pc sevm pre raw run =>
-      obtain ⟨entered, settled⟩ := RunFrame.some_inv process
-      have same : (⟨pc, sevm, pre⟩ : Evm) = cevm :=
-        FrameEntry.run.inj (entered.symm.trans henter)
-      have commits : Frame.settlementCommits (Frame.ofCall msg) raw = true := by
-        simp only [Frame.settlementCommits, ← settled, clean, Option.isNone_none]
-      have rawCommits := Frame.raw_commits_of_settlementCommits commits
-      refine ⟨Exec.Frame.ofRun run rawCommits, ?_, congrArg Evm.pc same,
-        congrArg Evm.sta same, congrArg Evm.dyna same⟩
-      simp only [ProcessMessageTrace.settledRoots, commits, ↓reduceIte,
-        RetainedXlot.settledRoots, rawCommits, ↓reduceDIte]
-
-/-- A clean ordinary call retains the root of its actual execution message.
-The no-delegation equations identify that message with the original call. -/
-theorem MessageCallTrace.exists_root_of_clean_call
-    {msg : Msg} {state : State} {out : MsgCallOutput}
-    (trace : MessageCallTrace msg state out)
-    (hsg : msg.benv.stat.rules.stateGas = none)
-    (target : msg.target.isNone = false) (clean : out.error = none)
-    (delegation : messageCallDelegation msg = .ok (msg, 0))
-    (direct : messageCallExecutionMessage msg = msg) {cevm : Evm}
-    (henter : (Frame.ofCall msg).enter = .run cevm) :
-    ∃ root, trace.settledRoots = [root] ∧ root.pc = cevm.pc ∧
-      root.sevm = cevm.sta ∧ root.pre = cevm.dyna := by
-  cases trace with
-  | createCollision targetNone collision result =>
-      simp only [target, Bool.false_eq_true] at targetNone
-  | createRun targetNone collision evm core retained result =>
-      simp only [target, Bool.false_eq_true] at targetNone
-  | callRun targetSome delegated refund delegationRun execMsg execMsgEq evm core retained result =>
-      have same := Prod.mk.inj (Except.ok.inj (delegationRun.symm.trans delegation))
-      obtain ⟨sameDelegated, sameRefund⟩ := same
-      subst delegated refund
-      have entered : (Frame.ofCall execMsg).enter = .run cevm := by
-        rw [execMsgEq, direct]
-        exact henter
-      have coreClean : evm.error = none :=
-        (callRun_logs_error hsg targetSome delegationRun execMsgEq core result).1.symm.trans clean
-      exact retained.exists_root_of_entered_clean entered coreClean
-
 /-- **The entered frame of a retained message execution is a settled frame.**  If the
 call frame enters `cevm`, its execution returns `post`, and settlement commits, the
 retained trace's settled frames contain a frame with exactly `cevm`'s pc, static

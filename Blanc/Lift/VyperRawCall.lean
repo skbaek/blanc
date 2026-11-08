@@ -643,20 +643,6 @@ original base's return data, read before the identity copy replaces it. -/
 def rawTailBaseNext (sevm : Sevm) (b : Devm) (S : List B256) (M : Mem) (p : VyRawSite) : Devm :=
   rawJoinBaseNext sevm b S M p (min b.returnData.length 32)
 
-/-- The join's canonical base is stable modulo gas in its base, at literal `S` and `M`. -/
-theorem rawJoinBaseNext_congr (sevm : Sevm) {b b' : Devm} (S : List B256) (M : Mem)
-    (p : VyRawSite) (n : Nat) (h : Devm.EqModGas b b') :
-    Devm.EqModGas (rawJoinBaseNext sevm b S M p n) (rawJoinBaseNext sevm b' S M p n) :=
-  identityCallNext_congr sevm _ _ _ _ _ _ h
-
-/-- The tail's canonical base is stable modulo gas in its base, at literal `S` and `M`. -/
-theorem rawTailBaseNext_congr (sevm : Sevm) {b b' : Devm} (S : List B256) (M : Mem)
-    (p : VyRawSite) (h : Devm.EqModGas b b') :
-    Devm.EqModGas (rawTailBaseNext sevm b S M p) (rawTailBaseNext sevm b' S M p) := by
-  unfold rawTailBaseNext
-  rw [h.returnData]
-  exact rawJoinBaseNext_congr sevm S M p _ h
-
 /-- The join's canonical base ignores the frame's static initial gas. -/
 theorem rawJoinBaseNext_withStaticGas (sevm : Sevm) (F : Nat) (b : Devm) (S : List B256)
     (M : Mem) (p : VyRawSite) (n : Nat) :

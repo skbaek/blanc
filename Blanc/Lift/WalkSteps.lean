@@ -176,19 +176,6 @@ theorem ri_slt {x y : B256} {d : Devm}
   simp only [Rinst.run, Rinst.runCore] at run
   exact ⟨_, St.of_diff (Devm.diffBurn_of_applyBinary run)⟩
 
-/-- `TIMESTAMP`, inverted. -/
-theorem ri_timestamp {d : Devm}
-    (h : Ninst.Run sevm (St b S M G) (.reg .timestamp) d) :
-    ∃ G', d = St b (sevm.benvStat.time :: S) M G' := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  have hp := Devm.pushBurn_of_pushItem run
-  have hs : d.stack = sevm.benvStat.time :: S := by
-    simpa only [Stack.Push, Split, St.stack, List.cons_append, List.nil_append] using hp.stack
-  have e := St.of_stackRel hp
-  rw [hs] at e
-  exact ⟨_, e⟩
-
 /-- `LOG2` exposes its exact added log and actual read-expanded memory. -/
 theorem ri_log2_post {i sz t1 t2 : B256} {d : Devm}
     (h : Ninst.Run sevm (St b (i :: sz :: t1 :: t2 :: S) M G) (.reg (.log 2)) d) :
@@ -282,45 +269,10 @@ theorem Mem.read_write_word_of_wf {M : Mem} (hwf : Mem.Wf M) (n : Nat) (v : B256
 
 /-! ## A load then a store of one key, and a log entry, seen from the world -/
 
-/-- The word at `key` after `SLOAD k; SSTORE k v` over `b`. -/
-theorem getStorVal_afterStore {sevm : Sevm} {b : Devm} {k v key : B256} :
-    (afterSstore sevm (afterSload sevm b k) k v).getStorVal sevm.currentTarget key =
-      ((Devm.getStor b sevm.currentTarget).set k v).get key := by
-  show (Devm.getStor _ _).get _ = _
-  rw [afterSstore_getStor_self, afterSload_getStor]
-
-theorem getStor_afterStore {sevm : Sevm} {b : Devm} {k v : B256} :
-    Devm.getStor (afterSstore sevm (afterSload sevm b k) k v) sevm.currentTarget =
-      (Devm.getStor b sevm.currentTarget).set k v := by
-  rw [afterSstore_getStor_self, afterSload_getStor]
-
-theorem getStor_afterStore_ne {sevm : Sevm} {b : Devm} {k v : B256} {a : Adr}
-    (ha : a ≠ sevm.currentTarget) :
-    Devm.getStor (afterSstore sevm (afterSload sevm b k) k v) a = Devm.getStor b a := by
-  rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), afterSload_getStor]
-
 theorem getStorVal_afterSload {sevm : Sevm} {b : Devm} {k : B256} {a : Adr} {x : B256} :
     (afterSload sevm b k).getStorVal a x = b.getStorVal a x := by
   show (Devm.getStor _ _).get _ = (Devm.getStor _ _).get _
   rw [afterSload_getStor]
-
-theorem getStor_addLog (d : Devm) (L : Log) (a : Adr) :
-    Devm.getStor (d.addLog L) a = Devm.getStor d a := rfl
-
-/-- The state `RETURN` leaves keeps the base's storage. -/
-theorem getStor_St_return (b : Devm) (S : List B256) (M : Mem) (G i n : Nat) (out : Bytes)
-    (a : Adr) :
-    Devm.getStor (((St b S M G).memRead i n).2.withOutput out) a = Devm.getStor b a := rfl
-
-theorem logs_St_return (b : Devm) (S : List B256) (M : Mem) (G i n : Nat) (out : Bytes) :
-    (((St b S M G).memRead i n).2.withOutput out).logs = b.logs := rfl
-
-theorem output_St_return (b : Devm) (S : List B256) (M : Mem) (G i n : Nat) (out : Bytes) :
-    (((St b S M G).memRead i n).2.withOutput out).output = out := rfl
-
-theorem logs_afterStore {sevm : Sevm} {b : Devm} {k v : B256} :
-    (afterSstore sevm (afterSload sevm b k) k v).logs = b.logs := by
-  rw [afterSstore_logs, afterSload_logs]
 
 /-! ## Storage chains of the executing contract
 

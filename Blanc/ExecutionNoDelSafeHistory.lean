@@ -1030,22 +1030,6 @@ theorem TransactionTrace.safeRawFrames_of_runtimeSafety {wa : Adr} {C : ByteArra
     hmsgSg hmsgState (prepareMessage_own trace.prepared) hnodel
     (trace.not_mem_msg_inheritedDeletions wa)
 
-/-- Compatibility wrapper for the original call-only certificate API. -/
-theorem TransactionTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
-    {c : Lift.Cert}
-    (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
-    (noSelfdestruct : c.noSelfdestruct = true) (hCdel : ¬ isValidDelegation C)
-    (hCne : C.toList ≠ [])
-    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    {state : State} {bout' : BlockOutput}
-    (trace : TransactionTrace benv bout tx index state bout')
-    (hsg : benv.stat.rules.stateGas = none)
-    (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
-    SafeRawFrames wa trace.rawFrames :=
-  trace.safeRawFrames_of_runtimeSafety
-    (InstalledRuntimeSafety.of_cert hc callOnly noSelfdestruct hCdel hCne)
-    hsg installed notCreated
-
 /-- **Per-frame safety of a system message from an installed checked runtime.** -/
 theorem SystemMessageTrace.safeRawFrames_of_runtimeSafety {wa : Adr} {C : ByteArray}
     (K : InstalledRuntimeSafety C)

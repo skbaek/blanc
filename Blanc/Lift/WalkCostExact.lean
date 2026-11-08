@@ -158,34 +158,11 @@ theorem sloadCost_afterSload_self : sloadCost sevm (afterSload sevm b k) k = gas
   unfold sloadCost
   rw [ite_eq_left (mem_afterSload sevm b k)]
 
-/-- A store just after a read pays only its value's case. -/
-theorem sstoreCost_afterSload_self :
-    sstoreCost sevm (afterSload sevm b k) k v =
-      sstoreValueCost (b.getOrigStorVal sevm sevm.currentTarget k)
-        (b.getStorVal sevm.currentTarget k) v := by
-  unfold sstoreCost
-  rw [ite_eq_left (mem_afterSload sevm b k), Nat.zero_add]
-  unfold afterSload
-  split <;> rfl
-
 end Charges
 
 section GasLeft
 
 variable (s : Sevm) (a : Devm) (k v : B256) (G : Nat)
-
-theorem afterSload_withGasLeft : afterSload s (a.withGasLeft G) k = (afterSload s a k).withGasLeft G := by
-  unfold afterSload
-  rw [show (a.withGasLeft G).accessedStorageKeys = a.accessedStorageKeys from rfl]
-  by_cases h : (⟨s.currentTarget, k⟩ : Adr × B256) ∈ a.accessedStorageKeys <;>
-    simp only [h, ↓reduceIte] <;> rfl
-
-theorem afterSstore_withGasLeft :
-    afterSstore s (a.withGasLeft G) k v = (afterSstore s a k v).withGasLeft G := by
-  unfold afterSstore
-  rw [show (a.withGasLeft G).accessedStorageKeys = a.accessedStorageKeys from rfl]
-  by_cases h : (⟨s.currentTarget, k⟩ : Adr × B256) ∈ a.accessedStorageKeys <;>
-    simp only [h, ↓reduceIte] <;> rfl
 
 theorem addLog_withGasLeft (l : Log) : (a.withGasLeft G).addLog l = (a.addLog l).withGasLeft G := rfl
 
@@ -201,173 +178,13 @@ section Cold
 
 variable {s : Sevm} {b : Devm} {k k' v : B256}
 
-/-- A slot not yet accessed is charged the cold read. -/
-theorem sloadCost_cold (h : (⟨s.currentTarget, k⟩ : Adr × B256) ∉ b.accessedStorageKeys) :
-    sloadCost s b k = gasColdSload := by
-  unfold sloadCost
-  rw [ite_eq_right h]
-
-/-- A read of another slot leaves this slot cold. -/
-theorem notMem_afterSload (hne : k' ≠ k)
-    (h : (⟨s.currentTarget, k⟩ : Adr × B256) ∉ b.accessedStorageKeys) :
-    (⟨s.currentTarget, k⟩ : Adr × B256) ∉ (afterSload s b k').accessedStorageKeys := by
-  unfold afterSload
-  split
-  · exact h
-  · intro hm
-    rcases Std.HashSet.mem_insert.mp hm with e | e
-    · have : (⟨s.currentTarget, k'⟩ : Adr × B256) = ⟨s.currentTarget, k⟩ := by simpa only [beq_iff_eq] using e
-      exact hne (Prod.mk.inj this).2
-    · exact h e
-
-/-- A store to a warm slot leaves every slot's temperature. -/
-theorem accessed_afterSstore_of_warm {k : B256} {v : B256}
-    (hw : (⟨s.currentTarget, k⟩ : Adr × B256) ∈ b.accessedStorageKeys) :
-    (afterSstore s b k v).accessedStorageKeys = b.accessedStorageKeys := by
-  unfold afterSstore
-  rw [ite_eq_left hw]
-  rfl
-
 end Cold
-
-/-- A frame's halting state keeps its base's columns: agreement modulo gas, at any residuals. -/
-theorem memRet_congr {B B' : Devm} {S : List B256} {M : Mem} {a n : Nat} {w : Bytes} {G H : Nat}
-    (h : Devm.EqModGas B B') :
-    Devm.EqModGas (((St B S M G).memRead a n).2.withOutput w) (((St B' S M H).memRead a n).2.withOutput w) := by
-  apply Devm.EqModGas.of_normalized_eq
-  have e := h.withGasLeft_eq 0
-  change (((St (B.withGasLeft 0) S M 0).memRead a n).2.withOutput w).withGasLeft 0 =
-    (((St (B'.withGasLeft 0) S M 0).memRead a n).2.withOutput w).withGasLeft 0
-  rw [e]
-
-/-- `memRet_congr` at a base one gas apart. -/
-theorem memRet_canon {B B' : Devm} {S : List B256} {M : Mem} {a n : Nat} {w : Bytes} {F G H : Nat}
-    (h : B = B'.withGasLeft F) :
-    Devm.EqModGas (((St B S M G).memRead a n).2.withOutput w) (((St B' S M H).memRead a n).2.withOutput w) := by
-  subst h
-  exact memRet_congr (Devm.EqModGas.withGasLeft B' F).symm
 
 section Move
 
 variable {s : Sevm} {a : Devm} {kr kt w u : B256}
 
 theorem getStor_withGasLeft (d : Devm) (G : Nat) (t : Adr) : Devm.getStor (d.withGasLeft G) t = Devm.getStor d t := rfl
-
-/-- A read keeps every warm slot warm. -/
-theorem mem_afterSload_of_mem {k k' : B256} {t : Adr}
-    (h : (⟨t, k⟩ : Adr × B256) ∈ a.accessedStorageKeys) :
-    (⟨t, k⟩ : Adr × B256) ∈ (afterSload s a k').accessedStorageKeys := by
-  unfold afterSload
-  split
-  · exact h
-  · exact Std.HashSet.mem_insert.mpr (Or.inr h)
-
-/-- A read of a warm slot changes nothing. -/
-theorem afterSload_of_warm (h : (⟨s.currentTarget, kr⟩ : Adr × B256) ∈ a.accessedStorageKeys) :
-    afterSload s a kr = a := by
-  unfold afterSload
-  rw [ite_eq_left h]
-
-theorem sloadCost_of_warm (h : (⟨s.currentTarget, kr⟩ : Adr × B256) ∈ a.accessedStorageKeys) :
-    sloadCost s a kr = gasWarmAccess := by
-  unfold sloadCost
-  rw [ite_eq_left h]
-
-/-- **A warm debit and a cold credit, at their states.** With `kr` warm and `kt` cold and apart: a read at
-`100`, the store's value class, a read at `2100`, and the store's value class, both classes at `a`. -/
-theorem move_charges (hw : (⟨s.currentTarget, kr⟩ : Adr × B256) ∈ a.accessedStorageKeys)
-    (hc : (⟨s.currentTarget, kt⟩ : Adr × B256) ∉ a.accessedStorageKeys) (hne : kr ≠ kt) :
-    sloadCost s a kr + sstoreCost s (afterSload s a kr) kr w +
-        sloadCost s (afterSstore s (afterSload s a kr) kr w) kt +
-        sstoreCost s (afterSload s (afterSstore s (afterSload s a kr) kr w) kt) kt u =
-      2200 + sstoreValueCost (a.getOrigStorVal s s.currentTarget kr) (a.getStorVal s.currentTarget kr) w +
-        sstoreValueCost (a.getOrigStorVal s s.currentTarget kt) (a.getStorVal s.currentTarget kt) u := by
-  have hk : (afterSstore s a kr w).accessedStorageKeys = a.accessedStorageKeys :=
-    accessed_afterSstore_of_warm hw
-  have hc' : (⟨s.currentTarget, kt⟩ : Adr × B256) ∉ (afterSstore s a kr w).accessedStorageKeys := by
-    rw [hk]; exact hc
-  have hco : (afterSstore s a kr w).getOrigStorVal s s.currentTarget kt =
-      a.getOrigStorVal s s.currentTarget kt := by
-    unfold Devm.getOrigStorVal
-    rw [afterSstore_createdAccounts]
-  have hcu : (afterSstore s a kr w).getStorVal s.currentTarget kt = a.getStorVal s.currentTarget kt := by
-    rw [getStorVal_eq_getStor, getStorVal_eq_getStor, afterSstore_getStor_self]
-    exact Stor.get_set_ne _ hne _
-  rw [afterSload_of_warm hw, sloadCost_of_warm hw, sstoreCost_afterSload_self, sloadCost_cold hc', hco, hcu]
-  have hs : sstoreCost s a kr w = sstoreValueCost (a.getOrigStorVal s s.currentTarget kr)
-      (a.getStorVal s.currentTarget kr) w := by
-    unfold sstoreCost
-    rw [ite_eq_left hw, Nat.zero_add]
-  rw [hs]
-  simp only [gasWarmAccess, gasColdSload]
-  omega
-
-/-- A read keeps a slot's snapshot value. -/
-theorem origVal_afterSload (k k' : B256) :
-    (afterSload s a k').getOrigStorVal s s.currentTarget k = a.getOrigStorVal s s.currentTarget k := by
-  unfold Devm.getOrigStorVal
-  rw [afterSload_createdAccounts]
-
-/-- A read keeps a slot's value. -/
-theorem curVal_afterSload (k k' : B256) :
-    (afterSload s a k').getStorVal s.currentTarget k = a.getStorVal s.currentTarget k := by
-  rw [getStorVal_eq_getStor, getStorVal_eq_getStor, afterSload_getStor]
-
-/-- A store keeps a slot's snapshot value. -/
-theorem origVal_afterSstore (k k' v : B256) :
-    (afterSstore s a k' v).getOrigStorVal s s.currentTarget k = a.getOrigStorVal s s.currentTarget k := by
-  unfold Devm.getOrigStorVal
-  rw [afterSstore_createdAccounts]
-
-/-- A store keeps another slot's value. -/
-theorem curVal_afterSstore_ne {k k' v : B256} (h : k' ≠ k) :
-    (afterSstore s a k' v).getStorVal s.currentTarget k = a.getStorVal s.currentTarget k := by
-  rw [getStorVal_eq_getStor, getStorVal_eq_getStor, afterSstore_getStor_self]
-  exact Stor.get_set_ne _ h _
-
-/-- A store keeps a slot warm. -/
-theorem mem_afterSstore_of_mem {k k' v : B256} {t : Adr}
-    (h : (⟨t, k⟩ : Adr × B256) ∈ a.accessedStorageKeys) :
-    (⟨t, k⟩ : Adr × B256) ∈ (afterSstore s a k' v).accessedStorageKeys := by
-  unfold afterSstore
-  by_cases hk : (⟨s.currentTarget, k'⟩ : Adr × B256) ∈ a.accessedStorageKeys
-  · rw [ite_eq_left hk]; exact h
-  · rw [ite_eq_right hk]; exact Std.HashSet.mem_insert.mpr (Or.inr h)
-
-/-- A store to another slot leaves this slot cold. -/
-theorem notMem_afterSstore {k k' v : B256} (hne : k' ≠ k)
-    (h : (⟨s.currentTarget, k⟩ : Adr × B256) ∉ a.accessedStorageKeys) :
-    (⟨s.currentTarget, k⟩ : Adr × B256) ∉ (afterSstore s a k' v).accessedStorageKeys := by
-  unfold afterSstore
-  by_cases hk : (⟨s.currentTarget, k'⟩ : Adr × B256) ∈ a.accessedStorageKeys
-  · rw [ite_eq_left hk]; exact h
-  · rw [ite_eq_right hk]
-    intro hm
-    rcases Std.HashSet.mem_insert.mp hm with e | e
-    · have : (⟨s.currentTarget, k'⟩ : Adr × B256) = ⟨s.currentTarget, k⟩ := by simpa only [beq_iff_eq] using e
-      exact hne (Prod.mk.inj this).2
-    · exact h e
-
-/-- A store to a warm slot pays its value's class. -/
-theorem sstoreCost_warm_eq (hw : (⟨s.currentTarget, kr⟩ : Adr × B256) ∈ a.accessedStorageKeys) :
-    sstoreCost s a kr w = sstoreValueCost (a.getOrigStorVal s s.currentTarget kr)
-      (a.getStorVal s.currentTarget kr) w := by
-  unfold sstoreCost
-  rw [ite_eq_left hw, Nat.zero_add]
-
-/-- **A cold debit and a cold credit, at their states**: `4200` and the stores' value classes. -/
-theorem move_charges_cold (hr : (⟨s.currentTarget, kr⟩ : Adr × B256) ∉ a.accessedStorageKeys)
-    (hc : (⟨s.currentTarget, kt⟩ : Adr × B256) ∉ a.accessedStorageKeys) (hne : kr ≠ kt) :
-    sloadCost s a kr + sstoreCost s (afterSload s a kr) kr w +
-        sloadCost s (afterSstore s (afterSload s a kr) kr w) kt +
-        sstoreCost s (afterSload s (afterSstore s (afterSload s a kr) kr w) kt) kt u =
-      4200 + sstoreValueCost (a.getOrigStorVal s s.currentTarget kr) (a.getStorVal s.currentTarget kr) w +
-        sstoreValueCost (a.getOrigStorVal s s.currentTarget kt) (a.getStorVal s.currentTarget kt) u := by
-  have hc' := notMem_afterSstore (s := s) (a := afterSload s a kr) (v := w) hne (notMem_afterSload hne hc)
-  rw [sloadCost_cold hr, sstoreCost_afterSload_self, sloadCost_cold hc', sstoreCost_afterSload_self,
-    origVal_afterSstore, origVal_afterSload, curVal_afterSstore_ne hne, curVal_afterSload]
-  simp only [gasColdSload]
-  omega
 
 end Move
 

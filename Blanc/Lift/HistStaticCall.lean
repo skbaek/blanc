@@ -944,49 +944,6 @@ theorem of_step_call_val_with_depth_frameH
             Resume.call_memory h_split.symm,
             by rw [Resume.call_stack_flag h_split.symm, ite_eq_right herr], spawned⟩
 
-/-- `of_run_call_val_with_depth_frame` under `rules.stateGas = none` and the actual rules. -/
-theorem of_run_call_val_with_depth_frameH
-    {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
-    {xs : Stack}
-    (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
-    (h_run : Ninst.Run sevm s Ninst.call sf)
-    (hsg : sevm.benvStat.rules.stateGas = none) :
-    (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) ∨
-    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (na : Adr)
-      (code : ByteArray) (avail pc : Nat),
-      Ninst.StepRun pc sevm s Ninst.call xl (.ok sf) ∧
-      0 < sevm.depth ∧
-      s.stack = g :: c :: v :: ii :: is :: oi :: os :: parent.stack ∧
-      parent.state = s.state ∧
-      parent.memory
-        = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] ∧
-      parent.logs = s.logs ∧
-      parent.output = s.output ∧
-      CallCodeH sevm.benvStat.rules.delegationEnabled s c.toAdr na code dp ∧
-      Xlot.Filled xl ∧
-      ProcessMessage
-        (callMsg sevm parent
-          (min g.toNat (except64th avail)
-            + (if v.toNat = 0 then 0 else gCallStipend))
-          v sevm.currentTarget c.toAdr na true false
-          ((s.memory.read ii.toNat is.toNat).1) code dp)
-        xl (.ok child) ∧
-      child.error.isSome = false ∧
-      (Resume.call parent oi.toNat os.toNat).run (.ok child) = .ok sf ∧
-      sf.state = child.state ∧
-      sf.returnData = child.output ∧
-      sf.memory = parent.memory.write oi.toNat (child.output.take os.toNat) ∧
-      sf.stack = (1 : B256) :: parent.stack := by
-  obtain ⟨xl, filled, pc, primitive⟩ := h_run
-  rcases of_step_call_val_with_depth_frameH hp filled primitive hsg with failed | entered
-  · exact Or.inl failed
-  · obtain ⟨parent, child, dp, na, code, avail, depth, stack, state, memory, logs,
-      output, delegation, filled, process, clean, resumed, returnedState, returnedData,
-      returnedMemory, returnedStack, _⟩ := entered
-    exact Or.inr ⟨parent, child, xl, dp, na, code, avail, pc, primitive, depth,
-      stack, state, memory, logs, output, delegation, filled, process, clean, resumed,
-      returnedState, returnedData, returnedMemory, returnedStack⟩
-
 end Blanc
 
 namespace Blanc.Lift
@@ -1407,14 +1364,6 @@ theorem ReturnDataBound.staticcall_returnData_length_ltH {sevm : Sevm} {pre post
   obtain ⟨xl, hf, pc, hr⟩ := hrun
   exact ReturnDataBound.call_step_returnData_length_lt (Or.inr rfl) hsg hf hr
 
-/-- `ReturnDataBound.call_returnData_length_lt` under `rules.stateGas = none`. -/
-theorem ReturnDataBound.call_returnData_length_ltH {sevm : Sevm} {pre post : Devm}
-    (hrun : Ninst.Run sevm pre Ninst.call post)
-    (hsg : sevm.benvStat.rules.stateGas = none) :
-    post.returnData.length < 2 ^ 256 := by
-  obtain ⟨xl, hf, pc, hr⟩ := hrun
-  exact ReturnDataBound.call_step_returnData_length_lt (Or.inl rfl) hsg hf hr
-
 section StaticCallH
 
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
@@ -1505,28 +1454,6 @@ end StaticCallH
 section CallH
 
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-
-/-- `ri_call_post` from `rules.stateGas = none` alone, under the actual access schedule and
-delegation flag. -/
-theorem ri_call_postH {g c v ii is oi os : B256} {d : Devm}
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (h : Ninst.Run sevm (St b (g :: c :: v :: ii :: is :: oi :: os :: S) M G) (.exec .call) d) :
-    ∃ flag, MutableCallPost b d S M ii is oi os flag := by
-  obtain ⟨flag, stack⟩ := (CallEffects.call_run_effects hsg rfl h).1
-  refine ⟨flag, stack, ?_⟩
-  intro nonzero
-  have operands : (g :: c :: v :: ii :: is :: oi :: os :: S) <<+
-      (St b (g :: c :: v :: ii :: is :: oi :: os :: S) M G).stack := by
-    simpa only [List.append_nil, St.stack] using
-      (pref_append (g :: c :: v :: ii :: is :: oi :: os :: S) [])
-  rcases of_run_call_val_with_depth_frameH operands h hsg with failed | entered
-  · rw [stack] at failed
-    exact absurd (pref_head_unique failed.1 (pref_append [flag] S)).symm nonzero
-  · obtain ⟨parent, child, xl, dp, na, code, avail, pc, _, _, _, _, parentMemory, _,
-      parentOutput, _, _, _, _, resume, _, returned, memory, _⟩ := entered
-    refine ⟨?_, (Resume.call_output resume).trans parentOutput⟩
-    rw [memory, parentMemory, returned]
-    rfl
 
 end CallH
 

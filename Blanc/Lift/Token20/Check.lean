@@ -44,7 +44,4 @@ def balSlot (a : Adr) : B256 := a.toB256
 /-- `allowance[owner][spender]` lives at `keccak256(pad32(owner) ‖ pad32(spender))`. -/
 def allowSlot (owner spender : Adr) : B256 := mapSlot owner.toB256 spender.toB256
 
-/-- No `CALL`- or `CREATE`-family instruction starts at a position an execution reaches. -/
-theorem spawnFreeReach : SpawnFreeReach code := spawnFreeReach_of_check (by decide +kernel)
-
 end Blanc.Lift.Token20

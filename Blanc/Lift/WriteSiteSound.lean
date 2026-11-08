@@ -630,22 +630,4 @@ theorem wsRun_sound {P : Sevm → Devm → Ninst → Devm → Prop}
     SProg.RunP (WsStep (wsRoot ann) (Env.root sevm) P) c.prog sevm pre post :=
   wsRun_sound_noStateGas hP hw hfork.rules_stateGas_none run
 
-/-- **The walk-facing lifting theorem**: a successful frame of certified bytes is a run of the
-certified program whose steps sit in the derivation and whose `SSTORE`s meet a root site. -/
-theorem lift_sound_ws_noStateGas {code : ByteArray} {c : Cert} {ann : List WAnn}
-    (hc : Cert.check code c = true) (hw : wsCert c ann = true)
-    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hfork : sevm.benvStat.rules.stateGas = none) (exc : Exec 0 sevm pre (.ok post)) :
-    SProg.RunP (WsStep (wsRoot ann) (Env.root sevm) (StepIn ⟨0, sevm, pre, .ok post, exc⟩))
-      c.prog sevm pre post := by
-  exact wsRun_sound_noStateGas (fun h => StepIn.toRun h) hw hfork (lift_sound_in_noStateGas hc hcode hfork exc)
-
-theorem lift_sound_ws {code : ByteArray} {c : Cert} {ann : List WAnn}
-    (hc : Cert.check code c = true) (hw : wsCert c ann = true)
-    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
-    SProg.RunP (WsStep (wsRoot ann) (Env.root sevm) (StepIn ⟨0, sevm, pre, .ok post, exc⟩))
-      c.prog sevm pre post :=
-  lift_sound_ws_noStateGas hc hw hcode hfork.rules_stateGas_none exc
-
 end Blanc.Lift.WriteSite

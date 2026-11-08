@@ -27,12 +27,6 @@ theorem rx_push0 {le : ([] : Bytes).length ≤ 32}
   .next (Ninst.runCompiled_pushBytes (devm := St b S M (G + 2)) (c := gBase) (G := G)
     (by simp only [pushCost, ↓reduceIte]) rfl hroom (fun _ => h_push0)) k
 
-/-- `SLT`. -/
-theorem rx_slt {x y v : B256} (hv : B256.sltCheck x y = v) (hroom : S.length < 1024)
-    (k : SFunc.RunExact fs sevm (St b (v :: S) M G) f o) :
-    SFunc.RunExact fs sevm (St b (x :: y :: S) M (G + 3)) (.next (.reg .slt) f) o :=
-  rx_binary (fn := B256.sltCheck) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) hv hroom k
-
 /-- `CODESIZE`: the length of the executing code. -/
 theorem rx_codesize (hroom : S.length < 1024)
     (k : SFunc.RunExact fs sevm (St b (sevm.code.size.toB256 :: S) M G) f o) :
@@ -54,10 +48,5 @@ theorem rx_log2 {i sz t1 t2 : B256} {c : Nat} {data : Bytes}
     hM rfl) k
 
 end Steps
-
-/-- A window inside a word-aligned image extends nothing (any window length). -/
-theorem read_covered_len {M : Mem} {n i len : Nat} (hs : M.size = n) (hn : n % 32 = 0)
-    (hi : i + len ≤ n) : (M.read i len).2 = M :=
-  Mem.read_snd_eq_self (by rw [hs]; exact memExtSize_of_le hn hi)
 
 end Blanc.Lift

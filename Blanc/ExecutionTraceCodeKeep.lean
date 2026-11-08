@@ -151,26 +151,6 @@ theorem TransactionTrace.codeAt_keep_noStateGas
   rw [State.addBal_getCode, State.addBal_getCode]
   exact hpost.trans hmsgState
 
-/-- **A transaction keeps nonempty, non-delegating code at `a`, and so does every frame it
-enters**, when no frame it enters targets `a`, none of its authorizations recovers to `a`, and `a`
-was not created in the block. -/
-theorem TransactionTrace.codeAt_keep
-    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    {state : State} {bout' : BlockOutput}
-    (trace : TransactionTrace benv bout tx index state bout')
-    (hfork : CoveredFork benv.stat.fork) {a : Adr}
-    (hauth : ∀ auth ∈ tx.auths, ∀ authority, recoverAuthority auth = .ok authority →
-      authority ≠ a)
-    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ a)
-    (hne : (benv.state.getCode a).toList ≠ [])
-    (hnd : ¬ isValidDelegation (benv.state.getCode a))
-    (notCreated : a ∉ benv.createdAccounts) :
-    (∀ root ∈ trace.rawFrames, root.devm.getCode a = benv.state.getCode a) ∧
-      state.getCode a = benv.state.getCode a :=
-  trace.codeAt_keep_noStateGas hfork.rules_stateGas_none hfork.rules_selfdestructOnlyCreated
-    hfork.rules_refundQuotient hfork.rules_touchedSweep (Or.inr hauth) avoid hne hnd notCreated
-
 /-- **A transaction list keeps nonempty, non-delegating code at `a`.** -/
 theorem ApplyTransactionsTrace.codeAt_keep_noStateGas
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}

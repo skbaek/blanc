@@ -1813,12 +1813,6 @@ theorem lift_sound_in_noStateGas {code : ByteArray} {c : Cert} (hc : Cert.check 
     SProg.RunP (StepIn ⟨0, sevm, pre, .ok post, exc⟩) c.prog sevm pre post :=
   lift_sound_in_lane hc hcode (Or.inl hfork) exc
 
-theorem lift_sound_in {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
-    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
-    SProg.RunP (StepIn ⟨0, sevm, pre, .ok post, exc⟩) c.prog sevm pre post :=
-  lift_sound_in_noStateGas hc hcode hfork.rules_stateGas_none exc
-
 /-- **The lifting theorem on its general lane.**  A successful execution of certified bytes from pc `0`
 is a run of the certified program, on a fork with no state gas or, on any fork, when no node of the program
 is a call-family instruction: the frame's own steps then cannot reach the call machinery, the only part of
@@ -1845,12 +1839,6 @@ theorem lift_sound_noStateGas {code : ByteArray} {c : Cert} (hc : Cert.check cod
     (hfork : sevm.benvStat.rules.stateGas = none) (exc : Exec 0 sevm pre (.ok post)) :
     SProg.Run c.prog sevm pre post :=
   (lift_sound_in_noStateGas hc hcode hfork exc).mono StepIn.toRun
-
-theorem lift_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
-    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
-    SProg.Run c.prog sevm pre post :=
-  lift_sound_noStateGas hc hcode hfork.rules_stateGas_none exc
 
 /-- **The lifting theorem, with a constant memory map.**  As `lift_sound`, for a
 certificate accepted by `Cert.checkM`. -/

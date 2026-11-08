@@ -209,23 +209,6 @@ theorem Exec.safe_of_installedCert {wa : Adr} {C : ByteArray} {c : Lift.Cert}
   · exact Or.inl direct
   · exact Or.inr (Or.inl direct)
 
-/-- Raw terminal safety for checked runtimes that may CREATE2 but never delegate.
-The actual creation guard prevents an entered child from replacing its already
-coded owner. Failed executions and recursive callbacks are included. -/
-theorem Exec.safe_of_installedUndelegatedCert {wa : Adr} {C : ByteArray} {c : Lift.Cert}
-    (hc : Lift.Cert.check C c = true) (undelegated : ∀ f ∈ c.prog, f.execsSatisfy Lift.Xinst.notDelegatecall = true)
-    (noSelfdestruct : c.noSelfdestruct = true) (hCdel : ¬ isValidDelegation C)
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec pc sevm pre out)
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (installed : pre.getCode wa = C) (hCne : C.toList ≠ [])
-    (root : sevm.currentTarget = wa → pc = 0 ∧ sevm.code = C) :
-    ∀ node ∈ Exec.rawNodes run, node.sevm.currentTarget = wa →
-      ¬ Linst.At node.sevm.code node.pc .selfdestruct := by
-  apply Exec.safe_of_installedSpawns hc (fun hpc hcode hgas chain atX => ?_)
-    noSelfdestruct hCdel run hsg installed hCne root
-  obtain ⟨_, reachable, ok⟩ := Lift.cursor_of_parentPrefix_noStateGas hc hpc hcode hgas chain
-  exact ok.exec_spawn_undelegated (Lift.Cursor.execsSatisfy_of_reachable undelegated reachable) atX
-
 /-- **No-deletion of a protected account holding an installed checked runtime**, for every
 outcome of a complete execution under state-gas absence, from the input `Devm.NoDel`. The `safe`
 premise of `Exec.inv_noDel_of_raw_terminal_safe` is produced by `Exec.safe_of_installedCert`. -/
@@ -263,17 +246,5 @@ theorem InstalledRuntimeSafety.of_cert {C : ByteArray} {c : Lift.Cert}
   nonempty := hCne
   safe := fun run hsg installed root =>
     Exec.safe_of_installedCert hc callOnly noSelfdestruct hCdel run hsg installed hCne root
-
-/-- An undelegated certificate may CREATE2 and still supplies the same bundle. -/
-theorem InstalledRuntimeSafety.of_undelegatedCert {C : ByteArray} {c : Lift.Cert}
-    (hc : Lift.Cert.check C c = true)
-    (undelegated : ∀ f ∈ c.prog, f.execsSatisfy Lift.Xinst.notDelegatecall = true)
-    (noSelfdestruct : c.noSelfdestruct = true) (hCdel : ¬ isValidDelegation C)
-    (hCne : C.toList ≠ []) : InstalledRuntimeSafety C where
-  notDelegation := hCdel
-  nonempty := hCne
-  safe := fun run hsg installed root =>
-    Exec.safe_of_installedUndelegatedCert hc undelegated noSelfdestruct hCdel
-      run hsg installed hCne root
 
 end Blanc

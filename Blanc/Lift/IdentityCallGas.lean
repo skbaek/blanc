@@ -185,30 +185,12 @@ theorem ri_call_identity_gas_fail {ii is oi os : B256} {d : Devm} (hid : IdReady
     (h0 : d.stack = 0 :: S) : d.gasLeft = 0 :=
   ri_call_identity_gas_failH hid.toH hdepth hG his h h0
 
-/-- A `POP` needs gas. -/
-theorem gasLeft_of_run_pop {d d' : Devm} (h : Ninst.Run sevm d (.reg .pop) d') :
-    0 < d.gasLeft := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  rcases e : d.pop with _ | ⟨x, d1⟩ <;> rw [e] at run
-  · cases run
-  · have h1 : d.gasLeft = d1.gasLeft := Devm.gasLeft_of_pop e
-    have h2 := Devm.gasLeft_of_chargeGas run
-    rw [h1, h2]
-    show 0 < d'.gasLeft + 2
-    omega
-
 /-! ## Identity readiness across storage steps -/
 
 theorem IdReady.afterSload {b : Devm} (h : IdReady sevm b) (k : B256) :
     IdReady sevm (afterSload sevm b k) :=
   ⟨by rw [afterSload_getCode]; exact h.nodeleg,
     by rw [afterSload_accessedAddresses]; exact h.warm, h.pre, h.fork⟩
-
-theorem IdReady.afterSstore {b : Devm} (h : IdReady sevm b) (k v : B256) :
-    IdReady sevm (afterSstore sevm b k v) :=
-  ⟨by rw [afterSstore_getCode]; exact h.nodeleg,
-    by rw [afterSstore_accessedAddresses]; exact h.warm, h.pre, h.fork⟩
 
 /-- Load-only bases keep the identity precompile ready (`IdReady.afterSload` per load). -/
 theorem SloadsOnly.idReady {sevm : Sevm} {b B : Devm} (h : SloadsOnly sevm b B)

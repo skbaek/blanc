@@ -176,17 +176,6 @@ theorem transfer_val_noStateGas {sevm : Sevm} {d d' : Devm} {i : Ninst} {out : P
   obtain ⟨w, hw⟩ := transfer_combine hS hr hkv' hM hcount
   exact ⟨S', w, hsp, hw⟩
 
-theorem transfer_val {sevm : Sevm} {d d' : Devm} {i : Ninst} {out : Pattern}
-    {kv' : List Nat} {rest : List B256} (hfork : CoveredFork sevm.benvStat.fork)
-    (hout : ninstTransfer i (indexPattern kv.length) = some out)
-    (hlen : kv.length ≤ 1024) (hcount : out.count none ≤ 1)
-    (hkv' : out.mapM (fun l => match l with | none => some r | some j => kv[j.toNat]?) = some kv')
-    (hr : r ∉ kv) (hS : List.Forall₂ (fun s w => ρ s = w) kv S)
-    (hstack : d.stack = S ++ rest) (run : Ninst.Run sevm d i d') :
-    ∃ S' w, d'.stack = S' ++ rest ∧
-      List.Forall₂ (fun s x => Function.update ρ r w s = x) kv' S' :=
-  transfer_val_noStateGas hfork.rules_stateGas_none hout hlen hcount hkv' hr hS hstack run
-
 end Transfer
 
 /-! ## Concrete results of the instructions with fact rules -/
@@ -231,12 +220,6 @@ theorem run_gt_top (run : Ninst.Run sevm d (.reg .gt) d') (hs : d.stack = x :: y
 
 theorem run_eq_top (run : Ninst.Run sevm d (.reg .eq) d') (hs : d.stack = x :: y :: rest) :
     d'.stack = B256.eqCheck x y :: rest := by
-  rcases of_run_reg run with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact binary_top run hs
-
-theorem run_xor_top (run : Ninst.Run sevm d (.reg .xor) d') (hs : d.stack = x :: y :: rest) :
-    d'.stack = B256.xor x y :: rest := by
   rcases of_run_reg run with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   exact binary_top run hs

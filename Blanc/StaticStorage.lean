@@ -1095,13 +1095,6 @@ theorem Exec.getStor_committedPost_eq_of_static_noStateGas
   · exact (Exec.staticStorageFrame_committedPost_noStateGas run static committed fork).getStor_all protectedTarget
   · exact congrArg State.getStor (Exec.committedPost_state_eq_of_emptyCode run empty committed)
 
-theorem Exec.getStor_committedPost_eq_of_static
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) (static : sevm.isStatic = true)
-    (committed : Execution.commits out = true) (fork : CoveredFork sevm.benvStat.fork)
-    (ready : State.Protected pre.state sevm.currentTarget ∨ sevm.code.size = 0) :
-    Devm.getStor (Execution.committedPost out committed) = Devm.getStor pre :=
-  Exec.getStor_committedPost_eq_of_static_noStateGas run static committed fork.rules_stateGas_none ready
 /-- Shared raw-storage boundary for actual STATICCALL on a covered fork. -/
 theorem Ninst.staticcall_getStor_eq_noStateGas
     {sevm : Sevm} {pre post : Devm}
@@ -1131,13 +1124,6 @@ theorem Ninst.staticcall_getStor_eq_noStateGas
         (fun committed => Exec.getStor_committedPost_eq_of_static_noStateGas childRun
           childStatic committed childFork
           (Frame.enter_run_static_ready enter (Xinst.step_staticcall_spawn_ready_noStateGas spawn hfork)))).symm
-
-theorem Ninst.staticcall_getStor_eq
-    {sevm : Sevm} {pre post : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (run : Ninst.Run sevm pre Ninst.staticcall post) :
-    Devm.getStor pre = Devm.getStor post :=
-  Ninst.staticcall_getStor_eq_noStateGas hfork.rules_stateGas_none run
 
 /-- A committing static execution preserves storage observations under the
 same readiness premise as the raw-storage theorem. -/

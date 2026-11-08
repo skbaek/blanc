@@ -26,28 +26,6 @@ namespace Blanc.Lift.WriteSite
 open Jaune AbstractStackSafety Blanc.Lift.SymTransfer
 open Blanc.Lift.FreePtr (cert_at gotoCompat_length)
 
-/-- **A run transformer is a step transformer.**  A map from `P`-runs to `Q`-runs of every
-program turns one `P` step into a `Q` step (apply it to the one-step program
-`next n (last stop)`).  So a locality law stated over whole runs (`SProg.RunP.mono` of a
-pointwise implication) applies at a single step. -/
-theorem _root_.Blanc.Lift.SProg.RunP.point {P Q : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm}
-    (hmono : ∀ {fs : List SFunc} {pre post : Devm},
-      SProg.RunP P fs sevm pre post → SProg.RunP Q fs sevm pre post)
-    {d d' : Devm} {n : Ninst} (h : P sevm d n d') : Q sevm d n d' := by
-  obtain ⟨f, hf, r⟩ := hmono (fs := [.next n (.last .stop)]) (pre := d) (post := d')
-    ⟨_, rfl, .next h (.last rfl)⟩
-  simp only [List.getElem?_cons_zero, Option.some.injEq] at hf
-  subst hf
-  cases r with
-  | next hq hl =>
-    cases hl with
-    | last hr =>
-      have he : _ = _ := hr
-      simp only [Linst.run, Except.ok.injEq] at he
-      subst he
-      exact hq
-
 /-- **An accepted `SSTORE` meets a site of the summary**, read over the machine state before the
 step; no successor state is needed. -/
 theorem wstep_sstore_obs {R : WRet} {σ σ' : WSt} {ε : Env} {sevm : Sevm} {ν : Nat → B256}

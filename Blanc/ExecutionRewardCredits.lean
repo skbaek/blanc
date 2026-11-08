@@ -468,17 +468,6 @@ theorem ConfiguredBlockTraceIn.rewardCreditsFunded
   trace.bodyTrace.rewardCreditsFunded_of_budget
     (fun pow enabled => trace.request_reward_budget hsg pow enabled)
 
-/-- Every block of a retained history funds its reward credits; `stateGas = none`
-comes per block from `BodyStageCapabilities F`. -/
-theorem ConfiguredHistoryTraceIn.rewardCreditsFunded
-    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint : BlockChain} :
-    {future : BlockChain} → (history : ConfiguredHistoryTraceIn F cfg checkpoint future) →
-    BodyStageCapabilities F → history.RewardCreditsFunded
-  | _, .refl _ _ _, _ => trivial
-  | _, .step prior block, capabilities =>
-      ⟨prior.rewardCreditsFunded capabilities,
-        block.rewardCreditsFunded (capabilities.stateGas_none block.forkIn)⟩
-
 end ExecutionTrace
 
 end Blanc

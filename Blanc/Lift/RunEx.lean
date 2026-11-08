@@ -40,15 +40,6 @@ theorem SFunc.RunExCut.of {d d' : Devm} {f f' : SFunc} {Q : Seg → Prop}
     (h : SFunc.RunExCut fs sevm C d' f' Q) : SFunc.RunExCut fs sevm C d f Q :=
   let ⟨r, hr, hq⟩ := h; ⟨r, L r hr, hq⟩
 
-/-- `RunEx` is `RunExCut` with no cuts, its results `.done`. -/
-theorem SFunc.runEx_iff_runExCut_nil {d : Devm} {f : SFunc} {Q : Outcome → Prop} :
-    SFunc.RunEx fs sevm d f Q ↔ SFunc.RunExCut fs sevm [] d f (fun s => ∃ o, s = .done o ∧ Q o) := by
-  constructor
-  · rintro ⟨r, hr, hq⟩
-    exact ⟨.done r, SFunc.runExact_iff_runExactCut_nil.mp hr, r, rfl, hq⟩
-  · rintro ⟨_, hr, o, rfl, hq⟩
-    exact ⟨o, SFunc.runExact_iff_runExactCut_nil.mpr hr, hq⟩
-
 /-- Lift a fixed-outcome step `e : ∀ r, RunExact … r → RunExact … r` (e.g. `(rx_push rfl h ·)`). -/
 macro "xr " e:term : tactic => `(tactic| refine SFunc.RunEx.of (fun _ => $e) ?_)
 

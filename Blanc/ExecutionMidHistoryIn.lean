@@ -289,18 +289,6 @@ theorem ConfiguredBlockTraceIn.rawFrames_txSplit
   simp only [ConfiguredBlockTraceIn.rawFrames, StagedBodyTrace.rawFrames, cut.rawFrames_eq,
     MidHistoryTraceIn.rawFrames, List.append_assoc]
 
-/-- Block settled roots split the same way. -/
-theorem ConfiguredBlockTraceIn.settledFrames_txSplit
-    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
-    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
-    (cut : block.bodyTrace.transactions.TxSplit i) :
-    block.settledFrames =
-      block.bodyTrace.beacon.settledFrames ++ block.bodyTrace.history.settledFrames ++
-        cut.before.settledFrames ++ cut.head.settledFrames ++
-        (MidHistoryTraceIn.tail block cut).settledFrames := by
-  simp only [ConfiguredBlockTraceIn.settledFrames, StagedBodyTrace.settledFrames,
-    cut.settledFrames_eq, MidHistoryTraceIn.settledFrames, List.append_assoc]
-
 /-- Whole-block admission restricts to the mid base. -/
 theorem ConfiguredBlockTraceIn.FrameAdmitted.tail
     {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
@@ -366,20 +354,6 @@ theorem MidHistoryTraceIn.append_rawFrames {F : Fork → Prop} {cfg : ChainConfi
   | step prior block ih =>
       simp only [MidHistoryTraceIn.append, MidHistoryTraceIn.rawFrames,
         ConfiguredHistoryTraceIn.rawFrames, ih, List.append_assoc]
-
-/-- Settlement-retained roots of an append are in order. -/
-theorem MidHistoryTraceIn.append_settledFrames {F : Fork → Prop} {cfg : ChainConfig}
-    {start : Benv} {current future : BlockChain}
-    (mid : MidHistoryTraceIn F cfg start current)
-    (history : ConfiguredHistoryTraceIn F cfg current future) :
-    (mid.append history).settledFrames = mid.settledFrames ++ history.settledFrames := by
-  induction history with
-  | refl =>
-      simp only [MidHistoryTraceIn.append, ConfiguredHistoryTraceIn.settledFrames,
-        List.append_nil]
-  | step prior block ih =>
-      simp only [MidHistoryTraceIn.append, MidHistoryTraceIn.settledFrames,
-        ConfiguredHistoryTraceIn.settledFrames, ih, List.append_assoc]
 
 /-- Entry admission splits across an append. -/
 theorem MidHistoryTraceIn.append_frameAdmitted {F : Fork → Prop} {cfg : ChainConfig}

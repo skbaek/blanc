@@ -62,17 +62,6 @@ theorem occurrence_stepRun_unique {root : Exec.Deriv}
     occurrence.slot = slot ∧ occurrence.stepResult = result := by
   exact Blanc.Step.Run.unique_of_filled occurrence.filled filled occurrence.stepRun step
 
-/-- Same-frame occurrences survive when the enclosing root commits. Raw
-success alone does not assert this settlement property. -/
-theorem CallOccurrenceStep.retained {root : Exec.Deriv} {x : Xinst}
-    (step : CallOccurrenceStep root x) (committed : Execution.commits root.exn = true) :
-    step.occurrence.Retained := by
-  apply (Exec.mem_retainedNodes_iff_committedFrame_parentPrefix
-    root.exc step.occurrence.node).mpr
-  exact ⟨Exec.Frame.ofRun root.exc committed,
-    by simp only [Exec.committedFrames, committed, ↓reduceDIte, List.mem_cons, true_or],
-    step.sameFrame⟩
-
 /-- An actual external-call occurrence cut from `rules.stateGas = none` alone. -/
 theorem cursor_next_call_occurrence_forwardH {code : ByteArray} {c : Cert}
     (checked : Cert.check code c = true) {root F : Exec.Deriv} {κ : Cursor}

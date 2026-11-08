@@ -87,12 +87,6 @@ structure BaseRel (b b' : Devm) : Prop where
 
 theorem BaseRel.refl (b : Devm) : BaseRel b b := ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl⟩
 
-theorem BaseRel.trans {b b' b'' : Devm} (h1 : BaseRel b b') (h2 : BaseRel b' b'') :
-    BaseRel b b'' :=
-  ⟨fun a => (h2.stor a).trans (h1.stor a), fun a => (h2.code a).trans (h1.code a),
-    h2.addrs.trans h1.addrs, h2.logs.trans h1.logs, h2.output.trans h1.output,
-    h2.error.trans h1.error⟩
-
 theorem BaseRel.getStorVal {b b' : Devm} (h : BaseRel b b') (a : Adr) (k : B256) :
     b'.getStorVal a k = b.getStorVal a k := by
   show (Devm.getStor b' a).get k = (Devm.getStor b a).get k
@@ -174,16 +168,6 @@ theorem rx_returndatasize (hroom : S.length < 1024)
     SFunc.RunExact fs sevm (St b S M (G + 2)) (.next (.reg .returndatasize) f) o :=
   .next (Ninst.runCompiled_pushItem (devm := St b S M (G + 2)) (G := G) (cost := gBase)
     (by rintro ⟨⟩) rfl rfl hroom) k
-
-/-- `MLOAD` whose window may extend memory to `M'`. -/
-theorem rx_mload_ext {i v : B256} {c : Nat} {M' : Mem}
-    (hc : gVerylow + (St b (i :: S) M (G + c)).extCost [⟨i.toNat, 32⟩] = c)
-    (hv : Bytes.toB256 (M.read i.toNat 32).1 = v) (hM : (M.read i.toNat 32).2 = M')
-    (hroom : S.length < 1024)
-    (k : SFunc.RunExact fs sevm (St b (v :: S) M' G) f o) :
-    SFunc.RunExact fs sevm (St b (i :: S) M (G + c)) (.next (.reg .mload) f) o :=
-  .next (Ninst.runCompiled_mload_of (devm := St b (i :: S) M (G + c)) (G := G) rfl hc hv hM
-    rfl hroom) k
 
 end Steps
 
@@ -295,13 +279,6 @@ theorem rxc_calldatacopy {di si sz : B256} {c : Nat} {M' : Mem}
       (.next (.reg .calldatacopy) f) r :=
   .next (Ninst.runCompiled_calldatacopy_of (devm := St b (di :: si :: sz :: S) M (G + c))
     (G := G) rfl hc hw rfl) k
-
-/-- An internal call that returns, inside a cut run (the callee runs uncut). -/
-theorem rxc_callRet {d : B256} {j : Nat} {D : Devm} (hj : fs[j]? = some g)
-    (hcall : SFunc.RunExact fs sevm (St b S M G) g (.returned D))
-    (k : SFunc.RunExactCut fs sevm C D f r) :
-    SFunc.RunExactCut fs sevm C (St b (d :: S) M (G + 8)) (.callNext j f) r :=
-  .callRet d hj popBurnBy_St1 hcall k
 
 /-- A callee's `JUMP` back to its return address, inside a cut run. -/
 theorem rxc_ret {d : B256} :

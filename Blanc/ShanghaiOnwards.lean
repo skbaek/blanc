@@ -56,10 +56,6 @@ macro "xfork" : tactic => `(tactic| first
   | assumption
   | exact CoveredFork.shanghaiOnwards (by assumption))
 
-/-- The domain embeds in the historical domain. -/
-theorem ShanghaiOnwards.histFork {f : Fork} : ShanghaiOnwards f → HistFork f := by
-  cases f <;> decide
-
 /-- Transport along a fork equation. -/
 theorem ShanghaiOnwards.of_eq {f1 f2 : Fork} (h : f1 = f2) (hf : ShanghaiOnwards f1) :
     ShanghaiOnwards f2 := by
@@ -122,10 +118,6 @@ theorem ShanghaiOnwards.rules_refundQuotient {s : BenvStat} (h : ShanghaiOnwards
     s.rules.settle.refundQuotient = 5 :=
   h.cases (motive := fun f => (Fork.ruleSet f).settle.refundQuotient = 5) rfl rfl rfl rfl rfl rfl
 
-theorem ShanghaiOnwards.rules_dataNonZero {s : BenvStat} (h : ShanghaiOnwards s.fork) :
-    s.rules.txr.dataNonZero = 16 :=
-  h.cases (motive := fun f => (Fork.ruleSet f).txr.dataNonZero = 16) rfl rfl rfl rfl rfl rfl
-
 theorem ShanghaiOnwards.rules_sstore {s : BenvStat} (h : ShanghaiOnwards s.fork) :
     s.rules.sstore = ⟨true, true⟩ :=
   h.cases (motive := fun f => (Fork.ruleSet f).sstore = ⟨true, true⟩) rfl rfl rfl rfl rfl rfl
@@ -134,19 +126,6 @@ theorem ShanghaiOnwards.rules_sstore {s : BenvStat} (h : ShanghaiOnwards s.fork)
 theorem BenvStat.gas_eq_prague_of_shanghaiOnwards {s : BenvStat} (h : ShanghaiOnwards s.fork) :
     s.rules.gas = pragueRules.gas :=
   h.cases (motive := fun f => (Fork.ruleSet f).gas = pragueRules.gas) rfl rfl rfl rfl rfl rfl
-
-theorem ShanghaiOnwards.rules_txBase {s : BenvStat} (h : ShanghaiOnwards s.fork) :
-    s.rules.gas.txBase = 21000 :=
-  h.cases (motive := fun f => (Fork.ruleSet f).gas.txBase = 21000) rfl rfl rfl rfl rfl rfl
-
-theorem ShanghaiOnwards.rules_floorTokenCost {s : BenvStat} (h : ShanghaiOnwards s.fork) :
-    s.rules.gas.floorTokenCost = 10 :=
-  h.cases (motive := fun f => (Fork.ruleSet f).gas.floorTokenCost = 10) rfl rfl rfl rfl rfl rfl
-
-theorem ShanghaiOnwards.rules_storageClearRefund {s : BenvStat} (h : ShanghaiOnwards s.fork) :
-    s.rules.gas.storageClearRefund = 4800 :=
-  h.cases (motive := fun f => (Fork.ruleSet f).gas.storageClearRefund = 4800)
-    rfl rfl rfl rfl rfl rfl
 
 /-- The per-transaction gas cap is absent, or EIP-7825's `2 ^ 24` from Osaka. -/
 theorem ShanghaiOnwards.rules_maxGas {s : BenvStat} (h : ShanghaiOnwards s.fork) :

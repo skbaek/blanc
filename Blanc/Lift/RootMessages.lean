@@ -42,9 +42,4 @@ def runMessages (fork : Fork) : State → List RootMsg → Option State
   | W, [] => some W
   | W, m :: ms => (settledState (m.result fork W)).bind fun W' => runMessages fork W' ms
 
-theorem runMessages_cons_of_ok {fork : Fork} {W : State} {m : RootMsg} {ms : List RootMsg}
-    {d : Devm} (h : m.result fork W = .ok d) (he : d.error = none) :
-    runMessages fork W (m :: ms) = runMessages fork d.state ms := by
-  simp only [runMessages, h, settledState, he, Option.bind_some]
-
 end Blanc.Lift

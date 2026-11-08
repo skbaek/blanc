@@ -49,10 +49,6 @@ theorem addressSlotReadWord_eq_toAdr_toB256 (raw : B256) :
     · exact lowMask middle
   · exact b128AndMax low
 
-theorem addressSlotReadWord_toB256 (address : Adr) :
-    addressSlotReadWord address.toB256 = address.toB256 := by
-  rw [addressSlotReadWord_eq_toAdr_toB256, toAdr_toB256]
-
 /-- A word below `2^160` clears the packed address mask.  This is the
 contract-neutral fact underlying every `canonicalAddress → addressMask &&&
 word = 0` call site (e.g. `Blanc.LidoCircuitBreaker.canonicalAddress_mask_zero`,
@@ -259,22 +255,11 @@ theorem ff20_eq :
       0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = ~~~ addressMask := by
   decide
 
-theorem ff20_and_adr (a : Adr) :
-    (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& a.toB256) =
-      a.toB256 := by
-  rw [ff20_eq]
-  exact addressSlotReadWord_toB256 a
-
 theorem ff20_and_word (x : B256) :
     (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
       0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& x) =
       x.toAdr.toB256 := by
   rw [ff20_eq]
-  exact addressSlotReadWord_eq_toAdr_toB256 x
-
-theorem and_mask_word (x : B256) : (x &&& ~~~ addressMask) = x.toAdr.toB256 := by
-  rw [B256.and_comm]
   exact addressSlotReadWord_eq_toAdr_toB256 x
 
 theorem ff20_and_and (x : B256) :
@@ -325,10 +310,5 @@ theorem B256.or_comm (x y : B256) : x ||| y = y ||| x := by
   rcases x with ⟨⟨xh0, xh1⟩, ⟨xl0, xl1⟩⟩
   rcases y with ⟨⟨yh0, yh1⟩, ⟨yl0, yl1⟩⟩
   apply Prod.ext <;> apply Prod.ext <;> exact UInt64.or_comm _ _
-
-/-- Zero is a right identity of bitwise disjunction on EVM words. -/
-theorem B256.or_zero (x : B256) : x ||| 0 = x := by
-  rcases x with ⟨⟨xh0, xh1⟩, ⟨xl0, xl1⟩⟩
-  apply Prod.ext <;> apply Prod.ext <;> exact UInt64.or_zero
 
 end Blanc

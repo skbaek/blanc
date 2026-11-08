@@ -200,31 +200,6 @@ theorem RunPS.back {d d₁ d'' : Devm} {g g₁ : SFunc} {S S₁ : List SFunc}
       cases ha; cases hb
       exact ⟨_, .ret t h, run⟩
 
-/-- **Split a reach at a callee's return.**  A reach from a configuration whose
-stack ends in `f :: K` either stays above `f :: K` (a reach of the truncated
-configuration) or first returns through `f`: the truncated part is then a
-big-step run to the return (`RunPS`), followed by a reach from `f`. -/
-theorem Reach.split {f : SFunc} {K : List SFunc} {T : Conf} :
-    ∀ {a : Conf}, Reach P fs sevm a T → ∀ {d g S}, a = ⟨d, g, S ++ f :: K⟩ →
-      (∃ T', Reach P fs sevm ⟨d, g, S⟩ T' ∧ T = T'.below (f :: K)) ∨
-        ∃ d'', RunPS P fs sevm g S d d'' ∧ Reach P fs sevm ⟨d'', f, K⟩ T := by
-  intro a h
-  induction h using Relation.ReflTransGen.head_induction_on with
-  | refl =>
-      intro d g S ha
-      exact .inl ⟨⟨d, g, S⟩, .refl, ha⟩
-  | head step rest ih =>
-      intro d g S ha
-      subst ha
-      rcases ConfStep.of_below step with ⟨c', step', rfl⟩ | ⟨rfl, rfl, t, f₀, L₀, hL, pop, hc⟩
-      · rcases ih (d := c'.d) (g := c'.f) (S := c'.K) rfl with ⟨T', r', hT⟩ | ⟨d'', run, r⟩
-        · exact .inl ⟨T', .head step' r', hT⟩
-        · exact .inr ⟨d'', RunPS.back step' run, r⟩
-      · injection hL with h₁ h₂
-        subst h₁ h₂
-        rw [hc] at rest
-        exact .inr ⟨_, SFunc.RunP.ret t pop, rest⟩
-
 /-! ## Walking a reach to an external-instruction target -/
 
 theorem Reach.next {d : Devm} {n : Ninst} {f : SFunc} {K : List SFunc} {T : Conf}
@@ -278,30 +253,6 @@ theorem Reach.branchTo {d : Devm} {f : SFunc} {k : Nat} {K : List SFunc} {T : Co
   · cases step with
     | toZero t hp => exact .inl ⟨t, _, hp, rest⟩
     | toSucc t w hw hk hp => exact .inr ⟨t, w, _, _, hw, hk, hp, rest⟩
-
-theorem Reach.jump {d : Devm} {k : Nat} {K : List SFunc} {T : Conf}
-    (h : Reach P fs sevm ⟨d, .jump k, K⟩ T) (hT : AtExec T) :
-    ∃ t g d', fs[k]? = some g ∧ Devm.PopBurn [t] d d' ∧ Reach P fs sevm ⟨d', g, K⟩ T := by
-  rcases Relation.ReflTransGen.cases_head h with rfl | ⟨c, step, rest⟩
-  · obtain ⟨x, f', hx⟩ := hT
-    cases hx
-  · cases step with
-    | jump t hk hp => exact ⟨t, _, _, hk, hp, rest⟩
-
-/-- **Through a `callNext`.**  Either the target lies inside the callee (a reach
-of the callee from an empty stack, re-based below `f :: K`), or the callee
-returns (a big-step run) and the target is reached from the continuation. -/
-theorem Reach.call {d : Devm} {k : Nat} {f : SFunc} {K : List SFunc} {T : Conf}
-    (h : Reach P fs sevm ⟨d, .callNext k f, K⟩ T) (hT : AtExec T) :
-    ∃ t g d', fs[k]? = some g ∧ Devm.PopBurn [t] d d' ∧
-      ((∃ T', Reach P fs sevm ⟨d', g, []⟩ T' ∧ T = T'.below (f :: K)) ∨
-        ∃ d'', SFunc.RunP P fs sevm d' g (.returned d'') ∧ Reach P fs sevm ⟨d'', f, K⟩ T) := by
-  rcases Relation.ReflTransGen.cases_head h with rfl | ⟨c, step, rest⟩
-  · obtain ⟨x, f', hx⟩ := hT
-    cases hx
-  · cases step with
-    | call t hk hp =>
-        exact ⟨t, _, _, hk, hp, Reach.split (S := []) rest rfl⟩
 
 theorem Reach.pcAt {d : Devm} {p : Nat} {f : SFunc} {K : List SFunc} {T : Conf}
     (h : Reach P fs sevm ⟨d, .pcAt p f, K⟩ T) (hT : AtExec T) :

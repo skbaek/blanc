@@ -812,15 +812,6 @@ def HashAvoid (slot : B256) (F : Exec.Deriv) : Prop :=
 
 namespace LockSpec
 
-/-- `Active L P F h`: `F` is a frame of `P` running `L.code`, and on its way to
-`h` it reached a mutating body start `b` after which no node strictly before
-`h` executed an `SSTORE` addressed at the lock slot.  Activity therefore ends
-at the frame's first concrete write to the slot, whatever value it writes. -/
-def Active (L : LockSpec) (P : Adr) (F h : Exec.Deriv) : Prop :=
-  CPFrame P L.code F ∧ ParentPrefix F h ∧
-    ∃ b, ParentPrefix F b ∧ ParentPrefix b h ∧ b.pc ∈ L.mutBodies ∧
-      ∀ x, ParentPrefix b x → ParentPrefix x h → x ≠ h → ¬ SstoreAt x L.slot
-
 /-- `Enters L P G`: the frame rooted at `G` is a frame of `P` running `L.code`
 that reaches some guarded body start, whether or not it later succeeds. -/
 def Enters (L : LockSpec) (P : Adr) (G : Exec.Deriv) : Prop :=
@@ -1115,70 +1106,6 @@ theorem nodeSafe_of_lockedFrom (dom : L.Dominance) :
           (by rw [Blanc.Exec.Deriv.ParentStep.codePreserve edge P nonempty]; exact nonempty)
           (lockedFrom_step anc reach edge locked) x member
 
-/-- Along a same-frame segment from `b` in which no node before `h` executes a
-slot-addressed `SSTORE`, the lock word held at `b` is still held at `h`:
-children spawned in between cannot change it (by the core induction) and
-completed spawns never touch storage. -/
-theorem lockAt_of_segment (dom : L.Dominance) {F b h : Exec.Deriv}
-    (reachB : ParentPrefix F b) (segment : ParentPrefix b h)
-    (okDesc : ∀ G ∈ Exec.rawFrameDescendants F.exc, FrameOK L P G)
-    (hfork : CoveredFork F.sevm.benvStat.fork)
-    (nonempty : (b.devm.getCode P).toList ≠ [])
-    (noStore : ∀ x, ParentPrefix b x → ParentPrefix x h → x ≠ h →
-      ¬ SstoreAt x L.slot)
-    (locked : lockAt P L.slot b.devm = L.locked) :
-    lockAt P L.slot h.devm = L.locked := by
-  induction segment with
-  | refl => exact locked
-  | @step root next tail edge rest ih =>
-      have distinct : root ≠ tail := by
-        rintro rfl
-        exact Blanc.Exec.Deriv.ParentStep.not_parentPrefix_back edge rest (.refl _)
-      have rootFork : CoveredFork root.sevm.benvStat.fork := by
-        rw [Blanc.Exec.Deriv.ParentPrefix.sevm_eq reachB]
-        exact hfork
-      apply ih (reachB.snoc edge)
-        (by rw [Blanc.Exec.Deriv.ParentStep.codePreserve edge P nonempty]; exact nonempty)
-        (fun x hnx hxt ne => noStore x (.step edge hnx) hxt ne)
-      cases edge with
-      | cont hstep nextRun =>
-          unfold lockAt
-          rw [Evm.step_cont_getStor_get rootFork hstep (fun _ decoded key =>
-            noStore _ (.refl _) (.step (.cont hstep nextRun) rest) distinct
-              ⟨decoded, key⟩)]
-          exact locked
-      | doneOk hstep henter hresume nextRun =>
-          unfold lockAt
-          rw [Evm.step_doneOk_getStor_eq hstep henter hresume P (State.Protected.of_code_ne_nil nonempty)]
-          exact locked
-      | @runOk _ _ _ _ _ _ _ childEvm _ _ hstep henter child hresume nextRun =>
-          have childMember : ∀ G ∈ Exec.rawFrameRoots child,
-              G ∈ Exec.rawFrameDescendants F.exc := by
-            intro G member
-            apply Exec.mem_rawFrameDescendants_of_parentPrefix reachB
-            simp only [Exec.rawFrameRoots, List.mem_cons] at member
-            simp only [Exec.rawFrameDescendants, List.mem_cons, List.mem_append]
-            rcases member with rfl | member
-            · exact Or.inl rfl
-            · exact Or.inr (Or.inl member)
-          have childNonempty : (childEvm.dyna.getCode P).toList ≠ [] := by
-            rw [(Evm.step_spawn_child hstep henter).2.1 P]
-            exact nonempty
-          have childLocked : lockAt P L.slot childEvm.dyna = L.locked := by
-            unfold lockAt
-            rw [Evm.step_spawn_enter_getStor rootFork hstep henter P (State.Protected.of_code_ne_nil nonempty)]
-            exact locked
-          have childSafe := nodeSafe_of_lockedFrom dom child _
-            (Frame.enter_run_pc henter) (.refl _)
-            (okDesc _ (childMember _ (by simp only [Exec.rawFrameRoots, List.mem_cons, true_or])))
-            (fun G member => okDesc G (childMember G (by
-              simp only [Exec.rawFrameRoots, List.mem_cons]
-              exact Or.inr member)))
-            (Evm.step_spawn_child_fork hstep henter rootFork) childNonempty
-            (lockedFrom_self childLocked)
-          rw [resume_lockAt rootFork hstep henter child hresume nonempty childSafe]
-          exact locked
-
 /-- Frame-local facts for every raw frame root of a disciplined execution. -/
 theorem frameOK_of_mem
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
@@ -1267,100 +1194,6 @@ theorem rawFrameRoots_entryIn
   · exact Exec.rawFrameDescendants_entryIn run hfork G hG
 
 /-! ## Public theorems -/
-
-/-- **V+ (generic lock exclusion).**  In any execution `R` — of any outcome,
-with nonempty entry world code at `P`, under current-fork semantics (`CoveredFork`) — satisfying the per-code dominance obligation, owner discipline and trace-local
-hash avoidance, if a frame `F` of `P` running `L.code` is active at a node `h`
-that spawns a child frame `c` (whether `h` then resumes or not), then no frame
-at or below `c` is a frame of `P` running `L.code` that reaches a guarded body
-start.  No frame involved is required to succeed. -/
-theorem LockSpec.lock_exclusion
-    {sevm : Sevm} {pre : Devm} {out : Execution}
-    (R : Exec 0 sevm pre out) (hfork : CoveredFork sevm.benvStat.fork)
-    (nonempty : (pre.getCode P).toList ≠ [])
-    (dom : L.Dominance) (owner : L.OwnerDiscipline P R)
-    (hash : L.HashAvoidIn P R)
-    {F h c : Exec.Deriv} (hF : F ∈ Exec.rawFrameRoots R)
-    (active : L.Active P F h) (spawn : Spawns h c)
-    {G : Exec.Deriv} (hG : G ∈ Exec.rawFrameRoots c.exc) :
-    ¬ L.Enters P G := by
-  rintro ⟨⟨_, gOwner, gCode⟩, x, hGx, body⟩
-  rcases active with ⟨⟨pc0, fOwner, fCode⟩, reachH, b, reachB, segment, mutBody,
-    noStore⟩
-  have fFork := (rawFrameRoots_entry R hfork hF).2
-  have okDesc : ∀ G ∈ Exec.rawFrameDescendants F.exc, FrameOK L P G :=
-    fun G member => frameOK_of_mem owner hash
-      (mem_rawFrameRoots_of_descendant hF member)
-  have fNonempty : (F.devm.getCode P).toList ≠ [] := by
-    rw [Exec.rawFrameRoots_codePreserve R P nonempty F hF]
-    exact nonempty
-  have bNonempty : (b.devm.getCode P).toList ≠ [] := by
-    rw [Blanc.Exec.Deriv.ParentPrefix.codePreserve reachB P fNonempty]
-    exact fNonempty
-  have hNonempty : (h.devm.getCode P).toList ≠ [] := by
-    rw [Blanc.Exec.Deriv.ParentPrefix.codePreserve reachH P fNonempty]
-    exact fNonempty
-  have bLocked : lockAt P L.slot b.devm = L.locked := by
-    have := (dom F pc0 fFork fCode (hash F hF ⟨pc0, fOwner, fCode⟩) b reachB).2 mutBody
-    rwa [fOwner] at this
-  have hLocked :=
-    lockAt_of_segment dom reachB segment okDesc fFork bNonempty noStore bLocked
-  have hFork : CoveredFork h.sevm.benvStat.fork := by
-    rw [Blanc.Exec.Deriv.ParentPrefix.sevm_eq reachH]
-    exact fFork
-  have childSafe : ∀ y ∈ Exec.rawNodes c.exc, NodeSafe L P y := by
-    have childMember : ∀ D ∈ Exec.rawFrameRoots c.exc,
-        D ∈ Exec.rawFrameDescendants F.exc := by
-      intro D member
-      apply Exec.mem_rawFrameDescendants_of_parentPrefix reachH
-      cases spawn with
-      | runErr hstep henter child hresume =>
-          simp only [Exec.rawFrameRoots, List.mem_cons] at member
-          simp only [Exec.rawFrameDescendants, List.mem_cons]
-          exact member
-      | runOk hstep henter child hresume next =>
-          simp only [Exec.rawFrameRoots, List.mem_cons] at member
-          simp only [Exec.rawFrameDescendants, List.mem_cons, List.mem_append]
-          rcases member with rfl | member
-          · exact Or.inl rfl
-          · exact Or.inr (Or.inl member)
-    cases spawn with
-    | @runErr _ _ _ _ _ _ childEvm _ _ hstep henter child hresume =>
-        have childNonempty : (childEvm.dyna.getCode P).toList ≠ [] := by
-          rw [(Evm.step_spawn_child hstep henter).2.1 P]
-          exact hNonempty
-        have childLocked : lockAt P L.slot childEvm.dyna = L.locked := by
-          unfold lockAt
-          rw [Evm.step_spawn_enter_getStor hFork hstep henter P (State.Protected.of_code_ne_nil hNonempty)]
-          exact hLocked
-        exact nodeSafe_of_lockedFrom dom child _
-          (Frame.enter_run_pc henter) (.refl _)
-          (okDesc _ (childMember _ (by simp only [Exec.rawFrameRoots, List.mem_cons, true_or])))
-          (fun D member => okDesc D (childMember D (by
-            simp only [Exec.rawFrameRoots, List.mem_cons]
-            exact Or.inr member)))
-          (Evm.step_spawn_child_fork hstep henter hFork) childNonempty
-          (lockedFrom_self childLocked)
-    | @runOk _ _ _ _ _ _ _ childEvm _ _ hstep henter child hresume next =>
-        have childNonempty : (childEvm.dyna.getCode P).toList ≠ [] := by
-          rw [(Evm.step_spawn_child hstep henter).2.1 P]
-          exact hNonempty
-        have childLocked : lockAt P L.slot childEvm.dyna = L.locked := by
-          unfold lockAt
-          rw [Evm.step_spawn_enter_getStor hFork hstep henter P (State.Protected.of_code_ne_nil hNonempty)]
-          exact hLocked
-        exact nodeSafe_of_lockedFrom dom child _
-          (Frame.enter_run_pc henter) (.refl _)
-          (okDesc _ (childMember _ (by simp only [Exec.rawFrameRoots, List.mem_cons, true_or])))
-          (fun D member => okDesc D (childMember D (by
-            simp only [Exec.rawFrameRoots, List.mem_cons]
-            exact Or.inr member)))
-          (Evm.step_spawn_child_fork hstep henter hFork) childNonempty
-          (lockedFrom_self childLocked)
-  have reached : x ∈ Exec.rawNodes c.exc :=
-    (Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix c.exc x).mpr ⟨G, hG, hGx⟩
-  have xSevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq hGx
-  exact (childSafe x reached).2.2 ⟨xSevm ▸ gOwner, xSevm ▸ gCode, body⟩
 
 /-- **Locked core.**  With nonempty entry world code at `P`, if every same-frame node of a raw frame `F` of `R` up to
 `E` held the lock word, then from `E` on — in `E`'s own frame and in every

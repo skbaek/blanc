@@ -65,11 +65,6 @@ theorem rx_or {x y v : B256} (hv : (x ||| y) = v) (hroom : S.length < 1024)
     SFunc.RunExact fs sevm (St b (x :: y :: S) M (G + 3)) (.next (.reg .or) f) o :=
   rx_binary (fn := B256.or) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) hv hroom k
 
-theorem rx_xor {x y v : B256} (hv : (x ^^^ y) = v) (hroom : S.length < 1024)
-    (k : SFunc.RunExact fs sevm (St b (v :: S) M G) f o) :
-    SFunc.RunExact fs sevm (St b (x :: y :: S) M (G + 3)) (.next (.reg .xor) f) o :=
-  rx_binary (fn := B256.xor) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) hv hroom k
-
 theorem rx_mul {x y v : B256} (hv : x * y = v) (hroom : S.length < 1024)
     (k : SFunc.RunExact fs sevm (St b (v :: S) M G) f o) :
     SFunc.RunExact fs sevm (St b (x :: y :: S) M (G + 5)) (.next (.reg .mul) f) o :=
@@ -117,19 +112,6 @@ theorem rx_log1 {i sz t : B256} {c : Nat} {data : Bytes}
     SFunc.RunExact fs sevm (St b (i :: sz :: t :: S) M (G + c)) (.next (.reg (.log 1)) f) o :=
   .next (Ninst.runCompiled_log_of (n := 1) (topics := [t]) (s := S) rfl rfl hstatic hc hd hM
     rfl) k
-
-/-- `EXP` with its exponent's byte charge named. -/
-theorem rx_exp' {x y : B256} {c : Nat} (hc : gExp + gExpbyte * y.bytecount = c)
-    (hroom : S.length < 1024)
-    (k : SFunc.RunExact fs sevm (St b (B256.bexp x y :: S) M G) f o) :
-    SFunc.RunExact fs sevm (St b (x :: y :: S) M (G + c)) (.next (.reg .exp) f) o := by
-  subst hc
-  refine .next ?_ k
-  have h := Ninst.runCompiled_reg (sevm := sevm) (r := .exp) (by rintro ⟨⟩)
-    (Rinst.runCore_exp_eq_ok (devm := St b (x :: y :: S) M (G + (gExp + gExpbyte * y.bytecount)))
-      rfl (by simp only [St.gasLeft, le_add_iff_nonneg_left, zero_le]) hroom)
-  simpa only [St, Devm.memory_setMach, Devm.setMach_gasLeft, add_tsub_cancel_right,
-    Devm.stateGas_setMach, Devm.setMach_setMach] using h
 
 theorem rx_dup4 {x y z w : B256} (hroom : (x :: y :: z :: w :: S).length < 1024)
     (k : SFunc.RunExact fs sevm (St b (w :: x :: y :: z :: w :: S) M G) f o) :

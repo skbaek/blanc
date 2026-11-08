@@ -20,15 +20,6 @@ def systemWorld : Jaune.State :=
     historyStorageAddress systemCode).setCode withdrawalRequestPredeployAddress
     systemCode).setCode consolidationRequestPredeployAddress systemCode
 
-theorem systemCode_compile : some systemCode.toList =
-    Prog.compile deploymentSystemProgram := by decide +kernel
-
-theorem systemWorld_bal (a : Adr) : (systemWorld.get a).bal = 0 := by
-  unfold systemWorld
-  rw [State.setCode_get_bal, State.setCode_get_bal, State.setCode_get_bal,
-    State.setCode_get_bal]
-  rfl
-
 theorem systemCode_size : systemCode.size ≠ 0 := by decide +kernel
 
 theorem systemWorld_stor (a : Adr) : (systemWorld.get a).stor = .empty := by

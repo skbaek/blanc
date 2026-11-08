@@ -180,13 +180,6 @@ theorem parentStep_ninstIn {n' n : Exec.Deriv} {i : Ninst}
     · simp only [Ninst.StepRun, hs, Step.Run]
       exact ⟨_, RunFrame.of_run henter, hresume.symm⟩
 
-/-- A same-frame edge out of a non-jump instruction is one `Ninst.Run` to the
-next pc, over the child frame (of any outcome) if the instruction spawned one. -/
-theorem parentStep_ninst {n' n : Exec.Deriv} {i : Ninst}
-    (edge : Exec.Deriv.ParentStep n' n) (hat : Ninst.At n.sevm.code n.pc i) :
-    n'.pc = n.pc + i.size ∧ Ninst.Run n.sevm n.devm i n'.devm :=
-  (parentStep_ninstIn edge hat).imp_right Ninst.RunWith.toRun
-
 /-- A same-frame edge out of a `PC` is the `PC` step at the node's own pc. -/
 theorem parentStep_pc {n' n : Exec.Deriv}
     (edge : Exec.Deriv.ParentStep n' n) (hat : Ninst.At n.sevm.code n.pc (.reg .pc)) :
@@ -274,14 +267,6 @@ theorem absNinst_run_stack_noStateGas {sevm : Sevm} {devm devm' : Devm} {n : Nin
     refine ⟨S', hsp, ?_⟩
     rw [hfold]
     exact frameMatches_foldTop hframe hstack run hsp (matches_to_frame hfirst)
-
-theorem absNinst_run_stack {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
-    {a a' : List AVal} {ρ : B256} {S rest : List B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (habs : absNinst n a = some a')
-    (hstack : devm.stack = S ++ rest) (hframe : FrameMatches ρ a S)
-    (run : Ninst.Run sevm devm n devm') :
-    ∃ S', devm'.stack = S' ++ rest ∧ FrameMatches ρ a' S' :=
-  absNinst_run_stack_noStateGas hfork.rules_stateGas_none habs hstack hframe run
 
 theorem pop_one_frame {ρ : B256} {av : AVal} {a : List AVal} {S rest : List B256}
     {x : B256} {d d' : Devm} (hstack : d.stack = S ++ rest)
@@ -602,14 +587,6 @@ theorem cursor_stepS_noStateGas {code : ByteArray} {c : Cert} (hc : Cert.check c
       rw [hcode, hpc]; simpa only [checkNode, Option.isNone_iff_eq_none] using hcheck
     exact (Cursor.parentStep_false_of_none edge hnone).elim
 
-theorem cursor_stepS {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
-    {n n' : Exec.Deriv} {κ : Cursor} (ok : CursorOK code c n κ)
-    (edge : Exec.Deriv.ParentStep n' n) (hfork : CoveredFork n.sevm.benvStat.fork) :
-    ∃ κ', SStep c κ κ' ∧
-      ConfStep (Ninst.RunWith (Cursor.DescOf n)) c.prog n.sevm (κ.conf n.devm) (κ'.conf n'.devm) ∧
-      CursorOK code c n' κ' :=
-  cursor_stepS_noStateGas hc ok edge hfork.rules_stateGas_none
-
 /-- **One same-frame edge is one synthetic step.**  `cursor_stepS` without the
 state. -/
 theorem cursor_step_noStateGas {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
@@ -644,12 +621,6 @@ theorem cursor_of_parentPrefix_noStateGas {code : ByteArray} {c : Cert} (hc : Ce
     obtain ⟨κ₁, hstep, ok₁⟩ := cursor_step_noStateGas hc ok head hfork
     obtain ⟨κ, hreach, ok'⟩ := ih κ₁ ok₁ (by rw [Cursor.parentStep_sevm head]; exact hfork)
     exact ⟨κ, .head hstep hreach, ok'⟩
-
-theorem cursor_of_parentPrefix {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
-    {F n : Exec.Deriv} (hpc : F.pc = 0) (hcode : F.sevm.code = code)
-    (hfork : ShanghaiOnwards F.sevm.benvStat.fork) (hp : Exec.Deriv.ParentPrefix F n) :
-    ∃ κ, Relation.ReflTransGen (SStep c) (Cursor.start c) κ ∧ CursorOK code c n κ :=
-  cursor_of_parentPrefix_noStateGas hc hpc hcode hfork.rules_stateGas_none hp
 
 /-- A cursor-placed node decoding a terminal instruction sits at that
 instruction's checked `last` node, independently of its execution outcome. -/
@@ -951,12 +922,5 @@ theorem reach_of_parentPrefix_noStateGas {code : ByteArray} {c : Cert} (hc : Cer
       CursorOK code c N κ := by
   obtain ⟨κ, reach, ok⟩ := observed_reach_of_parentPrefix_noStateGas hc hpc hcode hfork hp
   exact ⟨κ, reach.forget, ok⟩
-
-theorem reach_of_parentPrefix {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
-    {R N : Exec.Deriv} (hpc : R.pc = 0) (hcode : R.sevm.code = code)
-    (hfork : CoveredFork R.sevm.benvStat.fork) (hp : Exec.Deriv.ParentPrefix R N) :
-    ∃ κ, Reach (StepIn R) c.prog R.sevm ((Cursor.start c).conf R.devm) (κ.conf N.devm) ∧
-      CursorOK code c N κ :=
-  reach_of_parentPrefix_noStateGas hc hpc hcode hfork.rules_stateGas_none hp
 
 end Blanc.Lift

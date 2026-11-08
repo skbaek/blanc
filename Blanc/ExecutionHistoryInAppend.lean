@@ -90,21 +90,6 @@ theorem ConfiguredHistoryTraceIn.rawFrames_append {F : Fork → Prop}
       simp only [ConfiguredHistoryTraceIn.append,
         ConfiguredHistoryTraceIn.rawFrames, ih, List.append_assoc]
 
-/-- The settlement-retained roots of a join are in order. -/
-theorem ConfiguredHistoryTraceIn.settledFrames_append {F : Fork → Prop}
-    {cfg : ChainConfig} {a b c : BlockChain}
-    (first : ConfiguredHistoryTraceIn F cfg a b)
-    (second : ConfiguredHistoryTraceIn F cfg b c) :
-    (append first second).settledFrames =
-      first.settledFrames ++ second.settledFrames := by
-  induction second with
-  | refl =>
-      simp only [ConfiguredHistoryTraceIn.append,
-        ConfiguredHistoryTraceIn.settledFrames, List.append_nil]
-  | step prior block ih =>
-      simp only [ConfiguredHistoryTraceIn.append,
-        ConfiguredHistoryTraceIn.settledFrames, ih, List.append_assoc]
-
 /-- No-deletion scheduling splits across a join. -/
 theorem ConfiguredHistoryTraceIn.NoDelScheduled_append {F : Fork → Prop}
     {cfg : ChainConfig} {a b c : BlockChain}

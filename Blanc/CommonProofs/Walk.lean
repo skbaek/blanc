@@ -1400,36 +1400,6 @@ theorem Sevm.selector_eq_toB256_takeD_four (sevm : Sevm) :
   change Bytes.toB256 word >>> 224 = _
   rw [shiftRight_224_eq_toB256_take_four, firstFour]
 
-/-- Calldata beginning with a canonical ABI selector has that selector under
-`Sevm.selector`, independently of its tail.  The explicit canonicality premise
-is essential: `abiSelectorBytes` keeps only the low four bytes of an arbitrary
-`B256`, whereas `Sevm.selector` is itself a four-byte word. -/
-theorem selector_eq_of_data_eq_abiSelectorBytes_append
-    {sevm : Sevm} {selected : B256} {tail : Bytes}
-    (canonical : Bytes.toB256 (abiSelectorBytes selected) = selected)
-    (data : sevm.data = abiSelectorBytes selected ++ tail) :
-    Sevm.selector sevm = selected := by
-  let word := sevm.data.sliceD 0 32 0
-  have wordLength : word.length = 32 := by
-    exact List.takeD_length _ _ _
-  have roundtrip : (Bytes.toB256 word).toBytes = word :=
-    Bytes.toBytes_toB256_of_length wordLength
-  have firstFour :
-      (Bytes.toB256 word).toBytes.take 4 = abiSelectorBytes selected := by
-    rw [roundtrip]
-    unfold word
-    simp only [List.sliceD, List.drop_zero]
-    rw [List.take_takeD_of_le _ _ _ _ (by omega)]
-    rw [List.takeD_eq_take _ (by
-      simp only [data, length_append, abiSelectorBytes_length, le_add_iff_nonneg_right,
-        _root_.zero_le])]
-    rw [data, List.take_append_of_le_length]
-    · exact List.take_of_length_le (by rw [abiSelectorBytes_length])
-    · rw [abiSelectorBytes_length]
-  rw [Sevm.selector, Sevm.dataWord]
-  change Bytes.toB256 word >>> 224 = selected
-  rw [shiftRight_224_eq_toB256_take_four, firstFour, canonical]
-
 /-! The three head words and the offset word of a `flashLoan`-shaped call.
 
 `flashLoan(address,address,uint256,bytes)` is three static heads then one
@@ -1531,37 +1501,6 @@ lemma prefix_of_sload {e x xs} {s s' : Devm} :
   have hx : x = x' := (List.of_cons_pref_of_cons_pref h1 (pref_of_split h2)).left
   subst hx
   exact ⟨_, append_pref h3 (of_append_pref h2 h1), rfl⟩
-
-/-- A successful `SLOAD` does not mutate persistent EVM state.  The access-list
-warming performed on the cold path is execution metadata, not `Devm.state`. -/
-lemma of_run_sload_state {e : Sevm} {s s' : Devm}
-    (run : Ninst.Run e s sload s') : s.state = s'.state := by
-  rcases of_run_reg run with ⟨_pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨key, s1⟩, popRun, tailRun⟩
-  have popState := (Devm.pop_of_pop popRun).state
-  suffices preserve : ∀ (d : Devm) (cost : Nat),
-      s1.state = d.state →
-      (chargeGas cost d >>=
-        fun next => Devm.push
-          (Devm.getStorVal (Devm.balReadStorage e.benvStat.rules e.currentTarget key next) e.currentTarget key)
-          (Devm.balReadStorage e.benvStat.rules e.currentTarget key next)) = .ok s' →
-      s1.state = s'.state by
-    refine popState.trans ?_
-    cases haccess : e.benvStat.rules.access with
-    | eip2929 =>
-      simp only [haccess] at tailRun
-      split at tailRun
-      · exact preserve s1 gasWarmAccess rfl tailRun
-      · exact preserve (addAccessedStorageKey s1 e.currentTarget key)
-          gasColdSload rfl tailRun
-    | flat gas =>
-      simp only [haccess] at tailRun
-      exact preserve s1 gas.sload rfl tailRun
-  intro d cost stateEq tailRun
-  rcases Except.bind_eq_ok tailRun with ⟨charged, chargeRun, pushRun⟩
-  exact (stateEq.trans (Devm.burn_of_chargeGas chargeRun).state).trans
-    (Devm.push_of_push pushRun).state
 
 /-- A successful `SLOAD` emits no log entries. -/
 lemma of_run_sload_logs {e : Sevm} {s s' : Devm}

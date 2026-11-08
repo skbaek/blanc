@@ -133,21 +133,6 @@ theorem SFunc.RunP.not_halted {P : Sevm → Devm → Ninst → Devm → Prop}
       simp only [SFunc.refs] at hrefs
       exact ih hf hrefs ho
 
-/-- A run of an entry in a `NoHaltSet` cannot halt. -/
-theorem SFunc.RunP.not_halted_entry {P : Sevm → Devm → Ninst → Devm → Prop}
-    {fs : List SFunc} {S : List Nat} (hS : NoHaltSet fs S = true)
-    {k : Nat} (hkS : k ∈ S) {g : SFunc} (hk : fs[k]? = some g)
-    {sevm : Sevm} {devm : Devm} {D : Devm} {o : Outcome}
-    (run : SFunc.RunP P fs sevm devm g o) (ho : o = .halted D) : False := by
-  have closed : ∀ {k g}, k ∈ S → fs[k]? = some g →
-      g.noHalt = true ∧ g.refs.all (· ∈ S) = true := by
-    intro k g hk hget
-    have h := (List.all_eq_true.mp hS) k hk
-    rw [hget] at h
-    simpa only [List.all_eq_true, decide_eq_true_eq, Bool.and_eq_true] using h
-  have ht := closed hkS hk
-  exact SFunc.RunP.not_halted hS ht.1 ht.2 run ho
-
 /-! ## Gotos and calls of cut runs -/
 
 section Control
@@ -170,20 +155,6 @@ theorem ric_branchTo {k : Nat} {dd w : B256} (hkC : k ∉ C) (hk : fs[k]? = some
       cases hk'
       obtain ⟨-, hw', e⟩ := St.of_pop2 h
       exact .inr ⟨hw' ▸ hw, _, e ▸ k⟩
-
-/-- A conditional goto to a cut entry: taken, the run stops there. -/
-theorem ric_branchToCut {k : Nat} {dd w : B256} (hk : k ∈ C)
-    (run : SFunc.RunCut fs sevm C (St b (dd :: w :: S) M G) (.branchTo f k) r) :
-    (w = 0 ∧ ∃ G', SFunc.RunCut fs sevm C (St b S M G') f r) ∨
-      (w ≠ 0 ∧ ∃ G', r = .at k (St b S M G')) := by
-  cases run with
-  | toZero d0 h k =>
-      obtain ⟨-, hw, e⟩ := St.of_pop2 h
-      exact .inl ⟨hw, _, e ▸ k⟩
-  | toSuccCut d0 w0 hw _ h =>
-      obtain ⟨-, hw', e⟩ := St.of_pop2 h
-      exact .inr ⟨hw' ▸ hw, _, congrArg _ e⟩
-  | toSucc _ _ _ hkC _ _ _ => exact absurd hk hkC
 
 /-- An internal call (`JUMP` into entry `k` with a return tag below): the callee runs from the
 state with the destination popped, and either returns into the continuation or halts the
@@ -262,30 +233,6 @@ theorem ri_sload {k : B256} {d : Devm} (hfork : ShanghaiOnwards sevm.benvStat.fo
     refine ⟨s1.gasLeft, ?_⟩
     simp only [afterSload, hw, ite_false]
     rfl
-
-/-- `LOG1`, inverted: the successor's base carries the entry `rx_log1` appends, over the bytes
-the window reads; memory is the window read's image. -/
-theorem ri_log1 {i sz t : B256} {d : Devm}
-    (h : Ninst.Run sevm (St b (i :: sz :: t :: S) M G) (.reg (.log 1)) d) :
-    ∃ G', d = St (b.addLog ⟨sevm.currentTarget, [t], (M.read i.toNat sz.toNat).1⟩) S
-      (M.read i.toNat sz.toNat).2 G' := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  rw [show (St b (i :: sz :: t :: S) M G).popToNat = .ok (i.toNat, St b (sz :: t :: S) M G)
-    from rfl] at run
-  simp only [Except.bind_ok] at run
-  rw [show (St b (sz :: t :: S) M G).popToNat = .ok (sz.toNat, St b (t :: S) M G)
-    from rfl] at run
-  simp only [Except.bind_ok] at run
-  rw [show (St b (t :: S) M G).popN ((1 : Fin 5) : Nat) = .ok ([t], St b S M G) from rfl] at run
-  simp only [Except.bind_ok] at run
-  rcases Except.bind_eq_ok run with ⟨s1, h1, h2⟩
-  rcases Except.bind_eq_ok h2 with ⟨_, -, h3⟩
-  cases h3
-  have e1 := Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas h1)
-  refine ⟨s1.gasLeft, ?_⟩
-  rw [e1]
-  rfl
 
 end World
 

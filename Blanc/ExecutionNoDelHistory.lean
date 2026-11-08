@@ -34,12 +34,6 @@ namespace Blanc
 
 open Jaune
 
-/-- A byte array of nonzero size has a nonempty byte list. -/
-theorem toList_ne_nil_of_size_ne_zero {C : ByteArray} (h : C.size ≠ 0) : C.toList ≠ [] := by
-  intro hnil
-  apply h
-  rw [ByteArray.size_eq_length_toList, hnil, List.length_nil]
-
 /-- The actual facts about an installed runtime `C` that the no-deletion producer consumes. -/
 structure InstalledCert (C : ByteArray) : Prop where
   exists_cert : ∃ c : Lift.Cert, Lift.Cert.check C c = true ∧ c.callOnly = true ∧
@@ -214,15 +208,6 @@ theorem ConfiguredBlockTraceIn.noDel_of_runtimeSafety (K : InstalledRuntimeSafet
     trace.NoDelScheduled wa ∧ post.state.getCode wa = C := by
   exact trace.noDel_of_safe K.notDelegation K.nonempty capabilities installed
     (trace.safeRawFrames_of_runtimeSafety K capabilities installed)
-
-/-- Compatibility wrapper for the original call-only certificate API. -/
-theorem ConfiguredBlockTraceIn.noDel_of_installedCert (K : InstalledCert C)
-    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
-    (trace : ConfiguredBlockTraceIn F cfg pre post)
-    (capabilities : BodyStageCapabilities F)
-    (installed : pre.state.getCode wa = C) :
-    trace.NoDelScheduled wa ∧ post.state.getCode wa = C :=
-  trace.noDel_of_runtimeSafety K.runtimeSafety capabilities installed
 
 /-- **Code survival and no-deletion along a configured history.** If the checkpoint holds an
 installed checked runtime `C` at `wa`, the endpoint state of a retained In-history holds `C` at

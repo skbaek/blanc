@@ -26,39 +26,6 @@ namespace ExecutionTrace
 
 open Jaune
 
-/-- The original cut's admission uses the chain identity of its successful
-configured block transition. -/
-theorem ConfiguredBlockTraceIn.txSplit_chainId
-    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
-    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
-    (cut : block.bodyTrace.transactions.TxSplit i) :
-    cut.benv.beginTransaction.stat.chainId = cfg.chainId := by
-  have stat : cut.benv.stat = (initBenv block.fork pre block.block.header).stat :=
-    block.txSplit_stat cut
-  exact (congrArg BenvStat.chainId stat).trans
-    (stateTransitionUsing_success_chainId_eq block.transition).symm
-
-/-- Recovering the original cut's transaction under its configured chain
-returns the sender in the actual successful admission check. -/
-theorem ConfiguredBlockTraceIn.txSplit_recoveredSender
-    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
-    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
-    (cut : block.bodyTrace.transactions.TxSplit i) :
-    recoverSender cfg.chainId cut.tx = .ok cut.head.sender := by
-  have recovered := checkTransaction_sender cut.head.checked
-  rw [block.txSplit_chainId cut] at recovered
-  exact recovered
-
-/-- A recovery proof for this exact transaction identifies its admitted sender;
-no execution-success or replacement-history premise is required. -/
-theorem ConfiguredBlockTraceIn.txSplit_sender_of_recovery
-    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
-    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
-    (cut : block.bodyTrace.transactions.TxSplit i) {sender : Adr}
-    (recovered : recoverSender cfg.chainId cut.tx = .ok sender) :
-    cut.head.sender = sender := by
-  exact Except.ok.inj ((block.txSplit_recoveredSender cut).symm.trans recovered)
-
 /-- Every block of a mid history funds its reward credits; `stateGas = none` comes per block from
 `BodyStageCapabilities F`. -/
 theorem MidHistoryTraceIn.rewardCreditsFunded {F : Fork → Prop} {cfg : ChainConfig}
@@ -80,25 +47,6 @@ theorem MidHistoryTraceIn.rawFrames_entered {F : Fork → Prop} {cfg : ChainConf
   intro root member
   obtain ⟨_, _, block, blockMember⟩ := trace.rawFrames_mem_block root member
   exact block.rawFrames_entered hE root blockMember
-
-/-- Every raw root of a mid history starts at pc zero on a selected fork. -/
-theorem MidHistoryTraceIn.rootEntryIn {F : Fork → Prop} {cfg : ChainConfig}
-    {start : Benv} {future : BlockChain} (trace : MidHistoryTraceIn F cfg start future) :
-    ∀ root ∈ trace.rawFrames, RootEntryIn F root := by
-  intro root member
-  obtain ⟨_, _, block, blockMember⟩ := trace.rawFrames_mem_block root member
-  exact block.rootEntryIn root blockMember
-
-/-- Every raw root of a mid history has calldata shorter than `2 ^ 256` bytes on a domain whose
-nonzero calldata byte costs at least 16 gas. -/
-theorem MidHistoryTraceIn.calldata_bound {F : Fork → Prop} {cfg : ChainConfig}
-    {start : Benv} {future : BlockChain} (trace : MidHistoryTraceIn F cfg start future)
-    (capabilities : BodyStageCapabilities F)
-    (hdata : ∀ f, F f → 16 ≤ (Fork.ruleSet f).txr.dataNonZero) :
-    ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 := by
-  intro root member
-  obtain ⟨_, _, block, blockMember⟩ := trace.rawFrames_mem_block root member
-  exact block.calldata_bound capabilities hdata root blockMember
 
 end ExecutionTrace
 

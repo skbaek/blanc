@@ -28,56 +28,11 @@ theorem processCreateMessage_msg_getStor_currentTarget (msg : Msg) :
     · rw [State.get_setPresent_self]
     · rw [State.get_set_self]
 
-/-- Successful CREATE entry still has empty target storage after transferring
-any call value. Balance normalization can clear storage, but cannot populate
-the storage already cleared by creation preparation. No nonce, distinct-caller
-or zero-value premise is needed. -/
-theorem processCreateMessage_msg_afterTransfer_getStor
-    {msg : Msg} {benv : Benv}
-    (htransfer : (processCreateMessage.msg msg).benvAfterTransfer = .ok benv) :
-    benv.state.getStor msg.currentTarget = Stor.empty := by
-  let prepared := processCreateMessage.msg msg
-  have empty := processCreateMessage_msg_getStor_currentTarget msg
-  by_cases zero : prepared.value = 0
-  · exact (benvAfterTransfer_ok_getStor htransfer _ (Or.inl zero)).trans empty
-  by_cases transfer : prepared.shouldTransferValue = true
-  · obtain ⟨mid, debit, rfl⟩ := of_benvAfterTransfer transfer zero htransfer
-    change ((mid.addBal prepared.currentTarget prepared.value).get msg.currentTarget).stor = _
-    rw [State.addBal, State.setBal_get_stor]
-    split
-    · rfl
-    · rw [(State.of_subBal debit).2, State.setBal_get_stor]
-      split
-      · rfl
-      · exact empty
-  · rw [of_benvAfterTransfer_no transfer htransfer]
-    exact empty
-
 /-- A zero-value message can always cross its optional entry transfer. -/
 theorem benvAfterTransfer_exists_zero
     {msg : Msg} (hvalue : msg.value = 0) :
     ∃ benv, msg.benvAfterTransfer = .ok benv :=
   benvAfterTransfer_exists_of_value_zero hvalue
-
-/-- A successful raw `exec` with no frame error settles as the corresponding
-ordinary message result. -/
-theorem processMessage_ok_of_exec
-    {msg : Msg} {benv : Benv} {post : Devm}
-    (htransfer : msg.benvAfterTransfer = .ok benv)
-    (hcodeAddress : msg.codeAddress = .none)
-    (hexec : exec (initEvm (msg.withBenv benv)) = .ok post)
-    (herror : post.error = .none)
-    (hsweep : msg.benv.stat.rules.settle.touchedSweep = false) :
-    processMessage msg = .ok post := by
-  unfold processMessage runFrame Frame.enter Frame.ofCall
-  rw [htransfer]
-  unfold executeCode.enter
-  simp only [Msg.withBenv, hcodeAddress]
-  unfold Frame.settle Frame.settleMsg
-  simp only [Msg.withBenv, hcodeAddress] at hexec
-  rw [hexec]
-  simp only [Bool.false_eq_true, ↓reduceIte, processMessage.settle, executeCode.handleErrorWith_ok,
-    Except.bind_ok, herror, Option.isSome_none, Devm.recordTouch_of_not_touchedSweep hsweep]
 
 /-- Successful inner-message execution followed by successful code charging is
 the successful CREATE settlement, with the charged output installed at the
@@ -116,18 +71,6 @@ theorem processCreateMessage_ok_of_processMessage_error
     rw [hnone] at herror
     cases herror
   rw [ite_eq_right hnotNone]
-
-/-- The outer message result induced by a successful direct CREATE after code
-charging.  Constructor families may retain their historical wrapper names,
-but the projection itself is contract-neutral. -/
-def directCreateMessageOutputOf (post : Devm) : MsgCallOutput :=
-  { gasLeft := post.gasLeft
-    refundCounter := 0
-    logs := post.logs
-    accountsToDelete := post.accountsToDelete
-    error := post.error
-    returnData := post.output
-    touchedAccounts := post.meta.touchedAccounts }
 
 /-! ## Contract-neutral protocol-deployment plumbing -/
 
@@ -389,42 +332,6 @@ theorem processUncheckedSystemTransaction_deploymentSystemProgram
   · simp only [out, post, initDevm, Devm.setMach, Devm.logs, hmsgStateGas]
   · rfl
   · rfl
-
-theorem processCheckedSystemTransaction_deploymentSystemProgram
-    (benv : Benv) (target : Adr) (data : Bytes)
-    (hcode : some (benv.state.getCode target).toList =
-      Prog.compile deploymentSystemProgram)
-    (hnp : ¬ benv.stat.rules.isPrecomp target)
-    (hfork : CoveredFork benv.stat.fork) :
-    ∃ out,
-      processCheckedSystemTransaction benv target data =
-        .ok (benv.state, out) ∧
-      out.error = none ∧
-      out.refundCounter = 0 ∧
-      out.logs = [] ∧
-      out.accountsToDelete = .emptyWithCapacity ∧
-      out.returnData = [] := by
-  obtain ⟨out, hrun, herr, hrefund, hlogs, hdelete, hreturn⟩ :=
-    processUncheckedSystemTransaction_deploymentSystemProgram
-      benv target data hcode hnp hfork
-  have hne : (benv.state.getCode target).isEmpty = false := by
-    have hlistne : (benv.state.getCode target).toList ≠ [] := by
-      intro hnil
-      apply Prog.compile_ne_nil (p := deploymentSystemProgram)
-      rw [← hcode, hnil]
-    have hbytesne : benv.state.getCode target ≠ ByteArray.empty := by
-      intro hempty
-      apply hlistne
-      rw [hempty]
-      simp only [ByteArray.toList_empty]
-    simpa only [ByteArray.isEmpty, beq_eq_false_iff_ne, ne_eq, ByteArray.size_eq_zero_iff] using
-      hbytesne
-  refine ⟨out, ?_, herr, hrefund, hlogs, hdelete, hreturn⟩
-  unfold processCheckedSystemTransaction
-  simp only [hne, Bool.false_eq_true, ite_false]
-  unfold processUncheckedSystemTransaction at hrun
-  rw [hrun]
-  simp only [Except.mapError, Prod.mk.eta, Except.bind_ok, herr]
 
 /-- Reconstruct the mandatory beacon-roots and history-storage prefix from the
 configured prestate. -/

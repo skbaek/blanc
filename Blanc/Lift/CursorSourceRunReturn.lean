@@ -55,14 +55,4 @@ theorem CursorOK.sourceRunReturnH {code : ByteArray} {c : Cert}
           rw [arity, ← count] at unknown
           exact List.rel_append unknown callerFrame
 
-/-- A checked actual successful cursor either halts with its own result, or
-returns through its actual checked continuation. -/
-theorem CursorOK.sourceRunReturn {code : ByteArray} {c : Cert}
-    {F : Exec.Deriv} {κ : Cursor} (checked : Cert.check code c = true)
-    (placed : CursorOK code c F κ) {post : Devm} (success : F.exn = .ok post)
-    (fork : CoveredFork F.sevm.benvStat.fork) :
-    SFunc.RunP (StepIn F) c.prog F.sevm F.devm κ.f (.halted post) ∨
-      CursorSourceReturn code c F κ post :=
-  CursorOK.sourceRunReturnH checked placed success fork.rules_stateGas_none
-
 end Blanc.Lift

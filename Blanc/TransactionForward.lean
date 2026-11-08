@@ -207,29 +207,6 @@ theorem validateTransaction_ok_of_facts {rules : ForkRules} {tx : Tx} {sender : 
   | some m =>
     simp only [bind, Except.bind, hinit, hlimit, hcap, hnonce, ↓reduceIte]
 
-/-- Validation without a state-gas dimension when init-code limits are disabled.
-Direct intrinsic projections keep concrete CREATE payloads out of pair conversion. -/
-theorem validateTransaction_ok_of_noInitcodeLimit
-    {rules : ForkRules} {tx : Tx} {sender : Adr} {f : Nat}
-    (hsg : rules.stateGas = none) (hinit : rules.creation.initCodeLimit = false)
-    (hfloor : (calculateIntrinsicCost rules tx sender).2 = f)
-    (hgas : max (calculateIntrinsicCost rules tx sender).1 f ≤ tx.gas)
-    (hnonce : tx.nonce ≠ UInt64.max)
-    (hcap : checkTransactionGasCap rules.tx tx.gas = .ok ()) :
-    validateTransaction rules tx sender =
-      .ok ((calculateIntrinsicCost rules tx sender).1, f) := by
-  have hlimit : checkInitcodeLimit rules tx.type.receiver? tx.data.length = .ok () := by
-    simp only [checkInitcodeLimit, hinit, Bool.false_eq_true, ↓reduceIte]
-  cases hcost : calculateIntrinsicCost rules tx sender with
-  | mk i g =>
-    simp only [hcost] at hfloor hgas ⊢
-    subst f
-    unfold validateTransaction
-    simp only [hsg, hcost, Nat.not_lt.mpr hgas, ↓reduceIte]
-    cases hm : rules.tx.maxGas with
-    | none => simp only [hnonce, ↓reduceIte, bind, Except.bind, hlimit]
-    | some m => simp only [bind, Except.bind, hlimit, hcap, hnonce, ↓reduceIte]
-
 /-- The message a call transaction with receiver `t` prepares: it calls `t`'s current code with the
 transaction's data and value, from the origin, at the outermost depth, with the origin, the receiver
 and the precompiles pre-warmed on top of the transaction's access list. -/
@@ -260,36 +237,6 @@ theorem benvAfterTransfer_get_of_value_zero {msg : Msg} {benv : Benv}
   rw [Msg.benvAfterTransfer_of_value_zero hzero] at h
   cases h
   rfl
-
-/-- **A zero-value CREATE frame's entry world, account by account**: the new account keeps its
-balance and code, has its nonce incremented and its storage cleared; every other account is as
-the outer message left it. -/
-theorem processCreateMessage_msg_afterTransfer_get {msg : Msg} {benv : Benv}
-    (hzero : msg.value = 0) (h : (processCreateMessage.msg msg).benvAfterTransfer = .ok benv)
-    (a : Adr) :
-    benv.state.get a = if a = msg.currentTarget then
-      { msg.benv.state.get a with nonce := (msg.benv.state.get a).nonce + 1, stor := .empty }
-    else msg.benv.state.get a := by
-  rw [benvAfterTransfer_get_of_value_zero (msg := processCreateMessage.msg msg) hzero h a]
-  change ((msg.benv.state.setStor msg.currentTarget .empty).incrNonce msg.currentTarget).get a = _
-  unfold State.incrNonce State.setStor
-  by_cases ha : a = msg.currentTarget
-  · subst ha
-    simp only [↓reduceIte]
-    rw [State.setAccount_get_self]
-    split
-    all_goals
-      first
-        | rw [State.get_setPresent_self]
-        | rw [State.get_set_self]
-      apply Acct.ext <;> simp only [Acct.clearIfEmpty_nonce, Acct.clearIfEmpty_bal,
-        Acct.clearIfEmpty_code, Acct.clearIfEmpty_stor]
-      split <;> rfl
-  · simp only [ha, ↓reduceIte]
-    rw [State.setAccount_get_ne _ (Ne.symm ha)]
-    split
-    · rw [State.get_setPresent_ne _ (Ne.symm ha)]
-    · rw [State.get_set_ne _ (Ne.symm ha)]
 
 /-- **A call message with a code address that is no precompile settles as its raw execution**: when the
 value moved at entry is zero and the interpreter run from the entry environment succeeds with no frame
@@ -398,43 +345,6 @@ theorem processTransaction_of_stages_gasUsed
   obtain ⟨bout', h, hcum, hblk, -, -⟩ := processTransaction_of_stages_receipts hsg hbal hsweep hquot hvalid
     hchecked hdebit hprepared hcall hrefund
   exact ⟨bout', h, hcum, hblk⟩
-
-/-- **A transaction from its stages.**  Without a state-gas dimension or a block access list,
-the successful validation, admission check, debit, message preparation and message-call outcome
-of a transaction are its `processTransaction`: the returned state is the message's, with the
-sender's gas refund and the coinbase's priority fee credited and the message's accounts to
-delete removed. -/
-theorem processTransaction_of_stages
-    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    {intrinsicGas calldataFloorGas : Nat} {sender : Adr} {effectiveGasPrice : Nat}
-    {blobVersionedHashes : List B256} {txBlobGasUsed : Nat}
-    {debit : State} {msg : Msg} {mpost : State} {mout : MsgCallOutput} {refund : Nat}
-    (hsg : benv.stat.rules.stateGas = none) (hbal : benv.stat.rules.bal = none)
-    (hsweep : benv.stat.rules.settle.touchedSweep = false)
-    (hquot : benv.stat.rules.settle.refundQuotient = 5)
-    (hvalid : validateTransaction benv.stat.rules tx 0 = .ok (intrinsicGas, calldataFloorGas))
-    (hchecked : checkTransaction benv.beginTransaction (transactionPreludeBout bout tx index) tx =
-      .ok (sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed))
-    (hdebit : (benv.state.incrNonce sender).subBal sender
-      (tx.gas * effectiveGasPrice + transactionBlobGasFee benv tx).toB256 = some debit)
-    (hprepared : prepareMessage { benv.beginTransaction with state := debit }
-      (transactionTenv benv.beginTransaction tx index sender effectiveGasPrice intrinsicGas
-        blobVersionedHashes) tx = .ok msg)
-    (hcall : processMessageCall msg = .ok (mpost, mout))
-    (hrefund : Int.toNat? mout.refundCounter = some refund) :
-    ∃ bout', processTransaction benv bout tx index = .ok
-      (mout.accountsToDelete.toList.foldl destroyAccount
-        ((mpost.addBal sender
-            ((tx.gas -
-                max (tx.gas - mout.gasLeft - min ((tx.gas - mout.gasLeft) / 5) refund)
-                  calldataFloorGas) * effectiveGasPrice).toB256).addBal
-          benv.stat.coinbase
-            (max (tx.gas - mout.gasLeft - min ((tx.gas - mout.gasLeft) / 5) refund)
-                calldataFloorGas * (effectiveGasPrice - benv.stat.baseFeePerGas)).toB256),
-        bout') := by
-  obtain ⟨bout', h, -⟩ := processTransaction_of_stages_gasUsed hsg hbal hsweep hquot hvalid hchecked hdebit
-    hprepared hcall hrefund
-  exact ⟨bout', h⟩
 
 /-! ### A type-2 call transaction from the outcome of its message's execution -/
 
@@ -888,18 +798,6 @@ theorem calculateIntrinsicCost_two_call {rules : ForkRules} {tx : Tx} {sender : 
         calldataTokens tx.data * rules.gas.floorTokenCost + rules.gas.txBase) := by
   rw [calculateIntrinsicCost_two_call_any hsg htype hnz, hfloor]
   rfl
-
-/-- A plain type-2 call's calldata floor from Shanghai on: the floor of the tokens at ten gas over the
-base cost at most, and possibly zero. The intrinsic gas itself does not vary across the domain. -/
-theorem ShanghaiOnwards.calculateIntrinsicCost_two_call {s : BenvStat} {tx : Tx} {sender : Adr}
-    {chainId : UInt64} {maxPriorityFee maxFee : Nat} {t : Adr} (h : ShanghaiOnwards s.fork)
-    (htype : tx.type = .two chainId maxPriorityFee maxFee (some t) []) :
-    ∃ floor, floor ≤ calldataTokens tx.data * 10 + 21000 ∧
-      calculateIntrinsicCost s.rules tx sender =
-        (21000 + calldataTokens tx.data * standardCallDataTokenCost, floor) := by
-  rw [calculateIntrinsicCost_two_call_any h.rules_stateGas_none htype h.rules_dataNonZero,
-    h.rules_txBase, h.rules_floorTokenCost]
-  exact ⟨_, by split <;> omega, rfl⟩
 
 /-- **The per-transaction gas cap from Shanghai on**: no cap before Osaka, the EIP-7825 cap `2 ^ 24`
 from Osaka; a transaction whose gas is at most `2 ^ 24` passes on all of them. -/

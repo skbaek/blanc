@@ -113,14 +113,6 @@ theorem Exec.descendantFrames_forest :
           at split
         exact nextIh split
 
-/-- **Contiguity of a run's descendants**: at every split, the rest begins with the selected frame's
-descendants. -/
-theorem Exec.descendantFrames_contig {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) {b : List Exec.Frame} {F : Exec.Frame} {a : List Exec.Frame}
-    (split : Exec.descendantFrames run = b ++ F :: a) :
-    ∃ r, a = Exec.descendantFrames F.run ++ r :=
-  (Exec.descendantFrames_forest run split).1
-
 /-- The forest facts for the committed frames of a list of retained roots. -/
 theorem rootFrames_forest {roots : List Exec.Frame} {b : List Exec.Frame} {F : Exec.Frame}
     {a : List Exec.Frame}

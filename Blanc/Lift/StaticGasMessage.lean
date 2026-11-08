@@ -32,14 +32,4 @@ theorem initSevm_withGas (msg : Msg) (G : Nat) :
 theorem initDevm_withGas (msg : Msg) (G : Nat) :
     initDevm (msg.withGas G) = St (initDevm msg) [] Mem.empty G := rfl
 
-/-- A message's frame state at gas `G` measures `G`: nothing is spilled at entry. -/
-theorem initDevm_gasMeasure (msg : Msg) (G : Nat) :
-    (St (initDevm msg) [] Mem.empty G).gasMeasure = G := rfl
-
-/-- **A frame execution at the message's grant is the message's execution.** -/
-theorem exec_withGas_of_frame {msg : Msg} {G : Nat} {post : Devm}
-    (exc : Exec 0 {initSevm msg with gas := G} (St (initDevm msg) [] Mem.empty G) (.ok post)) :
-    exec (initEvm (msg.withGas G)) = .ok post :=
-  (exec_iff_exec_eq 0 _ _ _).mp ⟨exc⟩
-
 end Blanc.Lift

@@ -279,20 +279,6 @@ theorem Exec.spawn_seam_noStateGas {pc pc' : Nat} {sevm : Sevm} {pre inter : Dev
   · exact congrArg (fun stor => stor.get k)
       (congrFun (Evm.step_spawn_rollback_getStor_noStateGas hfork step enter hresume discarded) a)
 
-/-- Covered-fork compatibility projection. -/
-theorem Exec.spawn_seam {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm} {frame : Jaune.Frame}
-    {resume : Resume} {cevm : Evm} {raw : Execution}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
-    (enter : frame.enter = .run cevm) (child : Exec cevm.pc cevm.sta cevm.dyna raw)
-    (hresume : resume.run (frame.settle raw) = .ok inter) :
-    (∀ h : Execution.commits raw = true, Frame.settlementCommits frame raw = true →
-      ∀ a k, (Devm.getStor inter a).get k =
-        (Devm.getStor (Execution.committedPost raw h) a).get k) ∧
-    (Frame.settlementCommits frame raw ≠ true →
-      ∀ a k, (Devm.getStor inter a).get k = (Devm.getStor pre a).get k) :=
-  Exec.spawn_seam_noStateGas hfork.rules_stateGas_none step enter child hresume
-
 
 
 namespace Exec.CoreAccounting

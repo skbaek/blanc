@@ -73,30 +73,6 @@ inductive SFunc.RunExact (fs : List SFunc) (sevm : Sevm) :
 def SProg.RunExact (fs : List SFunc) (sevm : Sevm) (devm devm' : Devm) : Prop :=
   ∃ f, fs[0]? = some f ∧ SFunc.RunExact fs sevm devm f (.halted devm')
 
-theorem SFunc.RunExact.toRun {fs : List SFunc} {sevm : Sevm} {devm : Devm}
-    {f : SFunc} {o : Outcome} (h : SFunc.RunExact fs sevm devm f o) :
-    SFunc.Run fs sevm devm f o := by
-  refine SFunc.RunExact.rec
-    (motive := fun devm f o _ => SFunc.Run fs sevm devm f o)
-    (fun d hpop hrun ih => .zero d (Devm.PopBurn.of_popBurnBy hpop) ih)
-    (fun d w hne hpop hrun ih =>
-      .succ d w hne (Devm.PopBurn.of_popBurnBy hpop) ih)
-    (fun d hpop hrun ih => .toZero d (Devm.PopBurn.of_popBurnBy hpop) ih)
-    (fun d w hne hget hpop hrun ih =>
-      .toSucc d w hne hget (Devm.PopBurn.of_popBurnBy hpop) ih)
-    (fun hrun => .last hrun)
-    (fun hrun hnext ih => .next (Ninst.Run.of_runCompiled hrun) ih)
-    (fun hburn hrun ih => .dest (Devm.Burn.of_burnBy hburn) ih)
-    (fun d hget hpop hrun ih =>
-      .jump d hget (Devm.PopBurn.of_popBurnBy hpop) ih)
-    (fun d hpop => .ret d (Devm.PopBurn.of_popBurnBy hpop))
-    (fun d hget hpop hrun ih =>
-      .callHalt d hget (Devm.PopBurn.of_popBurnBy hpop) ih)
-    (fun d hget hpop hrun hcont ihrun ihcont =>
-      .callRet d hget (Devm.PopBurn.of_popBurnBy hpop) ihrun ihcont)
-    (fun {_ _ p _ _} hstep _ ih => .pcAt ⟨.none, trivial, p, hstep⟩ hstep ih)
-    h
-
 /-! ## The jumpability certificate -/
 
 def jumpsOkNode (code : ByteArray) (es : List Entry) : SFunc → List AVal → Bool
@@ -253,32 +229,6 @@ theorem Cert.jumpsOkM_of_jumpsOk {code : ByteArray} {c : Cert}
   rw [jumpsOkNode_eq_jumpsOkNodeM] at h
   simpa only [List.getD_eq_getElem?_getD, List.length_nil, not_lt_zero, not_false_eq_true,
     getElem?_neg, Option.getD_none] using h
-
-theorem Cert.jumpsEntriesM_at {code : ByteArray} {es : List Entry} {ms : List MemMap}
-    {b : Bool} : ∀ (c : Cert) (k : Nat), Cert.jumpsEntriesM code es ms b k c = true →
-      ∀ j e f, c.entries[j]? = some e → c.prog[j]? = some f →
-        jumpsOkNodeM code es b f e.frame (ms.getD (k + j) []) = true
-  | [], _, _, j, e, f, he, _ => by simp only [entries, List.map_nil, List.length_nil, not_lt_zero,
-    not_false_eq_true, getElem?_neg, reduceCtorEq] at he
-  | (e0, f0) :: c, k, h, 0, e, f, he, hf => by
-      simp only [Cert.entries, Cert.prog, List.map_cons, List.getElem?_cons_zero,
-        Option.some.injEq] at he hf
-      subst he hf
-      simp only [Cert.jumpsEntriesM, Bool.and_eq_true] at h
-      simpa only [add_zero, List.getD_eq_getElem?_getD] using h.1
-  | (e0, f0) :: c, k, h, j + 1, e, f, he, hf => by
-      simp only [Cert.jumpsEntriesM, Bool.and_eq_true] at h
-      have := Cert.jumpsEntriesM_at c (k + 1) h.2 j e f (by simpa only [entries, List.getElem?_map,
-        Option.map_eq_some_iff, Prod.exists, exists_and_right, exists_eq_right, List.map_cons,
-        List.getElem?_cons_succ] using he)
-        (by simpa only [prog, List.getElem?_map, Option.map_eq_some_iff, Prod.exists,
-          exists_eq_right, List.map_cons, List.getElem?_cons_succ] using hf)
-      simpa only [List.getD_eq_getElem?_getD, Nat.add_assoc, Nat.add_comm 1 j] using this
-
-theorem Cert.jumpsOkM_of_jumpsOkM {code : ByteArray} {c : Cert} {ms : List MemMap}
-    {b : Bool} (hj : Cert.jumpsOkM code c ms b = true) : Cert.JumpsOkM code c ms b := by
-  intro k e f he hf
-  simpa only [List.getD_eq_getElem?_getD, zero_add] using Cert.jumpsEntriesM_at c 0 hj k e f he hf
 
 private lemma popBurnBy_state {xs : List B256} {cost : Nat} {devm devm' : Devm}
     (h : Devm.PopBurnBy xs cost devm devm') :
@@ -1532,27 +1482,6 @@ theorem lift_exactM_core_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {
   exact node_exactM_lane hc hj hcode hlane hrf (hlane.imp_right fun h => h 0 f hf0) 0 e.rets [] 0 [] pre.stack [] hf hentry rfl
     (by simp only [FrameMatches, List.forall₂_nil_right_iff]) (memMatches_nil _ _) (fun h => absurd h retIn_nil_nil)
 
-/-- Historical form of `lift_exactM_core`: needs only `stateGas = none`. -/
-theorem lift_exactM_core_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
-    (hc : Cert.CheckedM code c ms b) (hj : Cert.JumpsOkM code c ms b)
-    (hstart : ∃ e f c', c = (e, f) :: c' ∧ e.pc = 0 ∧ e.frame = [] ∧ ms.getD 0 [] = [])
-    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hstateGas : sevm.benvStat.rules.stateGas = none)
-    (hrun : SProg.RunExact c.prog sevm pre post) :
-    Nonempty (Exec 0 sevm pre (.ok post)) :=
-  lift_exactM_core_lane hc hj hstart hcode (Or.inl hstateGas) hrun
-
-/-- The gas-exact converse from checked, jump-safe entries whose entry `0`
-starts the frame. -/
-theorem lift_exactM_core {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
-    (hc : Cert.CheckedM code c ms b) (hj : Cert.JumpsOkM code c ms b)
-    (hstart : ∃ e f c', c = (e, f) :: c' ∧ e.pc = 0 ∧ e.frame = [] ∧ ms.getD 0 [] = [])
-    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hfork : ShanghaiOnwards sevm.benvStat.fork)
-    (hrun : SProg.RunExact c.prog sevm pre post) :
-    Nonempty (Exec 0 sevm pre (.ok post)) :=
-  lift_exactM_core_noStateGas hc hj hstart hcode hfork.rules_stateGas_none hrun
-
 /-- `lift_exact` under the lift's premise: the no-state-gas lane, or no call-family node in the
 program. -/
 theorem lift_exact_lane {code : ByteArray} {c : Cert}
@@ -1599,22 +1528,5 @@ theorem lift_exact {code : ByteArray} {c : Cert}
     (hrun : SProg.RunExact c.prog sevm pre post) :
     Nonempty (Exec 0 sevm pre (.ok post)) :=
   lift_exact_noStateGas hc hj hcode hfork.rules_stateGas_none hrun
-
-/-- **The gas-exact converse, with a constant memory map.** -/
-theorem lift_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
-    (hc : Cert.checkM code c ms b = true) (hj : Cert.jumpsOkM code c ms b = true)
-    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hfork : ShanghaiOnwards sevm.benvStat.fork)
-    (hrun : SProg.RunExact c.prog sevm pre post) :
-    Nonempty (Exec 0 sevm pre (.ok post)) := by
-  apply lift_exactM_core (Cert.checkedM_of_checkM hc) (Cert.jumpsOkM_of_jumpsOkM hj) _
-    hcode hfork hrun
-  cases c with
-  | nil => simp only [Cert.checkM, List.getD_eq_getElem?_getD, Bool.false_and,
-    Bool.false_eq_true] at hc
-  | cons p cs =>
-    rcases p with ⟨e, f⟩
-    simp only [Cert.checkM, Bool.and_eq_true, beq_iff_eq, List.isEmpty_iff] at hc
-    exact ⟨e, f, cs, rfl, hc.1.1.1, hc.1.1.2, hc.1.2⟩
 
 end Blanc.Lift

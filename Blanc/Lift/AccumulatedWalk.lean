@@ -32,10 +32,6 @@ theorem rk {k c : Nat} (h : SFunc.RunExact fs sevm (St b S M (G + c + k)) f o) :
     SFunc.RunExact fs sevm (St b S M (G + (k + c))) f o := by
   rwa [Nat.add_comm k c, ← Nat.add_assoc]
 
-/-- The end of an accumulated walk: no charge left. -/
-theorem rk0 (h : SFunc.RunExact fs sevm (St b S M G) f o) :
-    SFunc.RunExact fs sevm (St b S M (G + 0)) f o := h
-
 /-- A `JUMPI` that falls through, its flag shown zero. -/
 theorem rx_branch_zero' {d w : B256} (hw : w = 0) (k : SFunc.RunExact fs sevm (St b S M G) f o) :
     SFunc.RunExact fs sevm (St b (d :: w :: S) M (G + 10)) (.branch f g) o := by
@@ -49,12 +45,6 @@ theorem rx_branchTo_zero' {d w : B256} {j : Nat} (hw : w = 0)
 end Acc
 
 /-! ## Comparison flags from arithmetic facts -/
-
-theorem ltCheck_add_zero {x y : B256} (h : x.toNat + y.toNat < 2 ^ 256) :
-    B256.ltCheck (x + y) y = 0 := by
-  have e : (x + y).toNat = x.toNat + y.toNat := B256.toNat_add_eq_of_nof x y h
-  have : ¬ x + y < y := by rw [B256.lt_iff_toNat_lt_toNat, e]; omega
-  simp only [B256.ltCheck, this, ↓reduceIte]
 
 /-! ## The free-pointer memory, any pointer -/
 
@@ -130,16 +120,6 @@ theorem rx_calldatacopyK {di si sz : B256}
       (.next (.reg .calldatacopy) f) o :=
   rx_calldatacopy rfl rfl k
 
-/-- `RETURNDATACOPY` with its charge read off the image size. -/
-theorem rx_returndatacopyK {di ri sz : B256} (hb : ri.toNat + sz.toNat ≤ b.returnData.length)
-    (k : SFunc.RunExact fs sevm
-      (St b S (M.write di.toNat (b.returnData.sliceD ri.toNat sz.toNat 0)) G) f o) :
-    SFunc.RunExact fs sevm (St b (di :: ri :: sz :: S) M (G + (gVerylow + gReturnDataCopy *
-      ceilDiv sz.toNat 32 + (St b (di :: ri :: sz :: S) M 0).extCost [⟨di.toNat, sz.toNat⟩])))
-      (.next (.reg .returndatacopy) f) o :=
-  .next (Ninst.runCompiled_returndatacopy_of (devm := St b (di :: ri :: sz :: S) M _) (G := G) rfl rfl
-    hb rfl rfl) k
-
 /-- `MSTORE` of a word inside the image, off the pointer word. -/
 theorem rx_mstoreP {i v : B256} {i0 : Nat} (hM : FpM fp n M) (hi : i.toNat = i0)
     (hin : i0 + 32 ≤ n) (hd : i0 + 32 ≤ 64 ∨ 96 ≤ i0)
@@ -189,16 +169,6 @@ theorem rx_log3P {M0 : Mem} {v i sz t1 t2 t3 : B256} {n0 : Nat} (hstatic : sevm.
   · rw [hi, hsz, hM.extCost (by omega)]; decide
   · rw [hi, hsz]; exact hM0.readback 128 v
   · rw [hi, hsz]; exact hM.read_self (by omega)
-
-/-- `RETURN` of the word just written at `0x80`, inside a five-word image. -/
-theorem rx_returnP {M1 : Mem} {v i sz : B256} {n0 : Nat} (hM1 : M = M1.write 128 v.toBytes)
-    (hM0 : FpM fp n0 M1) (hM : FpM fp 160 M) (hi : i.toNat = 128) (hsz : sz.toNat = 32) :
-    SFunc.RunExact fs sevm (St b (i :: sz :: S) M G) (.last .return_)
-      (.halted (((St b S M G).memRead i.toNat sz.toNat).2.withOutput v.toBytes)) := by
-  subst hM1
-  refine rx_return ?_ ?_
-  · rw [hi, hsz]; exact hM.extCost (by omega)
-  · rw [hi, hsz]; exact hM0.readback 128 v
 
 end MemSteps
 
@@ -473,92 +443,10 @@ namespace Blanc.Lift.AccumulatedWalk
 
 open Jaune Blanc Blanc.Lift
 
-/-- A `DELEGATECALL` to a non-precompile code address whose entered child halts cleanly resumes in
-`callChildPost`: the delegate sibling of `Ninst.runCompiled_call_zero_child` (no value moves). -/
-lemma Ninst.runCompiled_delegatecall_child {sevm : Sevm} {devm : Devm}
-    {gw cw iiw isw oiw osw : B256} {s : List B256}
-    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
-    {ext acc mcc mcs : Nat} {cpost : Devm}
-    (hfork : CallEra sevm.benvStat.fork dp)
-    (h_stk : devm.stack = gw :: cw :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
-      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
-    (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
-        cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
-    (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
-        + dgc = acc)
-    (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
-    (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0)
-    (h_nonprecompile : sevm.benvStat.rules.isPrecomp dadr = false)
-    (h_room : s.length < 1024)
-    (h_exec : exec (initEvm (delegatecallSpawnMsg sevm
-      (callSpawnParent d1 (mcc + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat)
-      mcs dadr iiw.toNat isw.toNat code dp)) = .ok cpost)
-    (h_error : cpost.error = none) :
-    Ninst.RunCompiled sevm devm (.exec .delegatecall)
-      (callChildPost (callSpawnParent d1 (mcc + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat)
-        cpost oiw.toNat osw.toNat) := by
-  let p := callSpawnParent d1 (mcc + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat
-  let msg := delegatecallSpawnMsg sevm p mcs dadr iiw.toNat isw.toNat code dp
-  have hbt : msg.benvAfterTransfer = .ok msg.benv := by
-    unfold Msg.benvAfterTransfer
-    simp only [msg, delegatecallSpawnMsg, callMsg, Bool.false_eq_true, false_and, ↓reduceIte]
-  have henter : (Frame.ofCall msg).enter = .run (initEvm (msg.withBenv msg.benv)) := by
-    apply Frame.enter_run_of_nonprecompile hbt
-    · rfl
-    · change sevm.benvStat.rules.isPrecomp dadr = false
-      exact h_nonprecompile
-  have hexec : exec (initEvm (msg.withBenv msg.benv)) = .ok cpost := by
-    simpa only [msg, p, delegatecallSpawnMsg, callMsg, Msg.withBenv] using h_exec
-  have hsettle : (Frame.ofCall msg).settle (exec (initEvm (msg.withBenv msg.benv))) = .ok cpost := by
-    rw [hexec, Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
-    have hsweep : msg.benv.stat.rules.settle.touchedSweep = false :=
-      ShanghaiOnwards.rules_touchedSweep (s := sevm.benvStat) hfork.shanghai
-    simp only [Frame.ofCall, Frame.settleMsg, processMessage.settle, h_error,
-      Option.isSome_none, Bool.false_eq_true, ite_false, bind, Except.bind,
-      Devm.recordTouch_of_not_touchedSweep hsweep]
-  have hdi := accessDelegation_inv h_del
-  have hpstack : p.stack.length < 1024 := by
-    change d1.stack.length < 1024
-    rw [hdi.1]
-    exact h_room
-  have hres : Resume.run (.call p oiw.toNat osw.toNat)
-      ((Frame.ofCall msg).settle (exec (initEvm (msg.withBenv msg.benv)))) =
-        .ok (callChildPost p cpost oiw.toNat osw.toNat) := by
-    rw [hsettle, Resume.run_call_ok (by rw [h_error]; rfl) hpstack]
-    rfl
-  exact Ninst.runCompiled_delegatecall hfork h_stk h_ext h_del h_acc h_split h_gas h_depth
-    henter hres
-
 end Blanc.Lift.AccumulatedWalk
 
 namespace Blanc.Lift.AccumulatedWalk
 
 open Jaune Blanc Blanc.Lift
-
-theorem short_of_len {n : Nat} (h4 : 4 ≤ n) (hn : n < 2 ^ 256) :
-    B256.ltCheck (Nat.toB256 n) (Bytes.toB256 [4]) = 0 :=
-  B256.ltCheck_eq_zero_of_toNat_le (by rw [B256.toNat_toB256_of_lt hn]; exact h4)
-
-theorem args_of_len {n : Nat} (h : 68 ≤ n) (hn : n < 2 ^ 256) :
-    B256.ltCheck (Nat.toB256 n - Bytes.toB256 [4]) (Bytes.toB256 [64]) = 0 := by
-  have h4 : (Bytes.toB256 [4]).toNat = 4 := by decide
-  have le : Bytes.toB256 [4] ≤ Nat.toB256 n := by
-    apply B256.not_lt.mp
-    rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hn, h4]
-    omega
-  apply B256.ltCheck_eq_zero_of_toNat_le
-  rw [B256.toNat_sub_eq_of_le _ _ le, B256.toNat_toB256_of_lt hn, h4]
-  have h64 : (Bytes.toB256 [64]).toNat = 64 := by decide
-  rw [h64]
-  omega
-
-theorem eqCheck_ne {x y : B256} (h : x ≠ y) : B256.eqCheck x y = 0 := by
-  simp only [B256.eqCheck, h, ↓reduceIte]
-
-theorem adr_toB256_ne_zero {a : Adr} (h : a ≠ 0) : a.toB256 ≠ 0 := fun e =>
-  h (Adr.toB256_inj (e.trans (by decide)))
 
 end Blanc.Lift.AccumulatedWalk

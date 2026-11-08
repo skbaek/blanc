@@ -13,11 +13,6 @@ Nothing here mentions a contract.
 namespace Blanc.Lift
 open Jaune
 
-theorem Bytes.sliceD_writeAt_word_after (img : Bytes) (n start len : Nat) (w : B256)
-    (h : n + 32 ≤ start) :
-    (Bytes.writeAt img n w.toBytes).sliceD start len 0 = img.sliceD start len 0 :=
-  Bytes.sliceD_writeAt_after img w.toBytes start len n (by rw [B256.length_toBytes]; exact h)
-
 /-- A word written at the end of a window appends to it. -/
 theorem Bytes.sliceD_writeAt_word_last (img : Bytes) (start len n m : Nat) (w : B256)
     (h : start + len = n) (hm : len + 32 = m) :

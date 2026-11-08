@@ -44,17 +44,6 @@ def ObservedKeccakPair (P : Sevm → Devm → Ninst → Devm → Prop)
     ObservedKeccak P (fun before after => observe before after ∧
       ObservedReach P observe fs sevm middle before) sevm outerInput (fun _ => True)
 
-/-- Forget only the relation between the pair, keeping both successful observations. -/
-theorem ObservedKeccakPair.forget {P : Sevm → Devm → Ninst → Devm → Prop}
-    {observe : Conf → Conf → Prop} {fs : List SFunc} {sevm : Sevm} {i o : Bytes}
-    (pair : ObservedKeccakPair P observe fs sevm i o) :
-    ObservedKeccak P observe sevm i (fun _ => True) ∧
-      ObservedKeccak P observe sevm o (fun _ => True) := by
-  obtain ⟨middle, ⟨a, b, run, obs, tree, stack, read, shape⟩,
-    ⟨c, d, run', obs', tree', stack', read', shape'⟩⟩ := pair
-  exact ⟨⟨a, b, run, obs.1, tree, stack, read, shape⟩,
-    ⟨c, d, run', obs'.1, tree', stack', read', shape'⟩⟩
-
 /-- Raw driver edges strictly decrease gas; this orders their actual derivation positions. -/
 theorem Cursor.RawEdgeAt.gasMeasure_lt {code : ByteArray} {cert : Cert}
     {root stop : Exec.Deriv} {before after : Conf}

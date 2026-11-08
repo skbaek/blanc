@@ -216,16 +216,6 @@ theorem xlift {P P' : Mem → Prop} (h : ∀ M', P M' → P' M') (k : ∃ M', P 
   let ⟨M', hp, hq⟩ := k
   ⟨M', h M' hp, hq⟩
 
-theorem rxc_mul {x y v : B256} {r : Seg} (hv : x * y = v) (hroom : S.length < 1024)
-    (k : SFunc.RunExactCut fs sevm C (St b (v :: S) M G) f r) :
-    SFunc.RunExactCut fs sevm C (St b (x :: y :: S) M (G + 5)) (.next (.reg .mul) f) r :=
-  rxc_binary (fn := (· * ·)) (c := gLow) (by rintro ⟨⟩) (fun _ => rfl) hv hroom k
-
-theorem rxc_gt {x y v : B256} {r : Seg} (hv : B256.gtCheck x y = v) (hroom : S.length < 1024)
-    (k : SFunc.RunExactCut fs sevm C (St b (v :: S) M G) f r) :
-    SFunc.RunExactCut fs sevm C (St b (x :: y :: S) M (G + 3)) (.next (.reg .gt) f) r :=
-  rxc_binary (fn := B256.gtCheck) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) hv hroom k
-
 theorem rxc_timestamp {r : Seg} (hroom : S.length < 1024)
     (k : SFunc.RunExactCut fs sevm C (St b (sevm.benvStat.time :: S) M G) f r) :
     SFunc.RunExactCut fs sevm C (St b S M (G + 2)) (.next (.reg .timestamp) f) r :=
@@ -317,10 +307,6 @@ inductive SloadsOnly (sevm : Sevm) (b : Devm) : Devm → Prop
   | refl : SloadsOnly sevm b b
   | sload {B : Devm} (h : SloadsOnly sevm b B) (k : B256) : SloadsOnly sevm b (afterSload sevm B k)
 
-theorem afterSload_getStorVal (sevm : Sevm) (b : Devm) (k : B256) (a : Adr) (x : B256) :
-    (afterSload sevm b k).getStorVal a x = b.getStorVal a x := by
-  rw [getStorVal_eq_getStor, getStorVal_eq_getStor, afterSload_getStor]
-
 namespace SloadsOnly
 
 variable {sevm : Sevm} {b B : Devm}
@@ -365,26 +351,6 @@ theorem eqCheck_zero_eq_zero {a : B256} (h : B256.eqCheck a 0 = 0) : a ≠ 0 := 
   · exact absurd h (by decide)
   · assumption
 
-theorem ltCheck_eq_zero {x y : B256} (h : B256.ltCheck x y = 0) : ¬ x.toNat < y.toNat := by
-  unfold B256.ltCheck at h; split at h
-  · exact absurd h (by decide)
-  · rename_i hn; rwa [B256.lt_iff_toNat_lt_toNat] at hn
-
-theorem ltCheck_ne_zero {x y : B256} (h : B256.ltCheck x y ≠ 0) : x.toNat < y.toNat := by
-  unfold B256.ltCheck at h; split at h
-  · rename_i hl; rwa [B256.lt_iff_toNat_lt_toNat] at hl
-  · exact absurd rfl h
-
-/-- `ISZERO (LT x y)` taken: `y ≤ x`. -/
-theorem ltCheck_iszero_ne {x y : B256} (h : B256.eqCheck (B256.ltCheck x y) 0 ≠ 0) :
-    ¬ x.toNat < y.toNat :=
-  ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero h)
-
-/-- `ISZERO (LT x y)` not taken: `x < y`. -/
-theorem ltCheck_iszero_eq {x y : B256} (h : B256.eqCheck (B256.ltCheck x y) 0 = 0) :
-    x.toNat < y.toNat :=
-  ltCheck_ne_zero (eqCheck_zero_eq_zero h)
-
 theorem gtCheck_iszero_ne {x y : B256} (h : B256.eqCheck (B256.gtCheck x y) 0 ≠ 0) :
     ¬ y.toNat < x.toNat := by
   have h' := B256.eq_of_eqCheck_ne_zero h
@@ -399,144 +365,7 @@ theorem gtCheck_iszero_eq {x y : B256} (h : B256.eqCheck (B256.gtCheck x y) 0 = 
   · rename_i hl; rwa [gt_iff_lt, B256.lt_iff_toNat_lt_toNat] at hl
   · exact absurd rfl h'
 
-theorem ltCheck_iszero_of_lt {x y : B256} (h : x.toNat < y.toNat) :
-    B256.eqCheck (B256.ltCheck x y) 0 = 0 := by
-  unfold B256.ltCheck
-  rw [ite_eq_left (B256.lt_iff_toNat_lt_toNat.mpr h)]; decide
-
-theorem ltCheck_iszero_of_not_lt {x y : B256} (h : ¬ x.toNat < y.toNat) :
-    B256.eqCheck (B256.ltCheck x y) 0 ≠ 0 := by
-  unfold B256.ltCheck
-  rw [ite_eq_right (fun h' => h (B256.lt_iff_toNat_lt_toNat.mp h'))]; decide
-
-theorem gtCheck_iszero_of_lt {x y : B256} (h : y.toNat < x.toNat) :
-    B256.eqCheck (B256.gtCheck x y) 0 = 0 := by
-  unfold B256.gtCheck
-  rw [ite_eq_left (show x > y from B256.lt_iff_toNat_lt_toNat.mpr h)]; decide
-
-theorem gtCheck_iszero_of_not_lt {x y : B256} (h : ¬ y.toNat < x.toNat) :
-    B256.eqCheck (B256.gtCheck x y) 0 ≠ 0 := by
-  unfold B256.gtCheck
-  rw [ite_eq_right (fun h' : x > y => h (B256.lt_iff_toNat_lt_toNat.mp h'))]; decide
-
-/-- Vyper's checked subtraction `ISZERO (LT x y)`, read back. -/
-theorem vyChkSub {x y : B256} (h : B256.eqCheck (B256.ltCheck x y) 0 ≠ 0) :
-    chkSub x.toNat y.toNat = some (x - y).toNat := by
-  have hle := ltCheck_iszero_ne h
-  rw [B256.toNat_sub_eq_of_le _ _ (B256.le_of_toNat_le_toNat (by omega))]
-  unfold chkSub
-  rw [ite_eq_left (by omega)]
-
-/-- Vyper's checked addition `ISZERO (LT (x + y) x)`, read back. -/
-theorem vyChkAdd {x y : B256} (h : B256.eqCheck (B256.ltCheck (x + y) x) 0 ≠ 0) :
-    chkAdd x.toNat y.toNat = some (x + y).toNat := by
-  have hle := ltCheck_iszero_ne h
-  have hx := B256.toNat_lt x
-  have hy := B256.toNat_lt y
-  rw [B256.toNat_add] at hle ⊢
-  unfold Nat.lo at hle ⊢
-  have hlt : x.toNat + y.toNat < 2 ^ 256 := by
-    by_contra hc
-    have e : (x.toNat + y.toNat) % 2 ^ 256 = x.toNat + y.toNat - 2 ^ 256 := by
-      rw [Nat.mod_eq_sub_mod (by omega), Nat.mod_eq_of_lt (by omega)]
-    omega
-  unfold chkAdd wordSize
-  rw [ite_eq_left hlt, Nat.mod_eq_of_lt hlt]
-
-/-- Vyper's checked multiplication `ISZERO x OR (x * y) / x == y`, read back. -/
-theorem vyChkMul {x y : B256} (h : (B256.eqCheck ((x * y) / x) y ||| B256.eqCheck x 0) ≠ 0) :
-    chkMul x.toNat y.toNat = some (x * y).toNat := by
-  have hN : (0 : Nat) < 2 ^ 256 := Nat.two_pow_pos 256
-  rw [B256.toNat_mul]
-  unfold Nat.lo chkMul wordSize
-  by_cases hx : x = 0
-  · subst hx
-    rw [show (0 : B256).toNat = 0 from rfl, Nat.zero_mul, Nat.zero_mod, ite_eq_left hN]
-  · have hx0 : B256.eqCheck x 0 = 0 := by unfold B256.eqCheck; rw [ite_eq_right hx]
-    rw [hx0] at h
-    have hq : (x * y) / x = y := by
-      unfold B256.eqCheck at h; split at h
-      · assumption
-      · exact absurd h (by decide)
-    have hxn := B256.toNat_pos hx
-    have hq' := congrArg B256.toNat hq
-    rw [B256.toNat_div hx, B256.toNat_mul] at hq'
-    unfold Nat.lo at hq'
-    have hlt : x.toNat * y.toNat < 2 ^ 256 := by
-      by_contra hc
-      have h1 : x.toNat * y.toNat % 2 ^ 256 < x.toNat * y.toNat :=
-        lt_of_lt_of_le (Nat.mod_lt _ hN) (Nat.le_of_not_lt hc)
-      have h2 : x.toNat * y.toNat % 2 ^ 256 / x.toNat < y.toNat :=
-        (Nat.div_lt_iff_lt_mul hxn).mpr (by rw [Nat.mul_comm y.toNat]; exact h1)
-      exact absurd hq' (Nat.ne_of_lt h2)
-    rw [ite_eq_left hlt, Nat.mod_eq_of_lt hlt]
-
-/-- Vyper's checked division (a nonzero divisor), read back. -/
-theorem vyChkDiv {x y : B256} (h : y ≠ 0) : chkDiv x.toNat y.toNat = some (x / y).toNat := by
-  unfold chkDiv
-  rw [ite_eq_right (fun h0 => h (B256.toNat_inj _ _ (by rw [h0]; rfl))), B256.toNat_div h]
-
 /-! ### The guards, forward: a checked operation that succeeds passes its guard -/
-
-theorem eqCheck_self (a : B256) : B256.eqCheck a a = 1 := by
-  unfold B256.eqCheck; rw [ite_eq_left rfl]
-
-theorem one_ne_zero_b256 : (1 : B256) ≠ 0 := by decide
-
-theorem fwdChkSub {x y : B256} {z : Nat} (h : chkSub x.toNat y.toNat = some z) :
-    B256.eqCheck (B256.ltCheck x y) 0 ≠ 0 ∧ (x - y).toNat = z := by
-  have hle : y.toNat ≤ x.toNat := by
-    unfold chkSub at h; split at h
-    · assumption
-    · cases h
-  have hg : B256.eqCheck (B256.ltCheck x y) 0 ≠ 0 := by
-    have : B256.ltCheck x y = 0 := by
-      unfold B256.ltCheck
-      rw [ite_eq_right (by rw [B256.lt_iff_toNat_lt_toNat]; omega)]
-    rw [this, eqCheck_self]; exact one_ne_zero_b256
-  exact ⟨hg, Option.some.inj ((vyChkSub hg).symm.trans h)⟩
-
-theorem fwdChkAdd {x y : B256} {z : Nat} (h : chkAdd x.toNat y.toNat = some z) :
-    B256.eqCheck (B256.ltCheck (x + y) x) 0 ≠ 0 ∧ (x + y).toNat = z := by
-  have hlt : x.toNat + y.toNat < 2 ^ 256 := by
-    unfold chkAdd wordSize at h; split at h
-    · assumption
-    · cases h
-  have hg : B256.eqCheck (B256.ltCheck (x + y) x) 0 ≠ 0 := by
-    have : B256.ltCheck (x + y) x = 0 := by
-      unfold B256.ltCheck
-      rw [ite_eq_right (by rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_add_eq_of_nof _ _ hlt]; omega)]
-    rw [this, eqCheck_self]; exact one_ne_zero_b256
-  exact ⟨hg, Option.some.inj ((vyChkAdd hg).symm.trans h)⟩
-
-theorem fwdChkMul {x y : B256} {z : Nat} (h : chkMul x.toNat y.toNat = some z) :
-    (B256.eqCheck ((x * y) / x) y ||| B256.eqCheck x 0) ≠ 0 ∧ (x * y).toNat = z := by
-  have hlt : x.toNat * y.toNat < 2 ^ 256 := by
-    unfold chkMul wordSize at h; split at h
-    · assumption
-    · cases h
-  have hg : (B256.eqCheck ((x * y) / x) y ||| B256.eqCheck x 0) ≠ 0 := by
-    by_cases hx : x = 0
-    · subst hx
-      rw [eqCheck_self]
-      unfold B256.eqCheck; split <;> decide
-    · have hq : (x * y) / x = y := by
-        apply B256.toNat_inj
-        rw [B256.toNat_div hx, B256.toNat_mul_eq_of_nofm hlt,
-          Nat.mul_div_cancel_left _ (B256.toNat_pos hx)]
-      rw [hq, eqCheck_self]
-      unfold B256.eqCheck; split <;> decide
-  exact ⟨hg, Option.some.inj ((vyChkMul hg).symm.trans h)⟩
-
-theorem fwdChkDiv {x y : B256} {z : Nat} (h : chkDiv x.toNat y.toNat = some z) :
-    y ≠ 0 ∧ (x / y).toNat = z := by
-  have hy : y ≠ 0 := by
-    rintro rfl
-    unfold chkDiv at h
-    split at h
-    · cases h
-    · rename_i h0; exact h0 rfl
-  exact ⟨hy, Option.some.inj ((vyChkDiv hy).symm.trans h)⟩
 
 /-! ## The inversion step tactic -/
 

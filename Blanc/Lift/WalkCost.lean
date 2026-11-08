@@ -68,29 +68,10 @@ elab "xcost " "[" ls:term,* "]" : tactic => withMainContext do
   (← getMainGoal).assign (mkApp5 (mkConst ``Nat.le_trans) lhs (mkNatLit n) K pf close)
   replaceMainGoal []
 
-/-- Two scratch words written value first read back in hash order. -/
-theorem scratch_read_rev {M0 : Mem} (wf : Mem.Wf M0) (a c : B256) :
-    (((M0.write 32 c.toBytes).write 0 a.toBytes).read 0 64).1 = a.toBytes ++ c.toBytes := by
-  have w1 : Mem.Wf (M0.write 32 c.toBytes) := wf.write _ _
-  rw [Mem.read_split64 _ (s := 0) (t := 32) rfl, Mem.read_write_word_of_wf w1 0 a,
-    Mem.read_write_word_disjoint w1 0 a (Or.inl (le_refl _)), Mem.read_write_word_of_wf wf 32 c]
-
 section Steps
 
 variable {fs : List SFunc} {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
   {f : SFunc} {o : Outcome} {n : Nat} {fp : B256}
-
-/-- `KECCAK256` of two scratch words written value first. -/
-theorem rx_keccakRev {M0 : Mem} {a c i sz : B256} (wf : Mem.Wf M0)
-    (hM0 : M = (M0.write 32 c.toBytes).write 0 a.toBytes) (hM : FpM fp n M) (hi : i.toNat = 0)
-    (hsz : sz.toNat = 64) (hroom : S.length < 1024)
-    (k : SFunc.RunExact fs sevm (St b (mapSlot a c :: S) M G) f o) :
-    SFunc.RunExact fs sevm (St b (i :: sz :: S) M (G + 42)) (.next (.reg .keccak256) f) o := by
-  subst hM0
-  refine rx_keccak (c := 42) ?_ ?_ ?_ hroom k
-  · rw [hi, hsz, hM.extCost (by have := hM.ge; omega)]; decide
-  · rw [hi, hsz, scratch_read_rev wf]; rfl
-  · rw [hi, hsz]; exact hM.read_self (by have := hM.ge; omega)
 
 end Steps
 

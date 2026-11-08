@@ -35,10 +35,6 @@ structure IdReady (sevm : Sevm) (b : Devm) : Prop where
   pre : decide (sevm.benvStat.rules.isPrecomp 4) = true
   fork : ShanghaiOnwards sevm.benvStat.fork
 
-theorem IdReady.of_rel {sevm : Sevm} {b b' : Devm} (h : IdReady sevm b) (hr : BaseRel b b') :
-    IdReady sevm b' :=
-  ⟨by rw [hr.code]; exact h.nodeleg, by rw [hr.addrs]; exact h.warm, h.pre, h.fork⟩
-
 /-- The identity precompile premises of a frame, under the frame's actual rules. -/
 structure IdReadyH (sevm : Sevm) (b : Devm) : Prop where
   nodeleg : getDelegatedCodeAddress (b.getCode 4) = none
@@ -48,10 +44,6 @@ structure IdReadyH (sevm : Sevm) (b : Devm) : Prop where
 
 theorem IdReady.toH {sevm : Sevm} {b : Devm} (h : IdReady sevm b) : IdReadyH sevm b :=
   ⟨h.nodeleg, h.warm, h.pre, h.fork.rules_stateGas_none⟩
-
-theorem IdReadyH.of_rel {sevm : Sevm} {b b' : Devm} (h : IdReadyH sevm b) (hr : BaseRel b b') :
-    IdReadyH sevm b' :=
-  ⟨by rw [hr.code]; exact h.nodeleg, by rw [hr.addrs]; exact h.warm, h.pre, h.stateGas⟩
 
 /-- The identity precompile's charge on `n` input bytes. -/
 def idCost (n : Nat) : Nat := 15 + 3 * ceilDiv n 32
@@ -290,17 +282,6 @@ theorem identityCallNext_returnData (sevm : Sevm) (b : Devm) (S : List B256) (M 
 theorem identityCallNext_gasLeft (sevm : Sevm) (b : Devm) (S : List B256) (M : Mem)
     (ii is oi os : B256) : (identityCallNext sevm b S M ii is oi os).gasLeft = 0 := rfl
 
-/-- Dynamic congruence: changing the base modulo gas, with `S` and `M` literal, keeps the
-canonical identity successor modulo gas. -/
-theorem identityCallNext_congr (sevm : Sevm) {b b' : Devm}
-    (S : List B256) (M : Mem) (ii is oi os : B256) (h : Devm.EqModGas b b') :
-    Devm.EqModGas (identityCallNext sevm b S M ii is oi os)
-      (identityCallNext sevm b' S M ii is oi os) := by
-  apply Devm.EqModGas.of_normalized_eq
-  change (identityCallNext sevm (b.withGasLeft 0) S M ii is oi os).withGasLeft 0 =
-    (identityCallNext sevm (b'.withGasLeft 0) S M ii is oi os).withGasLeft 0
-  rw [h.withGasLeft_eq 0]
-
 /-- The canonical identity successor ignores the frame's static initial gas. -/
 theorem identityCallNext_withStaticGas (sevm : Sevm) (F : Nat) (b : Devm)
     (S : List B256) (M : Mem) (ii is oi os : B256) :
@@ -443,23 +424,6 @@ theorem call_identity_step_canonical {g ii is oi os : B256} {ext : Nat} (hid : I
     rw [← e]
     exact hrun.toRunCompiled
 
-/-- **A value-0 `CALL` of the identity precompile, forward**, from the `GAS; CALL` stack (the gas
-operand is the whole remaining gas `G`): the step succeeds, pushes `1`, writes the input window
-(truncated to `os`) over the extended output window, makes the input the return data, and costs
-`100 + ext + idCost is` (warm access, the expansion charge `ext` of the two windows, the
-precompile's charge).  `hfund` keeps the 63/64-forwarded gas above the precompile's charge. -/
-theorem call_identity_step {g ii is oi os : B256} {ext : Nat} (hid : IdReady sevm b)
-    (hdepth : sevm.depth ≠ 0) (hg : g = Nat.toB256 G)
-    (hext : (St b S M G).extCost [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] = ext)
-    (hfund : 100 + ext + 64 * idCost is.toNat ≤ G) (hbound : G < 2 ^ 256)
-    (hroom : S.length < 1024) :
-    ∃ b', ShaCallPost b b' (M.read ii.toNat is.toNat).1 ∧
-      Ninst.RunCompiled sevm (St b (g :: 4 :: 0 :: ii :: is :: oi :: os :: S) M G) (.exec .call)
-        (St b' (1 :: S) ((M.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat
-          ((M.read ii.toNat is.toNat).1.take os.toNat)) (G - (100 + ext + idCost is.toNat))) := by
-  obtain ⟨b', hpost, -, hrun⟩ := call_identity_step_canonical hid hdepth hg hext hfund hbound hroom
-  exact ⟨b', hpost, hrun⟩
-
 /-- `call_identity_step_canonical` as a walk step of an exact cut run: the continuation also
 receives the canonical successor. -/
 theorem rxc_call_identity_canonical {fs : List SFunc} {C : List Nat} {f : SFunc} {r : Seg}
@@ -478,21 +442,5 @@ theorem rxc_call_identity_canonical {fs : List SFunc} {C : List Nat} {f : SFunc}
   obtain ⟨b', hpost, hcan, hrun⟩ :=
     call_identity_step_canonical hid hdepth hg hext hfund hbound hroom
   exact .next hrun (k b' hpost hcan)
-
-/-- `call_identity_step` as a walk step of an exact cut run. -/
-theorem rxc_call_identity {fs : List SFunc} {C : List Nat} {f : SFunc} {r : Seg}
-    {g ii is oi os : B256} {ext : Nat} (hid : IdReady sevm b)
-    (hdepth : sevm.depth ≠ 0) (hg : g = Nat.toB256 G)
-    (hext : (St b S M G).extCost [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] = ext)
-    (hfund : 100 + ext + 64 * idCost is.toNat ≤ G) (hbound : G < 2 ^ 256)
-    (hroom : S.length < 1024)
-    (k : ∀ b', ShaCallPost b b' (M.read ii.toNat is.toNat).1 →
-      SFunc.RunExactCut fs sevm C
-        (St b' (1 :: S) ((M.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat
-          ((M.read ii.toNat is.toNat).1.take os.toNat)) (G - (100 + ext + idCost is.toNat))) f r) :
-    SFunc.RunExactCut fs sevm C (St b (g :: 4 :: 0 :: ii :: is :: oi :: os :: S) M G)
-      (.next (.exec .call) f) r := by
-  obtain ⟨b', hpost, hrun⟩ := call_identity_step hid hdepth hg hext hfund hbound hroom
-  exact .next hrun (k b' hpost)
 
 end Blanc.Lift

@@ -55,64 +55,6 @@ theorem StagedBodyTrace.rawFrames_closed {benv : Benv} {txs : List (Bytes ⊕ Tx
     trace.beacon.rawFrames_closed trace.history.rawFrames_closed)
     trace.transactions.rawFrames_closed) trace.requests.rawFrames_closed
 
-/-- **The raw frames of a selected-domain history are closed under descent.** -/
-theorem ConfiguredHistoryTraceIn.rawFrames_closed {F : Fork → Prop} {cfg : ChainConfig}
-    {checkpoint future : BlockChain}
-    (history : ConfiguredHistoryTraceIn F cfg checkpoint future) :
-    RawFramesClosed history.rawFrames := by
-  induction history with
-  | refl => exact RawFramesClosed.nil
-  | step prior block ih =>
-      exact RawFramesClosed.append ih block.bodyTrace.rawFrames_closed
-
-/-- A committed frame of a raw frame's derivation is a raw frame of the
-history. -/
-theorem ConfiguredHistoryTraceIn.committedFrame_mem_rawFrames {F : Fork → Prop}
-    {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
-    {R : Exec.Deriv} (member : R ∈ history.rawFrames)
-    {frame : Exec.Frame} (committed : frame ∈ Exec.committedFrames R.exc) :
-    Blanc.Exec.Frame.rootDeriv frame ∈ history.rawFrames :=
-  history.rawFrames_closed R member _
-    (Exec.mem_rawFrameRoots_of_mem_committedFrames R.exc frame committed)
-
-/-- **Attribution of a changed cell to a retained SSTORE at the owner.** A
-committing raw frame `R` of a selected-domain history whose own derivation
-changes cell `key` of an owner with nonempty code at `R`'s entry has a last
-retained successful `SSTORE` of that cell recording the final word. The
-write lies on the same-frame prefix of a committed frame of `R`'s
-derivation; that frame is a raw frame of the history executing at the
-owner. -/
-theorem ConfiguredHistoryTraceIn.exists_retainedSstore_frame {F : Fork → Prop}
-    {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
-    (capabilities : BodyStageCapabilities F)
-    {R : Exec.Deriv} (member : R ∈ history.rawFrames)
-    (committed : Execution.commits R.exn = true) {owner : Adr} {key : B256}
-    (hcode : (R.devm.getCode owner).toList ≠ [])
-    (changed : (Devm.getStor R.devm owner).get key ≠
-      (Devm.getStor (Execution.committedPost R.exn committed) owner).get key) :
-    ∃ (write : Exec.SuccessfulSstoreOccurrence R) (frame : Exec.Frame),
-      write.Retained ∧ write.storageOwner = owner ∧ write.key = key ∧
-      write.value = (Devm.getStor (Execution.committedPost R.exn committed) owner).get key ∧
-      write.IsLastRetained ∧
-      frame ∈ Exec.committedFrames R.exc ∧
-      Blanc.Exec.Frame.rootDeriv frame ∈ history.rawFrames ∧
-      Exec.Deriv.ParentPrefix (Blanc.Exec.Frame.rootDeriv frame) write.occurrence.node ∧
-      frame.sevm.currentTarget = owner := by
-  obtain ⟨-, -, hsg, -, -⟩ := history.rawFrame_entryFacts capabilities R member
-  rcases R with ⟨pc, sevm, pre, out, run⟩
-  dsimp only at hsg committed hcode changed member ⊢
-  obtain ⟨write, retained, ownerEq, keyEq, valueEq, last⟩ :=
-    Exec.exists_lastRetainedSstore_of_getStor_ne_noStateGas run committed hsg hcode changed
-  obtain ⟨frame, frameMem, chain⟩ :=
-    (Exec.mem_retainedNodes_iff_committedFrame_parentPrefix run write.occurrence.node).mp
-      retained
-  refine ⟨write, frame, retained, ownerEq, keyEq, valueEq, last, frameMem,
-    history.committedFrame_mem_rawFrames member frameMem, chain, ?_⟩
-  have target := congrArg Sevm.currentTarget (Exec.Deriv.ParentPrefix.sevm_eq chain)
-  exact target.symm.trans ownerEq
-
 end ExecutionTrace
 
 end Blanc

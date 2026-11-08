@@ -470,33 +470,4 @@ theorem fpRun_sound {P : Sevm → Devm → Ninst → Devm → Prop}
     SProg.RunP (FpStep P) c.prog sevm pre post :=
   fpRun_sound_noStateGas hP hf hfork.rules_stateGas_none hmem run
 
-/-- **The walk-facing lifting theorem**: a successful frame of certified bytes, entered fresh
-with bounded potential, is a run of the certified program whose steps sit in the derivation,
-record the potential, and read only good free pointers. -/
-theorem lift_sound_fp_noStateGas {code : ByteArray} {c : Cert} {ann : List Ann}
-    (hc : Cert.check code c = true) (hf : fpCert c ann = true)
-    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (hmem : pre.memory = Mem.empty) (hpot : pre.gasMeasure < 2 ^ 256)
-    (exc : Exec 0 sevm pre (.ok post)) :
-    SProg.RunP (FpStep (PotStep (StepIn ⟨0, sevm, pre, .ok post, exc⟩))) c.prog sevm pre post := by
-  obtain ⟨f, hf0, r⟩ := lift_sound_in_noStateGas hc hcode hsg exc
-  have pot : Pot pre := by
-    unfold Pot
-    rw [hmem]
-    exact hpot
-  obtain ⟨r', -⟩ := SFunc.RunP.withPot (fun h => StepIn.toRun h) hsg r pot
-  exact fpRun_sound_noStateGas (fun h => ⟨StepIn.toRun h.1, h.2.1, h.2.2⟩) hf hsg hmem ⟨f, hf0, r'⟩
-
-/-- Covered-fork projection, retaining both original readiness premises. -/
-theorem lift_sound_fp {code : ByteArray} {c : Cert} {ann : List Ann}
-    (hc : Cert.check code c = true) (hf : fpCert c ann = true)
-    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork) (hsg : sevm.benvStat.rules.stateGas = none)
-    (hmem : pre.memory = Mem.empty) (hpot : pre.gasMeasure < 2 ^ 256)
-    (exc : Exec 0 sevm pre (.ok post)) :
-    SProg.RunP (FpStep (PotStep (StepIn ⟨0, sevm, pre, .ok post, exc⟩))) c.prog sevm pre post := by
-  have _ := hfork
-  exact lift_sound_fp_noStateGas hc hf hcode hsg hmem hpot exc
-
 end Blanc.Lift.FreePtr

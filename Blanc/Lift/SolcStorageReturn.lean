@@ -160,15 +160,6 @@ section Rebuild
 variable {Q : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {f g : SFunc}
   {o : Outcome}
 
-theorem qdest (run : SFunc.RunP P fs sevm (St b S M G) (.dest f) o)
-    (k : ∀ G', SFunc.RunP P fs sevm (St b S M G') f o → SFunc.RunP Q fs sevm (St b S M G') f o) :
-    SFunc.RunP Q fs sevm (St b S M G) (.dest f) o := by
-  cases run with
-  | dest burn run =>
-    have e := St.of_burn burn
-    rw [e] at run burn
-    exact .dest burn (k _ run)
-
 theorem qbranch {dd w : B256}
     (run : SFunc.RunP P fs sevm (St b (dd :: w :: S) M G) (.branch f g) o)
     (k0 : ∀ G', w = 0 → SFunc.RunP P fs sevm (St b S M G') f o →
@@ -186,24 +177,6 @@ theorem qbranch {dd w : B256}
     rw [e] at run pop
     subst hw
     exact .succ d0 w hne pop (k1 _ hne run)
-
-theorem qbranchTo {dd w : B256} {kk : Nat}
-    (run : SFunc.RunP P fs sevm (St b (dd :: w :: S) M G) (.branchTo f kk) o)
-    (k0 : ∀ G', w = 0 → SFunc.RunP P fs sevm (St b S M G') f o →
-      SFunc.RunP Q fs sevm (St b S M G') f o)
-    (k1 : ∀ G' g, w ≠ 0 → fs[kk]? = some g → SFunc.RunP P fs sevm (St b S M G') g o →
-      SFunc.RunP Q fs sevm (St b S M G') g o) :
-    SFunc.RunP Q fs sevm (St b (dd :: w :: S) M G) (.branchTo f kk) o := by
-  cases run with
-  | toZero d0 pop run =>
-    obtain ⟨-, hw, e⟩ := St.of_pop2 pop
-    rw [e] at run pop
-    exact .toZero d0 pop (k0 _ hw run)
-  | toSucc d0 w0 hne get pop run =>
-    obtain ⟨-, hw, e⟩ := St.of_pop2 pop
-    rw [e] at run pop
-    subst hw
-    exact .toSucc d0 w hne get pop (k1 _ _ hne get run)
 
 end Rebuild
 set_option hygiene false in
@@ -439,84 +412,6 @@ theorem ownerInit_effects
     exact (sstore_preserves_getStor_ne regular different.symm).trans (congrFun storage a)
   obtain ⟨b', G', e⟩ := SolcStorageReturn.ri_sstore_any store
   rw [e] at run effect foreign
-  obtain ⟨_, returned⟩ := ric_ret run
-  simp only [Seg.done.injEq, Outcome.returned.injEq] at returned
-  subst post
-  exact ⟨rfl, rfl, effect.trans (congrArg (fun s => s.set 0
-    (addressSlotWriteWord (b.getStorVal sevm.currentTarget 0) owner.toAdr.toB256))
-      (congrFun storage sevm.currentTarget)), foreign⟩
-
-/-- The legacy packed-address initializer uses EXP and a literal mask. Its
-source shape is shared by constructor and runtime owner setters. -/
-def legacyOwnerInit : SFunc := (.dest (.next (.reg (.dup 0)) (.next (.push [0x00] (by decide)) (.next (.reg (.dup 0)) (.next (.push [0x01, 0x00] (by decide)) (.next (.reg .exp) (.next (.reg (.dup 1)) (.next (.reg .sload) (.next (.reg (.dup 1)) (.next (.push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide)) (.next (.reg .mul) (.next (.reg .not) (.next (.reg .and) (.next (.reg (.swap 0)) (.next (.reg (.dup 3)) (.next (.push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide)) (.next (.reg .and) (.next (.reg .mul) (.next (.reg .or) (.next (.reg (.swap 0)) (.next (.reg .sstore) (.next (.reg .pop) (.next (.reg .pop) .ret)))))))))))))))))))))))
-
-/-- Exact returning effects of the legacy packed owner setter. Arbitrary upper
-bits of the owner operand are masked by the actual run. -/
-theorem legacyOwnerInit_effects
-    {fs : List SFunc} {sevm : Sevm} {b post : Devm} {owner returnPC : B256}
-    {S : List B256} {M : Mem} {G : Nat}
-    (run : SFunc.Run fs sevm (St b (owner :: returnPC :: S) M G)
-      legacyOwnerInit (.returned post)) :
-    post.stack = S ∧ post.memory = M ∧
-      post.getStor sevm.currentTarget = (b.getStor sevm.currentTarget).set 0
-        (addressSlotWriteWord (b.getStorVal sevm.currentTarget 0) owner.toAdr.toB256) ∧
-      (∀ a, a ≠ sevm.currentTarget → post.getStor a = b.getStor a) := by
-  have run := run.cut
-  unfold legacyOwnerInit at run
-  winv 5
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, eq⟩ := ri_exp step
-  change _ = St b (1 :: 0 :: owner :: owner :: returnPC :: S) M _ at eq
-  subst eq
-  winv 1
-  obtain ⟨loaded, load, run⟩ := ric_next run
-  have storage : loaded.getStor = b.getStor := (Ninst.Hinv.inv (f := Devm.getStor) load).symm
-  have memory : loaded.memory = M := sload_memory load
-  obtain ⟨key, tail, popped, pushed⟩ := of_run_sload load
-  simp only [Stack.Pop, Stack.Push, Split, St.stack, List.cons_append, List.nil_append,
-    List.cons.injEq] at popped pushed
-  obtain ⟨rfl, rfl⟩ := popped
-  rw [St.self pushed memory] at run
-  winv 2
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, eq⟩ := ri_mul step
-  change _ = St loaded ((~~~ addressMask) :: b.getStorVal sevm.currentTarget 0 ::
-    1 :: 0 :: owner :: owner :: returnPC :: S) M _ at eq
-  subst eq
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, eq⟩ := ri_not step
-  change _ = St loaded (addressMask :: b.getStorVal sevm.currentTarget 0 ::
-    1 :: 0 :: owner :: owner :: returnPC :: S) M _ at eq
-  subst eq
-  winv 4
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, eq⟩ := ri_and step
-  change _ = St loaded (((~~~ addressMask) &&& owner) :: 1 ::
-    (addressMask &&& b.getStorVal sevm.currentTarget 0) ::
-    0 :: owner :: owner :: returnPC :: S) M _ at eq
-  rw [show (~~~ addressMask) &&& owner = owner.toAdr.toB256 from
-    addressSlotReadWord_eq_toAdr_toB256 owner] at eq
-  subst eq
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, eq⟩ := ri_mul step
-  simp only [B256.mul_one] at eq
-  subst eq
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, eq⟩ := ri_or step
-  rw [B256.or_comm] at eq
-  change _ = St loaded (addressSlotWriteWord (b.getStorVal sevm.currentTarget 0)
-    owner.toAdr.toB256 :: 0 :: owner :: owner :: returnPC :: S) M _ at eq
-  subst eq
-  winv 1
-  obtain ⟨written, store, run⟩ := ric_next run
-  have effect := sstore_getStor_set (xs := []) store (by exact ⟨_, rfl⟩)
-  have foreign : ∀ a, a ≠ sevm.currentTarget → written.getStor a = b.getStor a := by
-    intro a different
-    obtain ⟨pc, regular⟩ := of_run_reg store
-    exact (sstore_preserves_getStor_ne regular different.symm).trans (congrFun storage a)
-  obtain ⟨b', G', eq⟩ := ri_sstore_any store
-  rw [eq] at run effect foreign
-  winv 2
   obtain ⟨_, returned⟩ := ric_ret run
   simp only [Seg.done.injEq, Outcome.returned.injEq] at returned
   subst post

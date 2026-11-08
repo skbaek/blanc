@@ -14,11 +14,6 @@ namespace Blanc.ExecutionTrace
 
 open Jaune
 
--- Structural equality supports finite kernel-checked wire certificates.
-deriving instance DecidableEq for Auth
-deriving instance DecidableEq for TxType
-deriving instance DecidableEq for Tx
-
 /-- A successful monadic list decode preserves each selected input's position
 and result, without requiring identities for the other inputs. -/
 theorem mapM_getElem_of_eq_ok {α β ε : Type} {f : α → Except ε β}
@@ -80,52 +75,5 @@ noncomputable def StagedBodyTrace.txSplitOfSlot
   obtain ⟨bound, _⟩ := List.getElem?_eq_some_iff.mp
     (body.decodedTxs_getElem_of_slot atIndex decoded)
   exact bound
-
-/-- The constructed cut retains the requested original position and decoded
-transaction. Its prefix and suffix are supplied by the original trace. -/
-theorem StagedBodyTrace.txSplitOfSlot_spec
-    {benv : Benv} {slots : List (Bytes ⊕ Tx)} {ommers : List Header}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (body : StagedBodyTrace benv slots ommers wds state bout)
-    {i : Nat} {slot : Bytes ⊕ Tx} {tx : Tx}
-    (atIndex : slots[i]? = some slot)
-    (decoded : decodeTx benv.stat.rules slot = .ok tx) :
-    (body.txSplitOfSlot atIndex decoded).index = i ∧
-      (body.txSplitOfSlot atIndex decoded).tx = tx :=
-  body.txSplit_tx_eq_of_slot (body.txSplitOfSlot atIndex decoded) atIndex decoded
-
-/-- Already-decoded legacy body slots retain their order under `decodeTx`.
-Strict wire decoding is a separate obligation at the byte producer. -/
-theorem decodeTxs_inr (rules : ForkRules) (xs : List Tx) :
-    (xs.map Sum.inr).mapM (decodeTx rules) = .ok xs := by
-  induction xs with
-  | nil => rfl
-  | cons x xs ih =>
-      simp only [List.map_cons, List.mapM_cons, decodeTx, ih]
-      rfl
-
-/-- An exact legacy-body equality determines the original trace's complete
-ordered decoded list, independently of the selected fork. -/
-theorem StagedBodyTrace.decodedTxs_eq_of_inr
-    {benv : Benv} {slots : List (Bytes ⊕ Tx)} {ommers : List Header}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (body : StagedBodyTrace benv slots ommers wds state bout)
-    {xs : List Tx} (same : slots = xs.map Sum.inr) : body.decodedTxs = xs := by
-  have decoded := body.decodeRun
-  simp only [same, decodeTxs_inr] at decoded
-  exact (Except.ok.inj decoded).symm
-
-/-- Identify the transaction of any supplied original cut from exact full-body
-identity and a positional fact about that ordered decoded body. -/
-theorem StagedBodyTrace.txSplit_tx_eq_of_inr
-    {benv : Benv} {slots : List (Bytes ⊕ Tx)} {ommers : List Header}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (body : StagedBodyTrace benv slots ommers wds state bout)
-    {i : Nat} (cut : body.transactions.TxSplit i)
-    {xs : List Tx} (same : slots = xs.map Sum.inr)
-    {tx : Tx} (atIndex : xs[i]? = some tx) : cut.index = i ∧ cut.tx = tx := by
-  obtain ⟨index, selected⟩ := cut.putIndex_eq
-  simp only [body.decodedTxs_eq_of_inr same, atIndex] at selected
-  exact ⟨index, (Option.some.inj selected).symm⟩
 
 end Blanc.ExecutionTrace

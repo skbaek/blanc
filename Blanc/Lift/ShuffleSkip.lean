@@ -55,9 +55,6 @@ def SVal.Den (X : List B256) : SVal → B256 → Prop
 def Carried (X : List B256) (a : List SVal) (Y : List B256) : Prop :=
   List.Forall₂ (SVal.Den X) a Y
 
-/-- The segment's input frame: `n` input words, in order. -/
-def argFrame (n : Nat) : List SVal := (List.range n).map SVal.arg
-
 /-- Read one transferred index label back into the abstract stack. -/
 def SVal.readBack (a : List SVal) : Option B256 → Option SVal
   | none => some .unk
@@ -195,14 +192,6 @@ theorem SFunc.eq_of_same : ∀ {f g : SFunc}, f.same g = true → f = g := by
     intro h hs
     cases h <;> simp only [SFunc.same, Bool.false_eq_true] at hs
     rfl
-
-theorem carried_argFrame (X : List B256) : Carried X (argFrame X.length) X := by
-  unfold Carried argFrame
-  apply List.forall₂_iff_get.mpr
-  refine ⟨by simp only [List.length_map, List.length_range], ?_⟩
-  intro i h1 h2
-  simp only [List.get_eq_getElem, List.getElem_map, List.getElem_range, SVal.Den,
-    List.getElem?_eq_getElem h2]
 
 theorem SVal.le_refl (x : SVal) : SVal.Le x x := .inr rfl
 
@@ -429,13 +418,6 @@ theorem shNinst_run_noStateGas {sevm : Sevm} {d d' : Devm} {n : Ninst} {a a' : L
       exact ⟨ninst_state_of_stateSilent hsil run, s1, hs, readBack_carried hY hout h1⟩
     · cases h
 
-/-- Covered-fork compatibility projection of `shNinst_run_noStateGas`. -/
-theorem shNinst_run {sevm : Sevm} {d d' : Devm} {n : Ninst} {a a' : List SVal}
-    {X Y R : List B256} (fork : CoveredFork sevm.benvStat.fork) (h : shNinst n a = some a')
-    (hst : d.stack = Y ++ R) (hY : Carried X a Y) (run : Ninst.Run sevm d n d') :
-    d'.state = d.state ∧ ∃ Y', d'.stack = Y' ++ R ∧ Carried X a' Y' := by
-  exact shNinst_run_noStateGas fork.rules_stateGas_none h hst hY run
-
 /-! ## The skip theorem -/
 
 /-- What a checked result promises for a cut run from `d0`: none can succeed (`none`), or every
@@ -608,39 +590,6 @@ theorem shuffle_sound (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   exact shuffle_sound_noStateGas hP fork.rules_stateGas_none hFw
 
 end Sound
-
-/-- **The shuffle skip.**  A checked segment from `f` to `tgt` over `n` input words: every cut
-run of `f` from `St b (X ++ R) M G` with `X.length = n` reaches `tgt` from a state with `b`'s
-world state and the stack `Y ++ R`, where `Y` is described by `π` over the inputs `X`.  Gotos
-the check follows (`Fw`) must not be cut.  The run's instruction relation `P` (any relation
-implying Jaune's steps) is kept in the continuation. -/
-theorem ric_shuffle_noStateGas {P : Sevm → Devm → Ninst → Devm → Prop}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {fs : List SFunc} {es : List Entry}
-    {Fw C : List Nat} {tgt f : SFunc} {pB pA fuel n : Nat} {π : List SVal} {sevm : Sevm} {r : Seg}
-    (hstateGas : sevm.benvStat.rules.stateGas = none) (hFw : ∀ k ∈ Fw, k ∉ C)
-    (hchk : shuffle fs es Fw tgt pB fuel pA (argFrame n) f = some (some π))
-    {X R : List B256} (hX : X.length = n) {b : Devm} {M : Mem} {G : Nat}
-    (run : SFunc.RunCutP P fs sevm C (St b (X ++ R) M G) f r) :
-    ∃ b' Y M' G', b'.state = b.state ∧ Carried X π Y ∧
-      SFunc.RunCutP P fs sevm C (St b' (Y ++ R) M' G') tgt r := by
-  subst hX
-  obtain ⟨d, hs, Y, hst, hY, run'⟩ :=
-    shuffle_sound_noStateGas hP hstateGas hFw _ _ _ _ _ _ _ hchk run rfl (carried_argFrame X)
-  refine ⟨d, Y, d.memory, d.gasLeft, hs, hY, ?_⟩
-  rw [← St.self hst rfl]
-  exact run'
-
-/-- Covered-fork compatibility projection of `ric_shuffle_noStateGas`. -/
-theorem ric_shuffle {P : Sevm → Devm → Ninst → Devm → Prop}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {fs : List SFunc} {es : List Entry}
-    {Fw C : List Nat} {tgt f : SFunc} {pB pA fuel n : Nat} {π : List SVal} {sevm : Sevm} {r : Seg}
-    (fork : CoveredFork sevm.benvStat.fork) (hFw : ∀ k ∈ Fw, k ∉ C)
-    (hchk : shuffle fs es Fw tgt pB fuel pA (argFrame n) f = some (some π))
-    {X R : List B256} (hX : X.length = n) {b : Devm} {M : Mem} {G : Nat}
-    (run : SFunc.RunCutP P fs sevm C (St b (X ++ R) M G) f r) :
-    ∃ b' Y M' G', b'.state = b.state ∧ Carried X π Y ∧
-      SFunc.RunCutP P fs sevm C (St b' (Y ++ R) M' G') tgt r := by
-  exact ric_shuffle_noStateGas hP fork.rules_stateGas_none hFw hchk hX run
 
 set_option hygiene false in
 /-- Read a `Carried X π Y` hypothesis `hY` over explicit `X` and `π` back into the stack of

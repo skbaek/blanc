@@ -96,21 +96,6 @@ theorem afterSstore_getCode
   · exact sstoreCore_getCode base _ _ _ _ _
   · exact sstoreCore_getCode _ _ _ _ _ _
 
-theorem afterSstore_accessedAddresses
-    (sevm : Sevm) (base : Devm) (key value : B256) :
-    (afterSstore sevm base key value).accessedAddresses =
-      base.accessedAddresses := by
-  unfold afterSstore
-  split <;> rfl
-
-theorem afterSstore_accessedStorageKeys
-    (sevm : Sevm) (base : Devm) (key value : B256) :
-    (afterSstore sevm base key value).accessedStorageKeys =
-      sloadAccessedStorageKeys sevm.currentTarget
-        base.accessedStorageKeys key := by
-  unfold afterSstore sloadAccessedStorageKeys
-  split <;> rfl
-
 theorem afterSstore_getStor_self
     (sevm : Sevm) (base : Devm) (key value : B256) :
     Devm.getStor (afterSstore sevm base key value) sevm.currentTarget =

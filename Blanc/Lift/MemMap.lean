@@ -688,16 +688,6 @@ theorem step_mem_sound_noStateGas (b : Bool) {sevm : Sevm} {pre post : Devm} {n 
       MemMatches ρ (if b then absMem n a μ else []) post.memory :=
   step_mem_sound_lane b (Or.inl hstateGas) hframe hstack hm run hpost h'
 
-/-- Preserve the existing modern memory-map statement. -/
-theorem step_mem_sound (b : Bool) {sevm : Sevm} {pre post : Devm} {n : Ninst}
-    {a a' : List AVal} {μ : MemMap} {ρ : B256} {S S' base : List B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hframe : FrameMatches ρ a S) (hstack : pre.stack = S ++ base)
-    (hm : MemMatches ρ μ pre.memory) (run : Ninst.Run sevm pre n post)
-    (hpost : post.stack = S' ++ base) (h' : FrameMatches ρ a' S') :
-    FrameMatches ρ (if b then memFold (memTop n a μ) a' else a') S' ∧
-      MemMatches ρ (if b then absMem n a μ else []) post.memory :=
-  step_mem_sound_noStateGas b hfork.rules_stateGas_none hframe hstack hm run hpost h'
-
 /-- A goto's declared map is recorded identically by the current one. -/
 theorem MemMatches.of_memCompat {ρ : B256} {cur decl : MemMap} {μ : Mem}
     (hc : memCompat cur decl = true) (hm : MemMatches ρ cur μ) : MemMatches ρ decl μ := by

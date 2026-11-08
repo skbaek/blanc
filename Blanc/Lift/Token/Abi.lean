@@ -22,12 +22,4 @@ structure Erc20Abi (B : Book) : Prop where
     Blanc.Sevm.selector a = 0x70a08231 →
     B.op a = .balanceOf (Sevm.dataWord a 4).toAdr
 
-/-- The canonical `true` answer is an accepted ERC-20 boolean. -/
-theorem true_word_accepted :
-    (Nat.toB256 1).toBytes = [] ∨ (32 ≤ (Nat.toB256 1).toBytes.length ∧
-      Bytes.toB256 ((Nat.toB256 1).toBytes.sliceD 0 32 0) ≠ 0) := by
-  refine Or.inr ⟨by rw [B256.length_toBytes], ?_⟩
-  rw [Bytes.sliceD_zero_length (B256.length_toBytes _), B256.toB256_toBytes]
-  decide
-
 end Blanc.Lift.Token

@@ -47,45 +47,6 @@ theorem Mem.size_extends_mod32 {μ : Mem} (ps : List (Nat × Nat)) (h : μ.size 
 variable {sevm : Sevm} {pc : Nat} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {img : Bytes}
   {d : Devm}
 
-theorem ri_mload_imgAtA {i : B256} {o : Nat} (ho : i.toNat = o) (hR : Mem.Reads M img)
-    (hW : Mem.Wf M) (hA : M.size % 32 = 0)
-    (h : Ninst.Run sevm (St b (i :: S) M G) (.reg .mload) d) :
-    ∃ M' G', d = St b (Bytes.toB256 (img.sliceD o 32 0) :: S) M' G' ∧
-      Mem.Reads M' img ∧ Mem.Wf M' ∧ M'.size % 32 = 0 := by
-  subst ho
-  obtain ⟨G', rfl⟩ := ri_mload h
-  exact ⟨M.extend i.toNat 32, G', by rw [Mem.Reads.read hR]; rfl, Mem.Reads.extend hR _ _,
-    Mem.Wf.extend hW _ _, Mem.size_extend_mod _ _ hA⟩
-
-theorem ri_mstore_imgAtA {i v : B256} {o : Nat} (ho : i.toNat = o) (hR : Mem.Reads M img)
-    (hW : Mem.Wf M) (hA : M.size % 32 = 0)
-    (h : Ninst.Run sevm (St b (i :: v :: S) M G) (.reg .mstore) d) :
-    ∃ M' G', d = St b S M' G' ∧ Mem.Reads M' (Bytes.writeAt img o v.toBytes) ∧
-      Mem.Wf M' ∧ M'.size % 32 = 0 := by
-  subst ho
-  obtain ⟨G', rfl⟩ := ri_mstore h
-  exact ⟨_, G', rfl, Mem.Reads.write hW hR _ _, Mem.Wf.write hW _ _, Mem.size_write_mod32 hA⟩
-
-theorem ri_calldatacopy_imgAtA {di si sz : B256} {o z : Nat} (ho : di.toNat = o)
-    (hz : sz.toNat = z) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
-    (h : Ninst.Run sevm (St b (di :: si :: sz :: S) M G) (.reg .calldatacopy) d) :
-    ∃ M' G', d = St b S M' G' ∧
-      Mem.Reads M' (Bytes.writeAt img o (sevm.data.sliceD si.toNat z 0)) ∧ Mem.Wf M' ∧
-      M'.size % 32 = 0 := by
-  subst ho hz
-  obtain ⟨G', rfl⟩ := ri_calldatacopy h
-  exact ⟨_, G', rfl, Mem.Reads.write hW hR _ _, Mem.Wf.write hW _ _, Mem.size_write_mod32 hA⟩
-
-theorem ri_keccak_imgAtA {i sz : B256} {o z : Nat} (ho : i.toNat = o) (hz : sz.toNat = z)
-    (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
-    (h : Ninst.Run sevm (St b (i :: sz :: S) M G) (.reg .keccak256) d) :
-    ∃ M' G', d = St b (Bytes.keccak (img.sliceD o z 0) :: S) M' G' ∧ Mem.Reads M' img ∧
-      Mem.Wf M' ∧ M'.size % 32 = 0 := by
-  subst ho hz
-  obtain ⟨G', rfl⟩ := ri_keccak h
-  exact ⟨M.extend i.toNat sz.toNat, G', by rw [Mem.Reads.read hR]; rfl, Mem.Reads.extend hR _ _,
-    Mem.Wf.extend hW _ _, Mem.size_extend_mod _ _ hA⟩
-
 variable {post : Devm} {L : List Exec.Frame}
 
 /-- `xa_staticcall_img` with the memory kept aligned. -/

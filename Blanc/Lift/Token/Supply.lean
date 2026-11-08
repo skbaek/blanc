@@ -73,14 +73,6 @@ theorem burned_cons (F : SupplyFacet B) (a : Sevm) (as : List Sevm) :
     simp only [List.filterMap_cons_some h, List.map_cons, List.sum_cons, Option.map_some,
       Option.getD_some]
 
-theorem minted_append (F : SupplyFacet B) (xs ys : List Sevm) :
-    F.minted (xs ++ ys) = F.minted xs + F.minted ys := by
-  simp only [minted, List.filterMap_append, List.map_append, List.sum_append]
-
-theorem burned_append (F : SupplyFacet B) (xs ys : List Sevm) :
-    F.burned (xs ++ ys) = F.burned xs + F.burned ys := by
-  simp only [burned, List.filterMap_append, List.map_append, List.sum_append]
-
 /-- **One accepted step**: the minter is kept unless the minter sent the message, and the supply moves
 by exactly the step's minted and burned amounts. -/
 theorem step_supply (F : SupplyFacet B) {l l' : B.Ledger} {a : Sevm} (h : B.step l a = some l') :
@@ -145,44 +137,6 @@ theorem run_supply (F : SupplyFacet B) :
       refine ⟨by rw [ihm, hm], ?_⟩
       rw [minted_cons, burned_cons]
       omega
-
-/-- **A run the minter takes no part in keeps supply and minter**: along an accepted run of the book
-none of whose messages the minter sends, no mint or burn is accepted and the minter cannot change,
-so the supply and the minter are kept. -/
-theorem run_keep (F : SupplyFacet B) :
-    ∀ {as : List Sevm} {l l' : B.Ledger}, B.run l as = some l' →
-      (∀ a ∈ as, a.caller ≠ F.minter l) →
-      F.supply l' = F.supply l ∧ F.minter l' = F.minter l := by
-  intro as
-  induction as with
-  | nil =>
-    intro l l' hrun _
-    simp only [Book.run, Option.some.injEq] at hrun
-    subst hrun
-    exact ⟨rfl, rfl⟩
-  | cons a as ih =>
-    intro l l' hrun foreign
-    simp only [Book.run] at hrun
-    cases hs : B.step l a with
-    | none => rw [hs, Option.bind_none] at hrun; cases hrun
-    | some m =>
-      rw [hs, Option.bind_some] at hrun
-      have other := foreign a List.mem_cons_self
-      have hm : F.minter m = F.minter l := by
-        apply Classical.byContradiction
-        intro hne
-        exact other (F.minter_step hs hne)
-      have hsup : F.supply m = F.supply l := by
-        cases hmint : F.mintOf a with
-        | some p => exact absurd (F.mint_step hs hmint).1 other
-        | none =>
-          cases hburn : F.burnOf a with
-          | some p => exact absurd (F.burn_step hs hburn).1 other
-          | none => exact F.other_step hs hmint hburn
-      obtain ⟨ihs, ihm⟩ := ih hrun fun a' ha' => by
-        rw [hm]
-        exact foreign a' (List.mem_cons_of_mem a ha')
-      exact ⟨ihs.trans hsup, ihm.trans hm⟩
 
 end SupplyFacet
 

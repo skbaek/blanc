@@ -76,13 +76,6 @@ theorem Xinst.step_done_getStor_noStateGas
   · rw [shape] at step
     exact (GenericCall.step_done_getStor step owner).trans (frame.getStor owner).symm
 
-theorem Xinst.step_done_getStor
-    {sevm : Sevm} {pre post : Devm} {x : Xinst}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (step : Xinst.step sevm pre x = .done (.ok post)) (owner : Adr) :
-    post.getStor owner = pre.getStor owner :=
-  Xinst.step_done_getStor_noStateGas fork.rules_stateGas_none step owner
-
 
 
 /-- Nonzero account nonces survive a completed recursive execution slot. -/
