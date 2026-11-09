@@ -441,6 +441,7 @@ CONTRACTS = {
                            "Lift.WithdrawalRequest.WordFifo", "Lift.WithdrawalRequest.WordDelivery",
                            "Lift.WithdrawalRequest.HistoryFifo", "Lift.WithdrawalRequest.JointHistory",
                            "Lift.WithdrawalRequest.RequestCodec", "Lift.WithdrawalRequest.JointLatency",
+                           "Lift.WithdrawalRequest.JointAuthorization",
                            "Lift.WithdrawalRequest.InhibitedHistory",
                            "Lift.WithdrawalRequest.InhibitedObservations",
                            "Lift.WithdrawalRequest.DeploymentHistory",

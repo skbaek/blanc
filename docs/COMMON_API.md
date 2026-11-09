@@ -1348,6 +1348,12 @@ turns steps `i ≤ j` into configured histories through them with
 `steps.length - 1 - j` blocks to `run.toExec pre`; `JointRun.extendsBy_toExec` is
 the one-step form. These are the premises `Blanc/ExecutionHistoryExtension.lean`
 consumers (delivery bounds, restricted exclusion premises) take.
+For the beacon side of a step, `JointRun.steps_jointStep` recovers the successful
+`jointStep` of any indexed step; `jointBlockInput ccfg bls s b` is the beacon state the
+step hands to `process_block` (same calls as `jointStep`), and `jointStep_processBlock`
+shows a successful step ran `processBlock (jointCtx ccfg bls)` on it successfully
+(`stateTransition_processBlock` is the within-fork piece). Combine with Jaune's
+`Facts.processBlockWith_split`/`Facts.processOperations_split` to reach a mid-block state.
 
 For consensus SSZ byte equations, use
 [`Blanc/ConsensusSsz.lean`](../Blanc/ConsensusSsz.lean):

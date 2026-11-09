@@ -1,4 +1,5 @@
 import JauneConsensus.Joint
+import JauneConsensus.Facts.Joint
 import Blanc.ExecutionHistory
 import Blanc.ExecutionHistoryExtension
 
@@ -48,48 +49,10 @@ theorem engineVerdict_ok {P : Preset} {cfg : ChainConfig} {cf : CFork} {pre post
       applyBody (initBenv fork pre (payloadToBlock req).header) (payloadToBlock req).txs
         (payloadToBlock req).ommers (payloadToBlock req).wds = .ok (bodyState, blockOutput) ∧
       blockOutput.requests = req.executionRequests := by
-  simp only [engineVerdict, bind, Except.bind, throw, throwThe, MonadExceptOf.throw,
-    Except.mapError, pure, Except.pure] at h
-  split at h
-  · simp only [reduceCtorEq] at h
-  split at h
-  · simp only [reduceCtorEq] at h
-  cases hb : blobVersionedHashesOf req.executionPayload.txBytes with
-  | error => simp only [hb, reduceCtorEq] at h
-  | ok hashes =>
-  simp only [hb] at h
-  split at h
-  · simp only [reduceCtorEq] at h
-  cases hid : cfg.checkChainId pre with
-  | error => simp only [hid, reduceCtorEq] at h
-  | ok u =>
-  simp only [hid] at h
-  cases hf : cfg.forkAt (payloadToBlock req).header.number (payloadToBlock req).header.timestamp with
-  | error => simp only [hf, reduceCtorEq] at h
-  | ok fork =>
-  simp only [hf] at h
-  split at h
-  · simp only [reduceCtorEq] at h
-  rename_i hpair
-  have hpair : fork.consensusFork? = some cf := by simpa only [bne_iff_ne, ne_eq, Decidable.not_not] using hpair
-  cases hs : stateTransitionScheduledE cfg fork pre (payloadToBlock req) with
-  | error => simp only [hs, reduceCtorEq] at h
-  | ok r =>
-  cases r with
-  | error => simp only [hs, reduceCtorEq] at h
-  | ok post' =>
-  simp only [hs] at h
-  cases hrun : applyBody (initBenv fork pre (payloadToBlock req).header) (payloadToBlock req).txs
-      (payloadToBlock req).ommers (payloadToBlock req).wds with
-  | error => simp only [hrun, reduceCtorEq] at h
-  | ok out =>
-  simp only [hrun] at h
-  split at h
-  · simp only [reduceCtorEq] at h
-  rename_i hreq
-  cases h
-  exact ⟨fork, out.1, out.2, rfl, hpair, coveredFork_of_consensusFork? hpair hcf,
-    stateTransitionUsing_of_scheduled hid hf hs, hrun, by simpa only [bne_iff_ne, ne_eq, Decidable.not_not] using hreq⟩
+  obtain ⟨-, -, -, hid, fork, hf, hpair, -, hs, bodyState, blockOutput, hrun, hreq⟩ :=
+    engineVerdict_ok_iff.mp h
+  exact ⟨fork, bodyState, blockOutput, hf, hpair, coveredFork_of_consensusFork? hpair hcf,
+    stateTransitionUsing_of_scheduled hid hf hs, hrun, hreq⟩
 
 /-! ## The joint step's engine verdict -/
 
@@ -168,6 +131,78 @@ theorem ofBlock_executionRequests {P : Preset} {f : CFork} {block : BeaconBlock 
   obtain ⟨requests, hread, h⟩ := Except.bind_eq_ok h
   cases h
   exact ⟨requests, hread, rfl⟩
+
+/-! ## The beacon state a joint step hands to `process_block` -/
+
+/-- The beacon context of a joint step whose engine verdict passed. -/
+abbrev jointCtx (ccfg : Config) (bls : Bool) : Ctx := { cfg := ccfg, blsActive := bls }
+
+/-- The beacon state a joint step hands to `process_block`, computed with the same calls as
+`jointStep`: within a fork, `process_slots` to the block's slot; across Electra → Fulu, the
+guarded `process_slots` to the fork slot, `upgrade_to_fulu`, then `process_slots` to the
+block's slot unless the block is at the fork slot. Other fork pairs are refused. -/
+def jointBlockInput {P : Preset} (ccfg : Config) (bls : Bool) :
+    (s : JointState P) → (b : AnySignedBlock P) → M (BeaconState P b.1)
+  | ⟨.electra, beacon, _⟩, ⟨.electra, sb⟩ =>
+    processSlots (jointCtx ccfg bls) beacon sb.message.slot
+  | ⟨.fulu, beacon, _⟩, ⟨.fulu, sb⟩ =>
+    processSlots (jointCtx ccfg bls) beacon sb.message.slot
+  | ⟨.electra, beacon, _⟩, ⟨.fulu, sb⟩ =>
+    U64.ofNat? (fuluForkSlot (P := P) ccfg) "joint step: Fulu fork slot" >>= fun forkSlot =>
+    (if beacon.slot < forkSlot then processSlots (jointCtx ccfg bls) beacon forkSlot
+      else pure beacon) >>= fun beacon =>
+    upgradeToFulu ccfg beacon >>= fun beacon =>
+    if sb.message.slot == beacon.slot then pure beacon
+    else processSlots (jointCtx ccfg bls) beacon sb.message.slot
+  | _, _ => throw (.assert "joint step: fork pair outside Electra and Fulu")
+
+/-- A successful state transition ran `process_slots` to the block's slot and then
+`process_block` on the result. -/
+theorem stateTransition_processBlock {P : Preset} {f : CFork} {ctx : Ctx}
+    {state state' : BeaconState P f} {sb : SignedBeaconBlock P f}
+    (h : stateTransition ctx state sb = .ok state') :
+    ∃ st, processSlots ctx state sb.message.slot = .ok st ∧
+      ∃ post, processBlock ctx st sb.message = .ok post := by
+  unfold JauneConsensus.stateTransition stateTransitionWith at h
+  obtain ⟨st, hslots, h⟩ := Except.bind_eq_ok h
+  refine ⟨st, hslots, ?_⟩
+  simp only [ite_true] at h
+  obtain ⟨_, _, h⟩ := Except.bind_eq_ok h
+  obtain ⟨_, _, h⟩ := Except.bind_eq_ok h
+  obtain ⟨post, hpost, _⟩ := Except.bind_eq_ok h
+  exact ⟨post, hpost⟩
+
+/-- A successful joint step ran `process_block` on the beacon state `jointBlockInput`
+computes. -/
+theorem jointStep_processBlock {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    {s s' : JointState P} {b : AnySignedBlock P}
+    (h : jointStep cfg ccfg bls s b = .ok s') :
+    ∃ st, jointBlockInput ccfg bls s b = .ok st ∧
+      ∃ post, processBlock (jointCtx ccfg bls) st b.2.message = .ok post := by
+  obtain ⟨sf, beacon, exec⟩ := s
+  obtain ⟨bf, sb⟩ := b
+  cases sf <;> cases bf
+  all_goals try (simp only [jointStep, ExceptT.stM_eq, throw, throwThe, MonadExceptOf.throw,
+    reduceCtorEq] at h; done)
+  · obtain ⟨-, _, _, _, -, -, hbeacon, -⟩ := jointStep_electra_ok_iff.mp h
+    exact stateTransition_processBlock hbeacon
+  · obtain ⟨-, -, _, forkSlot, beacon1, beacon2, _, _, hforkSlot, hslots, hup, -, -, hbeacon, -⟩ :=
+      jointStep_cross_ok_iff.mp h
+    by_cases hat : (sb.message.slot == beacon2.slot) = true
+    · rw [ite_eq_left hat] at hbeacon
+      obtain ⟨_, _, hbeacon⟩ := Except.bind_eq_ok hbeacon
+      obtain ⟨_, _, hbeacon⟩ := Except.bind_eq_ok hbeacon
+      obtain ⟨post, hpost, -⟩ := Except.bind_eq_ok hbeacon
+      refine ⟨beacon2, ?_, post, hpost⟩
+      simp only [jointBlockInput, hforkSlot, Except.bind_ok, hslots, hup, hat, ↓reduceIte]
+      rfl
+    · rw [ite_eq_right hat] at hbeacon
+      obtain ⟨st, hst, post, hpost⟩ := stateTransition_processBlock hbeacon
+      refine ⟨st, ?_, post, hpost⟩
+      simp only [jointBlockInput, hforkSlot, Except.bind_ok, hslots, hup, hat]
+      exact hst
+  · obtain ⟨_, _, _, _, -, hbeacon, -⟩ := jointStep_fulu_ok_iff.mp h
+    exact stateTransition_processBlock hbeacon
 
 /-! ## Joint runs -/
 
@@ -380,5 +415,21 @@ theorem JointRun.extendsBy_steps {P : Preset} {cfg : ChainConfig} {ccfg : Config
           exact .refl
         · rw [show run.steps.length + 1 - 1 - j = 0 by omega]
           exact .refl
+
+/-- Every step of a joint run is a successful joint step between its endpoints. -/
+theorem JointRun.steps_jointStep {P : Preset} {cfg : ChainConfig} {ccfg : Config}
+    {bls : Bool} {s₀ : JointState P} :
+    {s : JointState P} → (run : JointRun cfg ccfg bls s₀ s) → {j : Nat} →
+    {D : JointRunStep (P := P) cfg ccfg bls} → run.steps[j]? = some D →
+    jointStep cfg ccfg bls D.pre D.block = .ok D.post
+  | _, .nil, _, _, h => by
+    simp only [JointRun.steps, List.getElem?_nil, reduceCtorEq] at h
+  | _, .snoc run b step bound, j, D, h => by
+    rw [JointRun.steps_snoc] at h
+    by_cases hj : j < run.steps.length
+    · rw [List.getElem?_append_left hj] at h
+      exact JointRun.steps_jointStep run h
+    · obtain ⟨-, rfl⟩ := getElem?_append_singleton_of_not_lt hj h
+      exact step
 
 end Blanc
