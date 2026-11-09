@@ -2480,6 +2480,11 @@ a bare set-membership goal does not identify this execution-specific route.
   `TransactionRoots.bal_covers`, `BodyRoots.bal_covers`, `KeptHistory.bal_covers` (premises `HistoryRootsFit`,
   `HistoryCreditsFit`).
   `ConfiguredBlockTraceIn` has no Amsterdam inhabitant, since its request stage fixes two contracts: use `KeptHistory`.
+  To carry a covered-fork `ConfiguredHistoryTrace` onto `KeptHistory`, and splice it with later (Amsterdam) kept
+  steps: [`Blanc/ExecutionKeptConfigured.lean`](../Blanc/ExecutionKeptConfigured.lean): `ConfiguredHistoryTrace.kept`
+  (same parents, blocks, forks and outputs), `ConfiguredHistoryTrace.keptHistory`, `ConfiguredHistoryTrace.splice`,
+  `KeptHistory.append`; the kept carrier is determined by its start and blocks (`KeptStep.unique`,
+  `KeptHistory.unique`, `ConfiguredHistoryTrace.kept_unique`), so frames read off it do not depend on the derivation.
 - Reentrancy-lock exclusion over the all-outcome frame tree:
   [`Blanc/LockExclusion.lean`](../Blanc/LockExclusion.lean).
   `LockSpec.locked_core` keeps the lock cell fixed, slot-addressed owner

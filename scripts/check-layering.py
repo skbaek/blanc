@@ -342,6 +342,9 @@ SHARED += [
     "ExecutionKeptFacts",
     "ExecutionKeptTop",
     "ExecutionKeptChain",
+    # Covered configured histories as kept histories, the splice, and the kept carrier's uniqueness
+    # (eip8282-gloas-cross-layer-v1 R13).
+    "ExecutionKeptConfigured",
     "ExecutionKeptValue",
     "ExecutionInCellProvenance",
     "ExecutionCommittedCell",
@@ -637,6 +640,8 @@ CONTRACTS["builder-request"] = [
 # `KeptHistory`, generic over a linked builder contract, and its deposit and exit instances.
 CONTRACTS["builder-request"].extend(["Lift.BuilderRequest.Occurrence", "Lift.BuilderRequest.Deposit.Indexed",
                                      "Lift.BuilderRequest.Exit.Indexed"])
+# EIP-8282 cross-layer R13: the occurrence-indexed results across a covered (pre-Gloas) prefix.
+CONTRACTS["builder-request"].extend(["Lift.BuilderRequest.Carrier"])
 # EIP-7251 consolidation requests: fee and user frames under covered forks.
 CONTRACTS.setdefault("consolidation-request", []).extend([
     "Lift.ConsolidationRequest.Fee", "Lift.ConsolidationRequest.Submission",
@@ -660,6 +665,7 @@ COMPOSITION = {
     "Composition.BuilderRequestPublicGuarantees": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestPublicFindings": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestPublicBounds": ('builder-request', 'withdrawal-request'),
+    "Composition.BuilderRequestCarrier": ('builder-request', 'withdrawal-request'),
     "Composition.RequestPhaseOrder": ('builder-request', 'withdrawal-request'),
     "Composition.RequestPhaseAmsterdamBal": ('builder-request', 'withdrawal-request'),
     "Composition.WithdrawalRequestFeeCounterexample": ('withdrawal-request',),
