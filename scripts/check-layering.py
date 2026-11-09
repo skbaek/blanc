@@ -345,6 +345,9 @@ SHARED += [
     # Covered configured histories as kept histories, the splice, and the kept carrier's uniqueness
     # (eip8282-gloas-cross-layer-v1 R13).
     "ExecutionKeptConfigured",
+    # Gloas joint runs over jointStepG and the joint-level invariants G3-09..11 (eip8282-gloas-cross-layer-v1 RUN).
+    "JointGloasHistory",
+    "JointGloasInvariants",
     "ExecutionKeptValue",
     "ExecutionInCellProvenance",
     "ExecutionCommittedCell",
@@ -666,6 +669,7 @@ COMPOSITION = {
     "Composition.BuilderRequestPublicFindings": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestPublicBounds": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestCarrier": ('builder-request', 'withdrawal-request'),
+    "Composition.BuilderRequestJointG": ('builder-request', 'withdrawal-request'),
     "Composition.RequestPhaseOrder": ('builder-request', 'withdrawal-request'),
     "Composition.RequestPhaseAmsterdamBal": ('builder-request', 'withdrawal-request'),
     "Composition.WithdrawalRequestFeeCounterexample": ('withdrawal-request',),

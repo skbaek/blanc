@@ -1348,6 +1348,22 @@ turns steps `i ≤ j` into configured histories through them with
 `steps.length - 1 - j` blocks to `run.toExec pre`; `JointRun.extendsBy_toExec` is
 the one-step form. These are the premises `Blanc/ExecutionHistoryExtension.lean`
 consumers (delivery bounds, restricted exclusion premises) take.
+
+To run consensus blocks across the Gloas fork (ePBS: a block carries a bid, its payload arrives in an envelope and is
+built upon by the next block), use [`Blanc/JointGloasHistory.lean`](../Blanc/JointGloasHistory.lean).
+`GJointRun cfg ccfg bls s₀` is a snoc-shaped run of `GJointRunStep`s over `JauneConsensus.jointStepG` and the sum
+state `GJointState`, of three kinds: `.pre` (`PreStepData`, a `jointStep` with its `JointStepTrace`), `.crossing`
+(`CrossingData`: `crossFromFulu`, the fork state `atFork`, the slots, the FULL settlement of the `.landed` bid) and
+`.gloas` (`GloasStepData`, exposing the post-slots state `postSlots`, the settlement and the built-upon block).
+`GJointRun.blocks` are the built-upon execution blocks, one `KeptHistory` (`GJointRun.keptHistory`);
+`GJointRun.extendsBy` splits them at a step (`payloadIndex`); `GJointRun.reach`, `reach_pre`, `reach_post`,
+`reach_post_pre` over `GJointReach`. `GJointRunStep.exists_of_jointStepG` makes any successful step from a
+`ParentCoherent` state a run step; `keptStep_of_engineVerdictG` turns an accepted Gloas payload into an Amsterdam
+`KeptStep`. The joint-level invariants G3-09..11 (`ExecHeadIsLatestBlockHash`, `ParentPayloadCoherence`,
+`ExpectedWithdrawalsLedger`, together `GJointInv`), their step preservation, the Gloas `process_block` frame of
+`latest_block_hash` (`processBlock_latestBlockHash`), and the crossing's forced FULL settlement
+(`crossing_parentFull`, `jointStepG_cross_ok_of_spec`) and builders (`CrossingData.buildersFar`) are in
+[`Blanc/JointGloasInvariants.lean`](../Blanc/JointGloasInvariants.lean).
 For the beacon side of a step, `JointRun.steps_jointStep` recovers the successful
 `jointStep` of any indexed step; `jointBlockInput ccfg bls s b` is the beacon state the
 step hands to `process_block` (same calls as `jointStep`), and `jointStep_processBlock`

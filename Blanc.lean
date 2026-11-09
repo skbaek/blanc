@@ -25,6 +25,7 @@ import Blanc.CompiledStackSafety
 import Blanc.CompiledWalkInversion
 import Blanc.Composition.BuilderRequestCarrier
 import Blanc.Composition.BuilderRequestCodesKept
+import Blanc.Composition.BuilderRequestJointG
 import Blanc.Composition.BuilderRequestPublicBounds
 import Blanc.Composition.BuilderRequestPublicFindings
 import Blanc.Composition.BuilderRequestPublicGuarantees
@@ -219,6 +220,8 @@ import Blanc.ForwardSha256
 import Blanc.ForwardStorageAccess
 import Blanc.GasErasure
 import Blanc.HistoricalFork
+import Blanc.JointGloasHistory
+import Blanc.JointGloasInvariants
 import Blanc.JointHistory
 import Blanc.Ladder
 import Blanc.LadderBase

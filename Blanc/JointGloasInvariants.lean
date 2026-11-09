@@ -1,0 +1,342 @@
+import Blanc.JointGloasHistory
+import JauneConsensus.Facts.Gloas.Invariants
+import JauneConsensus.Facts.Gloas.InvariantsBid
+import JauneConsensus.Facts.Gloas.InvariantsCrossing
+import JauneConsensus.Facts.Gloas.InvariantsRequests
+
+/-!
+# The joint-level Gloas invariants G3-09, G3-10, G3-11, and the crossing's FULL settlement (O-b)
+
+The three joint-level rows of Plans `recon/design.md` §5 (rev 3.1), over `GJointState`:
+
+* **G3-09 `ExecHeadIsLatestBlockHash`**: the built-upon chain's head hash is the beacon state's
+  `latest_block_hash` (on a pre-Gloas state, the Electra/Fulu `latest_execution_payload_header.block_hash`, the
+  hash `upgrade_to_gloas` copies into `latest_block_hash`, FK:176);
+* **G3-10 `ParentPayloadCoherence`**: a delivered payload is for the latest bid (`block_hash`), on the latest
+  block hash (`parent_hash`), its request is the envelope's, and its chain is the engine's verdict on the built-upon
+  chain; a landed payload is the head, and its bid commits to the empty requests;
+* **G3-11 `ExpectedWithdrawalsLedger`** (list form): a delivered payload carries exactly
+  `payload_expected_withdrawals`; a landed one leaves none outstanding.
+
+Preservation (`GloasStepData.gJointInv`, `CrossingData.gJointInv`, `GJointRunStep.postState_ledger`): G3-10 and
+G3-11 hold at every run step's post-state outright (the envelope check establishes them); G3-09 is carried by a
+Gloas step from G3-09 and G3-10 at its pre-state, and established by the crossing from the Fulu head relation at the
+fork state `atFork`.
+
+**O-b** (`crossing_parentFull`, `jointStepG_cross_ok_of_spec`): at the crossing, Gloas `process_block` succeeding
+forces the FULL settlement, because `upgrade_to_gloas` sets `latest_block_hash` to the synthetic bid's
+`block_hash` (FK:176, 209) and the bid check requires `bid.parent_block_hash == latest_block_hash` (CL:2193). So the
+joint step's named refusal of an EMPTY first settlement excludes no chain the beacon transition accepts.
+
+**O-a** (the builder half of `crossing_builders`, `CrossingData.buildersPkWe`, `CrossingData.buildersFar`): after
+the first Gloas block every builder has `upgrade_to_gloas`'s pubkey and `withdrawable_epoch`, all
+`FAR_FUTURE_EPOCH`, and there are as many: the first block's requests are empty, so neither a builder request nor a
+fresh record runs (the writers of `withdrawable_epoch` are only those, `withdrawableEpoch_writers`).
+-/
+
+namespace Blanc
+
+open Jaune JauneConsensus ExecutionTrace JauneConsensus.Facts.Gloas
+
+variable {P : Preset}
+
+/-! ## Vocabulary -/
+
+/-- The hash of a chain's head block, if any. -/
+def execHeadHash (ch : BlockChain) : Option B256 := ch.blocks.getLast?.map (·.header.hash)
+
+/-- **G3-09 ExecHeadIsLatestBlockHash.** -/
+def ExecHeadIsLatestBlockHash : GJointState P → Prop
+  | .pre s => execHeadHash s.exec = some s.beacon.latest_execution_payload_header.block_hash
+  | .gloas b exec _ => execHeadHash exec = some b.latest_block_hash
+
+/-- **G3-10 ParentPayloadCoherence.** -/
+def ParentPayloadCoherence (cfg : ChainConfig) : GJointState P → Prop
+  | .gloas b exec (.delivered e req post) =>
+    e.message.payload.block_hash = b.latest_execution_payload_bid.block_hash ∧
+      e.message.payload.parent_hash = b.latest_block_hash ∧
+      Gloas.envelopeNewPayloadRequest b e = .ok req ∧ engineVerdictG cfg exec req = .ok post
+  | .gloas b exec .landed =>
+    b.latest_execution_payload_bid.block_hash = b.latest_block_hash ∧
+      execHeadHash exec = some b.latest_block_hash ∧
+      b.latest_execution_payload_bid.execution_requests_root =
+        Ssz.hashTreeRoot Gloas.ExecutionRequests.empty
+  | _ => True
+
+/-- **G3-11 ExpectedWithdrawalsLedger** (the list form). -/
+def ExpectedWithdrawalsLedger : GJointState P → Prop
+  | .gloas b _ (.delivered e _ _) => Gloas.WithdrawalsMatchExpected b e
+  | .gloas b _ .landed => b.payload_expected_withdrawals.toArray.toList = []
+  | _ => True
+
+/-- The three joint-level invariants together. -/
+def GJointInv (cfg : ChainConfig) (s : GJointState P) : Prop :=
+  ExecHeadIsLatestBlockHash s ∧ ParentPayloadCoherence cfg s ∧ ExpectedWithdrawalsLedger s
+
+/-- G3-10 includes the coherence the run's kept history needs. -/
+theorem ParentPayloadCoherence.coherent {cfg : ChainConfig} {s : GJointState P}
+    (h : ParentPayloadCoherence cfg s) : ParentCoherent cfg s := by
+  rcases s with _ | ⟨b, exec, _ | _ | ⟨e, req, post⟩⟩
+  all_goals first | trivial | exact h.2.2.2
+
+/-! ## Frames of `latest_block_hash` and the latest bid -/
+
+/-- Gloas `process_slots` keeps the builders, the latest bid and `latest_block_hash`. -/
+theorem processSlots_bidFrame {ctx : Ctx} {s s' : Gloas.BeaconState P} {slot : Slot}
+    (h : Gloas.processSlots ctx s slot = .ok s') :
+    s'.builders = s.builders ∧ s'.latest_execution_payload_bid = s.latest_execution_payload_bid ∧
+      s'.latest_block_hash = s.latest_block_hash :=
+  Inv.processSlots_ind (ctx := ctx)
+    (fun m => m.builders = s.builders ∧
+      m.latest_execution_payload_bid = s.latest_execution_payload_bid ∧
+      m.latest_block_hash = s.latest_block_hash)
+    (fun _ _ _ _ hI f1 _ hc => by
+      obtain ⟨hb, hl, hk, _, _⟩ := Inv.slotIter_core f1 hc
+      exact ⟨hb.trans hI.1, hl.trans hI.2.1, hk.trans hI.2.2⟩) h ⟨rfl, rfl, rfl⟩
+
+/-- The crossing's slots function keeps the builders, the latest bid and `latest_block_hash`. -/
+theorem crossingSlots_bidFrame {ctx : Ctx} {s s' : Gloas.BeaconState P} {slot : Slot}
+    (h : crossingSlots ctx s slot = .ok s') :
+    s'.builders = s.builders ∧ s'.latest_execution_payload_bid = s.latest_execution_payload_bid ∧
+      s'.latest_block_hash = s.latest_block_hash := by
+  unfold crossingSlots at h
+  split at h
+  · cases h
+    exact ⟨rfl, rfl, rfl⟩
+  · exact processSlots_bidFrame h
+
+/-- The rest of a Gloas `state_transition` after the slots is Gloas `process_block`. -/
+theorem gloasBlockTransition_processBlock_eq {ctx : Ctx} {st post : Gloas.BeaconState P}
+    {b : Gloas.SignedBeaconBlock P} (h : gloasBlockTransition ctx st b = .ok post) :
+    Gloas.processBlock ctx st b.message = .ok post :=
+  Inv.applySignedBlockWith_ok h
+
+/-- **Gloas `process_block` moves `latest_block_hash` only by a FULL settlement**, to the parent bid's
+`block_hash`; and the block's bid builds on the `latest_block_hash` the settlement leaves (CL:2193). -/
+theorem processBlock_latestBlockHash {ctx : Ctx} {s s' : Gloas.BeaconState P}
+    {blk : Gloas.BeaconBlock P} (h : Gloas.processBlock ctx s blk = .ok s') :
+    s'.latest_block_hash =
+        (if parentFull s blk then s.latest_execution_payload_bid.block_hash else s.latest_block_hash) ∧
+      blk.body.signed_execution_payload_bid.message.parent_block_hash =
+        (if parentFull s blk then s.latest_execution_payload_bid.block_hash else s.latest_block_hash) := by
+  obtain ⟨s1, s2, s3, s4, s5, s6, s7, h1, h2, h3, h4, h5, h6, h7, h8⟩ := Inv.processBlock_phases h
+  have hs1 : s1.latest_block_hash =
+      (if parentFull s blk then s.latest_execution_payload_bid.block_hash else s.latest_block_hash) := by
+    rcases Inv.processParentExecutionPayload_cases h1 with ⟨he, hne⟩ | ⟨heq, a, d, e, ha, hd, he, hs⟩
+    · have hf : parentFull s blk = false := by
+        unfold parentFull
+        exact beq_false_of_ne hne
+      rw [hf, he]
+      rfl
+    · have hf : parentFull s blk = true := by
+        unfold parentFull
+        exact beq_iff_eq.mpr heq
+      rw [hf]
+      exact (Inv.parentFull_frame ha hd he hs).2.2.2.1
+  obtain ⟨-, -, hm2⟩ := Inv.processBlockHeader_post h2
+  have e2 : s2.latest_block_hash = s1.latest_block_hash := by rw [hm2]
+  have w3 := Inv.processWithdrawals_wFrame _ _ h3
+  have b4 := Inv.processExecutionPayloadBid_post h4
+  have c := Inv.afterBid_core h5 h6 h7 h8
+  refine ⟨?_, ?_⟩
+  · rw [c.2.2.1, b4.2.2.2.2.2.1, w3.2.1, e2, hs1]
+  · rw [b4.2.2.1, w3.2.1, e2, hs1]
+
+/-- A Gloas `process_block` from a state whose `latest_block_hash` is the latest bid's `block_hash` settles the
+parent FULL. -/
+theorem processBlock_full_of_latestBlockHash {ctx : Ctx} {s s' : Gloas.BeaconState P}
+    {blk : Gloas.BeaconBlock P} (h : Gloas.processBlock ctx s blk = .ok s')
+    (hl : s.latest_block_hash = s.latest_execution_payload_bid.block_hash) : parentFull s blk = true := by
+  have hb := (processBlock_latestBlockHash h).2
+  cases hf : parentFull s blk with
+  | true => rfl
+  | false =>
+    rw [hf, ite_eq_right (by simp only [Bool.false_eq_true, not_false_eq_true]), hl] at hb
+    unfold parentFull at hf
+    rw [hb, beq_self_eq_true] at hf
+    cases hf
+
+/-- `upgrade_to_gloas` sets `latest_block_hash` and the synthetic bid's `block_hash` both to the Fulu
+`latest_execution_payload_header.block_hash` (FK:176, 209). -/
+theorem upgradeToGloas_latestBlockHash {ctx : Ctx} {pre : BeaconState P .fulu}
+    {post : Gloas.BeaconState P} (h : Gloas.upgradeToGloas ctx pre = .ok post) :
+    post.latest_block_hash = pre.latest_execution_payload_header.block_hash ∧
+      post.latest_execution_payload_bid.block_hash = pre.latest_execution_payload_header.block_hash := by
+  unfold Gloas.upgradeToGloas at h
+  obtain ⟨p0, hp0, h⟩ := Except.bind_eq_ok h
+  obtain ⟨_, _, h⟩ := Except.bind_eq_ok h
+  obtain ⟨fr, -⟩ := Inv.onboard_post h
+  unfold Gloas.upgradedState at hp0
+  obtain ⟨_, _, hp0⟩ := Except.bind_eq_ok hp0
+  obtain ⟨_, _, hp0⟩ := Except.bind_eq_ok hp0
+  cases hp0
+  obtain ⟨_, _, _, hL, hK, _⟩ := fr
+  exact ⟨hK, by rw [hL]⟩
+
+/-! ## O-b: the crossing settles FULL -/
+
+/-- **O-b.** At the crossing, if Gloas `process_block` accepts the first Gloas block, its settlement is FULL:
+`upgrade_to_gloas` leaves `latest_block_hash` equal to the synthetic bid's `block_hash`, the crossing's slots keep
+both, and the bid check (CL:2193) then makes the block's bid build on that hash. -/
+theorem crossing_parentFull {ccfg : Config} {bls : Bool} {beacon : BeaconState P .fulu}
+    {upgraded postSlots post : Gloas.BeaconState P} {b : Gloas.SignedBeaconBlock P}
+    (hup : Gloas.crossFromFulu (gloasCtx ccfg bls) beacon = .ok upgraded)
+    (h0 : crossingSlots (gloasCtx ccfg bls) upgraded b.message.slot = .ok postSlots)
+    (hp : gloasBlockTransition (gloasCtx ccfg bls) postSlots b = .ok post) :
+    parentFull postSlots b.message = true := by
+  obtain ⟨atFork, hat⟩ := crossFromFulu_upgrade hup
+  obtain ⟨hk, hl⟩ := upgradeToGloas_latestBlockHash hat
+  obtain ⟨-, hL, hK⟩ := crossingSlots_bidFrame h0
+  refine processBlock_full_of_latestBlockHash (gloasBlockTransition_processBlock_eq hp) ?_
+  rw [hK, hL, hk, hl]
+
+/-- **O-b, the refusal excludes no spec-valid chain.** A Fulu state before the fork slot, a Gloas block at or
+after it, the crossing (`crossFromFulu`) and slots, and the block accepted by the Gloas block transition: then the
+joint step's crossing succeeds as soon as the block's `parent_execution_requests` are empty by value (the SF-7
+strengthening of the spec's root check, FK:218) and its envelope, if any, passes. The named refusal of an EMPTY
+first settlement (`jointStepG_cross_refuses_empty`) never fires on such a chain. -/
+theorem jointStepG_cross_ok_of_spec {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    {beacon : BeaconState P .fulu} {exec : BlockChain} {b : Gloas.SignedBeaconBlock P}
+    {env? : Option (Gloas.SignedExecutionPayloadEnvelope P)} {upgraded postSlots post : Gloas.BeaconState P}
+    {s' : GJointState P}
+    (h1 : beacon.slot.toNat < gloasForkSlot (P := P) ccfg) (h2 : gloasForkSlot (P := P) ccfg ≤ b.message.slot.toNat)
+    (hup : Gloas.crossFromFulu (gloasCtx ccfg bls) beacon = .ok upgraded)
+    (h0 : crossingSlots (gloasCtx ccfg bls) upgraded b.message.slot = .ok postSlots)
+    (hp : gloasBlockTransition (gloasCtx ccfg bls) postSlots b = .ok post)
+    (hr : b.message.body.parent_execution_requests = Gloas.ExecutionRequests.empty)
+    (hd : gloasDeliverOpt cfg ccfg bls post exec env? = .ok s') :
+    jointStepG cfg ccfg bls (.pre ⟨.fulu, beacon, exec⟩) (.gloas b) env? = .ok s' :=
+  jointStepG_cross_ok_iff.mpr ⟨h1, h2, upgraded, postSlots, post, hup, h0, crossing_parentFull hup h0 hp, hr, hp, hd⟩
+
+/-! ## G3-10 and G3-11 at every post-state -/
+
+/-- The request `envelopeNewPayloadRequest` builds carries the envelope's payload. -/
+theorem envelopeNewPayloadRequest_payload {state : Gloas.BeaconState P}
+    {e : Gloas.SignedExecutionPayloadEnvelope P} {req : Gloas.NewPayloadRequest P}
+    (h : Gloas.envelopeNewPayloadRequest state e = .ok req) :
+    req.execution_payload = e.message.payload := by
+  unfold Gloas.envelopeNewPayloadRequest at h
+  obtain ⟨_, _, h⟩ := Except.bind_eq_ok h
+  cases h
+  rfl
+
+/-- The end of a Gloas step establishes G3-10 and G3-11: the envelope check ties a delivered payload to the
+post-block state's bid and `latest_block_hash`, its withdrawals to `payload_expected_withdrawals`, and its chain
+to the engine. -/
+theorem gloasDeliverOpt_ledger {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    {post : Gloas.BeaconState P} {exec : BlockChain} {env? : Option (Gloas.SignedExecutionPayloadEnvelope P)}
+    {s' : GJointState P} (h : gloasDeliverOpt cfg ccfg bls post exec env? = .ok s') :
+    ParentPayloadCoherence cfg s' ∧ ExpectedWithdrawalsLedger s' := by
+  rcases gloasDeliverOpt_ok_iff.mp h with ⟨-, rfl⟩ | ⟨e, req, postE, -, hv, rfl⟩
+  · exact ⟨trivial, trivial⟩
+  · obtain ⟨hc, hw, hr, he⟩ := verifyEnvelopeG_ok_iff.mp hv
+    exact ⟨⟨hc.blockHash, hc.parentHash, hr, he⟩, hw⟩
+
+/-- **G3-10 and G3-11 hold at every run step's post-state**, whatever its pre-state. -/
+theorem GJointRunStep.postState_ledger {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    (D : GJointRunStep (P := P) cfg ccfg bls) :
+    ParentPayloadCoherence cfg D.postState ∧ ExpectedWithdrawalsLedger D.postState := by
+  cases D with
+  | pre D => exact ⟨trivial, trivial⟩
+  | crossing D => exact gloasDeliverOpt_ledger D.deliver
+  | gloas D => exact gloasDeliverOpt_ledger D.deliver
+
+/-! ## G3-09 -/
+
+/-- **G3-09 across a Gloas step**, from G3-09 and G3-10 at the pre-state. FULL over a delivered payload: the
+chain becomes the engine's, whose head is the payload's block, whose hash is the payload's `block_hash`, the
+latest bid's (G3-10), which the settlement writes to `latest_block_hash`. FULL over a landed payload: the bid's
+`block_hash` already is `latest_block_hash` (G3-10). EMPTY: neither moves. -/
+theorem GloasStepData.execHead {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    (D : GloasStepData (P := P) cfg ccfg bls)
+    (h9 : ExecHeadIsLatestBlockHash (GJointState.gloas D.preB D.preExec D.preParent))
+    (h10 : ParentPayloadCoherence cfg (GJointState.gloas D.preB D.preExec D.preParent)) :
+    ExecHeadIsLatestBlockHash (GJointState.gloas D.postB D.postExec D.postParent) := by
+  have hpb := (processBlock_latestBlockHash (gloasBlockTransition_processBlock_eq D.transition)).1
+  obtain ⟨-, hL, hK⟩ := processSlots_bidFrame D.slots
+  change execHeadHash D.preExec = some D.preB.latest_block_hash at h9
+  show execHeadHash D.postExec = some D.postB.latest_block_hash
+  rcases settleParent_ok_iff.mp D.settleOk with
+    ⟨hf, env, req, post, hpar, -, hex, -⟩ | ⟨hf, hpar, -, hex, -⟩ | ⟨hf, -, hex, -⟩
+  · rw [hpar] at h10
+    obtain ⟨hbh, -, hreq, heng⟩ := h10
+    rw [hpb, hf, ite_eq_left rfl, hL, hex, execHeadHash, engineVerdictG_getLast heng, Option.map_some,
+      (engineVerdictG_ok_iff.mp heng).2.1, envelopeNewPayloadRequest_payload hreq, hbh]
+  · rw [hpar] at h10
+    obtain ⟨hbh, -, -⟩ := h10
+    rw [hpb, hf, ite_eq_left rfl, hL, hex, hbh, h9]
+  · rw [hpb, hf, ite_eq_right (by simp only [Bool.false_eq_true, not_false_eq_true]), hK, hex, h9]
+
+/-- **G3-09 across the crossing**, from the Fulu head relation at the fork state `atFork`: the built-upon chain
+does not move, and the first block's FULL settlement writes the synthetic bid's `block_hash`, which
+`upgrade_to_gloas` copied from `atFork`'s `latest_execution_payload_header`. -/
+theorem CrossingData.execHead {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    (D : CrossingData (P := P) cfg ccfg bls)
+    (h : execHeadHash D.exec = some D.atFork.latest_execution_payload_header.block_hash) :
+    ExecHeadIsLatestBlockHash (GJointState.gloas D.postB D.exec D.postParent) := by
+  have hpb := (processBlock_latestBlockHash (gloasBlockTransition_processBlock_eq D.transition)).1
+  obtain ⟨-, hL, -⟩ := crossingSlots_bidFrame D.slots
+  obtain ⟨-, hl⟩ := upgradeToGloas_latestBlockHash D.upgrade
+  show execHeadHash D.exec = some D.postB.latest_block_hash
+  rw [hpb, D.full, ite_eq_left rfl, hL, hl, h]
+
+/-- **The joint invariants across a Gloas step.** -/
+theorem GloasStepData.gJointInv {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    (D : GloasStepData (P := P) cfg ccfg bls)
+    (h : GJointInv cfg (GJointState.gloas D.preB D.preExec D.preParent)) :
+    GJointInv cfg (GJointState.gloas D.postB D.postExec D.postParent) :=
+  ⟨D.execHead h.1 h.2.1, gloasDeliverOpt_ledger D.deliver⟩
+
+/-- **The joint invariants across the crossing**, from the Fulu head relation at the fork state. -/
+theorem CrossingData.gJointInv {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    (D : CrossingData (P := P) cfg ccfg bls)
+    (h : execHeadHash D.exec = some D.atFork.latest_execution_payload_header.block_hash) :
+    GJointInv cfg (GJointState.gloas D.postB D.exec D.postParent) :=
+  ⟨D.execHead h, gloasDeliverOpt_ledger D.deliver⟩
+
+/-! ## O-a: the builders after the first Gloas block -/
+
+/-- The first Gloas block's parent settlement, with empty requests, leaves the builders as they were. -/
+theorem processParentExecutionPayload_builders_of_empty {ctx : Ctx} {s s1 : Gloas.BeaconState P}
+    {blk : Gloas.BeaconBlock P} (h : Gloas.processParentExecutionPayload ctx s blk = .ok s1)
+    (hr : blk.body.parent_execution_requests = Gloas.ExecutionRequests.empty) : s1.builders = s.builders := by
+  rcases Inv.processParentExecutionPayload_cases h with ⟨he, -⟩ | ⟨-, a, d, e, ha, hd, he, hs⟩
+  · rw [he]
+  · rw [hr] at hd he
+    have ca := Inv.applyParentPrefix_core _ _ _ _ ha
+    cases hd
+    cases he
+    rw [(Inv.applyParentSuffix_post hs).1]
+    exact ca.1
+
+/-- **O-a, the builders.** After the first Gloas block, the builders are `upgrade_to_gloas`'s, as pubkeys and
+withdrawable epochs, and as many: the crossing's slots keep them, the parent settlement over empty requests keeps
+them, and the rest of the block writes neither (`processBlock_after_parent`). -/
+theorem CrossingData.buildersPkWe {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    (D : CrossingData (P := P) cfg ccfg bls) : BuildersPkWe D.upgraded D.postB := by
+  obtain ⟨hb0, -, -⟩ := crossingSlots_bidFrame D.slots
+  obtain ⟨mid, hmid, hpk⟩ :=
+    processBlock_after_parent _ _ _ _ (gloasBlockTransition_processBlock_eq D.transition)
+  have hm : mid.builders = D.upgraded.builders :=
+    (processParentExecutionPayload_builders_of_empty hmid D.emptyRequests).trans hb0
+  unfold BuildersPkWe at hpk ⊢
+  rw [hm] at hpk
+  exact hpk
+
+/-- **O-a, `withdrawable_epoch`.** After the first Gloas block every builder is at `FAR_FUTURE_EPOCH`. -/
+theorem CrossingData.buildersFar {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    (D : CrossingData (P := P) cfg ccfg bls) : BuildersFar D.postB := by
+  obtain ⟨-, hmap⟩ := D.buildersPkWe
+  have hf := (upgradeToGloas_builders D.upgrade).1
+  intro i x hx
+  have hi := hmap i
+  rw [hx] at hi
+  cases hu : D.upgraded.builders.toArray[i]? with
+  | none => rw [hu] at hi; cases hi
+  | some y =>
+    rw [hu] at hi
+    simp only [Option.map_some, Option.some.injEq, Prod.mk.injEq] at hi
+    rw [hi.2]
+    exact hf i y hu
+
+end Blanc
