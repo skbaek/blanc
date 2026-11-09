@@ -610,6 +610,7 @@ import Blanc.Lift.WithdrawalRequest.HistoryFifo
 import Blanc.Lift.WithdrawalRequest.InhibitedHistory
 import Blanc.Lift.WithdrawalRequest.InhibitedObservations
 import Blanc.Lift.WithdrawalRequest.JointAuthorization
+import Blanc.Lift.WithdrawalRequest.JointCrediting
 import Blanc.Lift.WithdrawalRequest.JointFate
 import Blanc.Lift.WithdrawalRequest.JointHistory
 import Blanc.Lift.WithdrawalRequest.JointLatency

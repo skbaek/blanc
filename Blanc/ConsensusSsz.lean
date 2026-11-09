@@ -78,4 +78,27 @@ theorem serialize_sszList_of_fixedSize {α : Type} [Ssz α] {k n : Nat}
     serialize l = l.toArray.toList.flatMap serialize :=
   serializeSeq_of_fixedSize hk l.toArray
 
+/-- Jaune's four-byte constructor is the big-endian four-byte decoder. -/
+theorem uint32_ofBytes_eq_toUInt32 (a b c d : UInt8) :
+    UInt32.ofBytes a b c d = Bytes.toUInt32 [a, b, c, d] := by
+  rw [UInt32.ofBytes_eq_halves]
+  rfl
+
+/-- Twenty bytes split 4 + 8 + 8 decode to the address of the three big-endian limbs. -/
+theorem toAdr?_append {l₁ l₂ l₃ : Bytes} (h₁ : l₁.length = 4) (h₂ : l₂.length = 8)
+    (h₃ : l₃.length = 8) :
+    Bytes.toAdr? (l₁ ++ l₂ ++ l₃) = some ⟨l₁.toUInt32, l₂.toUInt64, l₃.toUInt64⟩ := by
+  match l₁, l₂, l₃, h₁, h₂, h₃ with
+  | [_, _, _, _], [_, _, _, _, _, _, _, _], [_, _, _, _, _, _, _, _], _, _, _ =>
+    simp only [List.cons_append, List.nil_append, Bytes.toAdr?, uint32_ofBytes_eq_toUInt32,
+      UInt64.ofBytes_eq_toUInt64]
+
+/-- An address's 20 bytes decode back to it. -/
+theorem toAdr?_toBytes (a : Adr) : Bytes.toAdr? a.toBytes = some a := by
+  obtain ⟨a₁, a₂, a₃⟩ := a
+  simp only [Adr.toBytes, B128.toBytes, ← List.append_assoc]
+  rw [toAdr?_append (UInt32.length_toBytes _) (UInt64.length_toBytes _)
+    (UInt64.length_toBytes _), toUInt32_toBytes, UInt64.toUInt64_toBytes,
+    UInt64.toUInt64_toBytes]
+
 end Blanc.ConsensusSsz

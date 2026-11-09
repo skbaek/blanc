@@ -1354,6 +1354,16 @@ step hands to `process_block` (same calls as `jointStep`), and `jointStep_proces
 shows a successful step ran `processBlock (jointCtx ccfg bls)` on it successfully
 (`stateTransition_processBlock` is the within-fork piece). Combine with Jaune's
 `Facts.processBlockWith_split`/`Facts.processOperations_split` to reach a mid-block state.
+For a step's withdrawals, `jointWithdrawalsInput ccfg bls s b` is the state
+`process_withdrawals` reads (after `process_block_header`), and
+`jointStep_processWithdrawals` gives its `getExpectedWithdrawals` result `(ws, processed)`,
+the payload withdrawals equal to `ws` (via `consensusWithdrawals_eq_of_beq`, the derived
+`BEq` as equality) and the successful `process_withdrawals`; `JointStepTrace.block_wds`
+identifies the step's execution block withdrawals with `payloadWithdrawals b`. For the
+execution-side credit of a withdrawal list, `addBal_bal` gives a credit's effect on one
+address, `processWithdrawalsState_bal_congr` says the fold's effect at an address depends only
+on that address's balance, and `processWithdrawalsState_bal_filter` reduces an address's
+balance after the fold to crediting only the withdrawals addressed to it.
 To address a flattened per-step list (any `l.flatMap f`, e.g. the requests of all of a
 run's steps) by step and offset, use
 [`Blanc/ListFlatMapPosition.lean`](../Blanc/ListFlatMapPosition.lean):
@@ -1365,7 +1375,8 @@ For consensus SSZ byte equations, use
 [`Blanc/ConsensusSsz.lean`](../Blanc/ConsensusSsz.lean):
 `leBytes_eight_eq_reverse_toBytes` (little-endian `uint64` bytes are Jaune's
 big-endian `UInt64.toBytes` reversed), `leNat_leBytes`, `leBytes_eight_injective`,
-`adr_toBytes_injective`, `serialize_byteVector`, and
+`adr_toBytes_injective`, `toAdr?_toBytes` (an address's 20 bytes decode back to it, with
+`toAdr?_append` and `uint32_ofBytes_eq_toUInt32`), `serialize_byteVector`, and
 `serializeSeq_of_fixedSize`/`serialize_sszList_of_fixedSize` (a list of
 fixed-size elements serializes to the concatenation of its elements).
 

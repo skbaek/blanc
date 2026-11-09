@@ -1,5 +1,6 @@
 import JauneConsensus.Joint
 import JauneConsensus.Facts.Joint
+import JauneConsensus.Facts.Operations
 import Blanc.ExecutionHistory
 import Blanc.ExecutionHistoryExtension
 
@@ -204,6 +205,108 @@ theorem jointStep_processBlock {P : Preset} {cfg : ChainConfig} {ccfg : Config} 
   · obtain ⟨_, _, _, _, -, hbeacon, -⟩ := jointStep_fulu_ok_iff.mp h
     exact stateTransition_processBlock hbeacon
 
+/-! ## The withdrawals of a joint step -/
+
+/-- The beacon state a joint step's `process_withdrawals` reads (and `get_expected_withdrawals`
+computes from): `process_block_header` applied to `jointBlockInput`, the same calls as the
+`process_block` the step runs. -/
+def jointWithdrawalsInput {P : Preset} (ccfg : Config) (bls : Bool) (s : JointState P)
+    (b : AnySignedBlock P) : M (BeaconState P b.1) := do
+  let st ← jointBlockInput ccfg bls s b
+  processBlockHeader st b.2.message
+
+/-- The derived `BEq` of consensus withdrawals is equality. -/
+theorem consensusWithdrawal_eq_of_beq {a b : JauneConsensus.Withdrawal} (h : (a == b) = true) :
+    a = b := by
+  cases a
+  cases b
+  simp only [BEq.beq] at h
+  unfold instBEqWithdrawal.beq at h
+  simp only [Bool.and_eq_true, beq_iff_eq] at h
+  obtain ⟨rfl, rfl, rfl, rfl⟩ := h
+  rfl
+
+/-- `Array` `BEq` of consensus withdrawals is equality. -/
+theorem consensusWithdrawals_eq_of_beq {xs ys : Array JauneConsensus.Withdrawal}
+    (h : (xs == ys) = true) : xs = ys := by
+  obtain ⟨hsize, hall⟩ := Array.isEqv_iff_rel.mp h
+  exact Array.ext hsize fun i h₁ _ => consensusWithdrawal_eq_of_beq (hall i h₁)
+
+/-- A successful joint step ran `process_withdrawals` successfully on the state
+`jointWithdrawalsInput` computes, so the payload's withdrawals are exactly the
+`get_expected_withdrawals` of that state (the `require` of `process_withdrawals`). -/
+theorem jointStep_processWithdrawals {P : Preset} {cfg : ChainConfig} {ccfg : Config}
+    {bls : Bool} {s s' : JointState P} {b : AnySignedBlock P}
+    (h : jointStep cfg ccfg bls s b = .ok s') :
+    ∃ st, jointWithdrawalsInput ccfg bls s b = .ok st ∧
+      ∃ (ws : Array JauneConsensus.Withdrawal) (processed : Nat),
+        getExpectedWithdrawals st = .ok (ws, processed) ∧
+        b.2.message.body.execution_payload.withdrawals.toArray = ws ∧
+        ∃ post, JauneConsensus.processWithdrawals st b.2.message.body.execution_payload = .ok post := by
+  obtain ⟨st0, h0, post, hpost⟩ := jointStep_processBlock h
+  unfold processBlock at hpost
+  rw [Facts.processBlockWith_eq_afterWithdrawals] at hpost
+  obtain ⟨sw, hsw, -⟩ := Except.bind_eq_ok hpost
+  unfold Facts.blockAfterWithdrawals at hsw
+  obtain ⟨st, hst, hw⟩ := Except.bind_eq_ok hsw
+  refine ⟨st, by simp only [jointWithdrawalsInput, h0, hst, Except.bind_ok], ?_⟩
+  have hw' := hw
+  unfold JauneConsensus.processWithdrawals at hw'
+  obtain ⟨⟨ws, processed⟩, hge, hrest⟩ := Except.bind_eq_ok hw'
+  obtain ⟨_, hreq, -⟩ := Except.bind_eq_ok hrest
+  unfold require at hreq
+  split at hreq
+  · exact ⟨ws, processed, hge, consensusWithdrawals_eq_of_beq (by assumption), sw, hw⟩
+  · cases hreq
+
+/-! ## Per-address withdrawal credits -/
+
+/-- A credit moves only its recipient's balance. -/
+theorem addBal_bal (st : State) (x a : Adr) (v : B256) :
+    (st.addBal x v).bal a = if x = a then st.bal a + v else st.bal a := by
+  by_cases same : x = a
+  · subst same
+    rw [ite_eq_left rfl]
+    change ((st.setBal x (st.bal x + v)).get x).bal = _
+    rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
+    rfl
+  · rw [ite_eq_right same]
+    change ((st.setBal x (st.bal x + v)).get a).bal = _
+    rw [State.setBal_get_ne same]
+    rfl
+
+/-- The withdrawal fold's effect on an address depends only on that address's balance. -/
+theorem processWithdrawalsState_bal_congr {a : Adr} :
+    ∀ (wds : List Jaune.Withdrawal) {st st' : State}, st.bal a = st'.bal a →
+      (processWithdrawalsState st wds).bal a = (processWithdrawalsState st' wds).bal a
+  | [], _, _, h => h
+  | wd :: rest, st, st', h => by
+    unfold processWithdrawalsState
+    rw [List.foldl_cons, List.foldl_cons]
+    apply processWithdrawalsState_bal_congr rest
+    rw [addBal_bal, addBal_bal, h]
+
+/-- **Per-address crediting.** An address's balance after the withdrawal fold is its balance
+after crediting only the withdrawals whose recipient it is. -/
+theorem processWithdrawalsState_bal_filter (a : Adr) :
+    ∀ (wds : List Jaune.Withdrawal) (st : State),
+      (processWithdrawalsState st wds).bal a =
+        (processWithdrawalsState st (wds.filter fun wd => decide (wd.recipient = a))).bal a
+  | [], _ => rfl
+  | wd :: rest, st => by
+    rw [List.filter_cons]
+    by_cases hr : wd.recipient = a
+    · rw [ite_eq_left (decide_eq_true hr)]
+      unfold processWithdrawalsState
+      rw [List.foldl_cons, List.foldl_cons]
+      exact processWithdrawalsState_bal_filter a rest _
+    · rw [ite_eq_right (by simp only [hr, decide_false, Bool.false_eq_true, not_false_eq_true])]
+      unfold processWithdrawalsState
+      rw [List.foldl_cons]
+      refine (processWithdrawalsState_bal_filter a rest _).trans ?_
+      apply processWithdrawalsState_bal_congr
+      rw [addBal_bal, ite_eq_right hr]
+
 /-! ## Joint runs -/
 
 /-- The execution withdrawals of a signed block's payload: the withdrawals the converted
@@ -222,6 +325,13 @@ structure JointStepTrace {P : Preset} (cfg : ChainConfig) (ccfg : Config) (bls :
   trace : ConfiguredBlockTrace cfg s.exec s'.exec
   block_eq : trace.block = payloadToBlock req
   requests_eq : trace.blockOutput.requests = req.executionRequests
+
+/-- The execution block of a joint step credits the payload's withdrawals. -/
+theorem JointStepTrace.block_wds {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    {s s' : JointState P} {b : AnySignedBlock P} (t : JointStepTrace cfg ccfg bls s s' b) :
+    t.trace.block.wds = payloadWithdrawals b := by
+  rw [t.block_eq]
+  simp only [payloadToBlock, payloadWithdrawals, ofBlock_executionPayload t.ofBlock]
 
 /-- Every successful joint step with the balance no-wrap bound has a configured execution
 block trace. -/
