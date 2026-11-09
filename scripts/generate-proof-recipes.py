@@ -655,7 +655,7 @@ STRUCTURAL_DISPATCH_ARMS = frozenset()
 # When ``.lake/packages/jaune`` is materialized at that exact rev, every name is
 # additionally resolved against the pinned source. See ``validate_jaune_dispatch``
 # for what that verification does and does not establish.
-JAUNE_DISPATCH_PIN = "5d7abb73ac333f80d60dc91a4280d4823f58488c"
+JAUNE_DISPATCH_PIN = "74564f4d52f5ee685be41f93961b48b68524782f"
 JAUNE_DISPATCH_SURFACE = frozenset({
     "Jaune.State.subBal",
     "Jaune.Sevm",
