@@ -74,7 +74,7 @@ def HistoryFifo {cfg : ChainConfig} {checkpoint final : BlockChain}
 
 /-! The rest of this file proves the correspondence to the internal model. -/
 
-private theorem submissionRecord_eq {frame : Exec.Frame} {entry : Blanc.WithdrawalRequest.Entry}
+theorem submissionRecord_eq {frame : Exec.Frame} {entry : Blanc.WithdrawalRequest.Entry}
     (caller : frame.sevm.caller = entry.caller)
     (payload : frame.sevm.data = submissionPayload entry) :
     submissionRecord frame = outputRecord entry := by
@@ -145,7 +145,7 @@ theorem withdrawalRequestRecords_optional (tag : UInt8) (payload : Bytes) :
       withdrawalRequestRecords, List.flatMap_nil, withdrawalRecords, Nat.zero_add,
       Nat.reduceDiv, List.range_zero, List.map_nil, ite_self]
 
-private theorem submissions_eq_records {cfg : ChainConfig} {checkpoint final : BlockChain}
+theorem submissions_eq_records {cfg : ChainConfig} {checkpoint final : BlockChain}
     (history : ConfiguredHistoryTrace cfg checkpoint final)
     (pairs : List (Exec.Frame × Blanc.WithdrawalRequest.Entry))
     (frames : pairs.map Prod.fst =
