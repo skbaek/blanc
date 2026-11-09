@@ -1,6 +1,7 @@
 import Blanc.Lift.WithdrawalRequest.JointAuthorization
 import Blanc.ConsensusSsz
 import JauneConsensus.Facts.ExpectedWithdrawals
+import JauneConsensus.Facts.WithdrawalsFloor
 
 /-!
 # Round-trip crediting safety along a valid joint chain (P4)
@@ -20,6 +21,10 @@ reads (`jointWithdrawalsInput`: `process_block_header` applied to the state the 
   processed pending entry `p` with `w.amount ≤ p.amount`, and leaves the loop's running
   balance of its validator (the state balance minus what `ws` already withdrew from it) at
   least `MIN_ACTIVATION_BALANCE` above `w.amount`.
+* **Post-withdrawals floor** (`ValidJoint.crediting_floor`). After the step's
+  `process_withdrawals st payload = .ok post`, every loop-1 payee whose validator is not exiting
+  (`exit_epoch = FAR_FUTURE_EPOCH`) keeps `MIN_ACTIVATION_BALANCE ≤ post.balances[V]`, from Jaune's
+  `Facts.processWithdrawals_floor` with every premise discharged along the chain.
 * **Compounding recipient** (`ValidJoint.crediting_loop1_compounding`). Every loop-1 payment
   goes to a validator with a compounding credential: the anchor invariant holds at `st`
   (`ValidJoint.anchorInv_at_withdrawals`), carried from the anchor by Jaune's `Facts.Pres` along
@@ -182,6 +187,52 @@ theorem ValidJoint.crediting_loop1_compounding {P : Preset} {cfg : ChainConfig} 
     ∃ validator, st.validators.toArray[w.validator_index.toNat]? = some validator ∧
       hasCompoundingWithdrawalCredential validator = true :=
   crediting_loop1_compounding_of_anchorInv hl hwit (v.anchorInv_at_withdrawals stepD hst) hw
+
+/-- **P4 (2), post-withdrawals floor.** At step `D` of a valid joint chain, with `st` the state
+`process_withdrawals` reads and `post` the state it returns on the step's payload, the
+`ValidJoint.crediting_loop1` package holds and every pending-partial loop payee `V` (of some
+`w ∈ ws1`) whose validator has `exit_epoch = FAR_FUTURE_EPOCH` ends with
+`MIN_ACTIVATION_BALANCE ≤ post.balances[V]`. The premises of `Facts.processWithdrawals_floor` are
+discharged here: Electra from `JointRunStep.atLeast_electra`, `ExitImpliesWithdrawable st` from
+`ValidJoint.anchorInv_at_withdrawals`, and the preset bounds from `ValidJoint`; the pre-state balance
+read is the loop's own (`Facts.Loop1Floor`). -/
+theorem ValidJoint.crediting_floor {P : Preset} {cfg : ChainConfig} {ccfg : Config}
+    {bls : Bool} {checkpoint : BlockChain} {anchor final : JointState P}
+    (v : ValidJoint cfg ccfg bls checkpoint anchor final)
+    {j : Nat} {D : JointRunStep (P := P) cfg ccfg bls} (stepD : v.run.steps[j]? = some D) :
+    ∃ st, jointWithdrawalsInput ccfg bls D.pre D.block = .ok st ∧
+      ∃ (ws : Array JauneConsensus.Withdrawal) (processed : Nat),
+        getExpectedWithdrawals st = .ok (ws, processed) ∧
+        D.block.2.message.body.execution_payload.withdrawals.toArray = ws ∧
+        ∃ post, JauneConsensus.processWithdrawals st D.block.2.message.body.execution_payload =
+            .ok post ∧
+        ∃ (ws1 ws2 : Array JauneConsensus.Withdrawal) (l : SszList PendingPartialWithdrawal
+            P.PENDING_PARTIAL_WITHDRAWALS_LIMIT),
+          st.pendingPartialWithdrawals = .ok l ∧
+          ws.toList = ws1.toList ++ ws2.toList ∧
+          Facts.Loop1Witness ws1 l.toArray processed ∧
+          Facts.Loop1Floor st ws1 P.MIN_ACTIVATION_BALANCE ∧
+          ∀ w ∈ ws1.toList, ∀ validator,
+            st.validators.toArray[w.validator_index.toNat]? = some validator →
+            validator.exit_epoch = FAR_FUTURE_EPOCH →
+            ∀ b : U64, post.balances.toArray[w.validator_index.toNat]? = some b →
+              P.MIN_ACTIVATION_BALANCE ≤ b.toNat := by
+  obtain ⟨st, hst, ws, processed, hge, hpay, ws1, ws2, l, hl, hsplit, hwit, hfloor⟩ :=
+    v.crediting_loop1 stepD
+  obtain ⟨st', hst', -, -, -, -, post, hpost⟩ :=
+    jointStep_processWithdrawals (v.run.steps_jointStep stepD)
+  rw [hst] at hst'
+  cases hst'
+  refine ⟨st, hst, ws, processed, hge, hpay, post, hpost, ws1, ws2, l, hl, hsplit, hwit, hfloor, ?_⟩
+  intro w hw validator hv hexit b hb
+  obtain ⟨b0, -, -, hb0, -, -⟩ := hfloor w hw
+  have hws : w ∈ ws.toList := by
+    rw [hsplit]
+    exact List.mem_append_left _ hw
+  exact Facts.processWithdrawals_floor st _ post ws processed (JointRunStep.atLeast_electra stepD)
+    (v.anchorInv_at_withdrawals stepD hst).2 v.slotsPerEpoch v.activationBalance hge hpost
+    w.validator_index ⟨validator, hv, hexit⟩ ⟨w, hws, rfl⟩ b0 b
+    (Facts.ssz_get_ok_iff.mpr (Facts.ssz_get_ok_iff.mp hb0)) (Facts.ssz_get_ok_iff.mpr hb)
 
 /-! ## Address stability from a mid-block state -/
 
