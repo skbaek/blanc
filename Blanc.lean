@@ -608,6 +608,7 @@ import Blanc.Lift.WithdrawalRequest.HeadlineFee
 import Blanc.Lift.WithdrawalRequest.HeadlineHistory
 import Blanc.Lift.WithdrawalRequest.HeadlineSystem
 import Blanc.Lift.WithdrawalRequest.HistoryFifo
+import Blanc.Lift.WithdrawalRequest.IgnoreWitnesses
 import Blanc.Lift.WithdrawalRequest.InhibitedHistory
 import Blanc.Lift.WithdrawalRequest.InhibitedObservations
 import Blanc.Lift.WithdrawalRequest.JointAuthorization
