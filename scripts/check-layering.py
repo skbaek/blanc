@@ -449,6 +449,7 @@ CONTRACTS = {
                            "Lift.WithdrawalRequest.JointAuthorization",
                            "Lift.WithdrawalRequest.JointFate",
                            "Lift.WithdrawalRequest.IgnoreWitnesses",
+                           "Lift.WithdrawalRequest.OrderWitness",
                            "Lift.WithdrawalRequest.JointCrediting",
                            "Lift.WithdrawalRequest.InhibitedHistory",
                            "Lift.WithdrawalRequest.InhibitedObservations",

@@ -627,6 +627,7 @@ import Blanc.Lift.WithdrawalRequest.NatFee
 import Blanc.Lift.WithdrawalRequest.NatFeeBound
 import Blanc.Lift.WithdrawalRequest.NatLiveness
 import Blanc.Lift.WithdrawalRequest.NumericFacts
+import Blanc.Lift.WithdrawalRequest.OrderWitness
 import Blanc.Lift.WithdrawalRequest.Prog
 import Blanc.Lift.WithdrawalRequest.ProtocolOccurrences
 import Blanc.Lift.WithdrawalRequest.RequestCodec
