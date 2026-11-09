@@ -14,8 +14,11 @@ reads (`jointWithdrawalsInput`: `process_block_header` applied to the state the 
   whose withdrawal address is `w.address`. The step's execution block carries exactly
   `ws` (the `require` of `process_withdrawals` plus the payload conversion), so the body run
   credits exactly the fold `processWithdrawalsState pre (ws.map toExecution)` before its
-  request pass, and each address's balance moves only by the withdrawals in `ws` addressed
-  to it.
+  request pass, and each address `a`'s balance after that fold is its balance before plus
+  `Σ w.amount * 10^9` over `{w ∈ ws | w.address = a}`, modulo `2^256`
+  (`processWithdrawalsState_toExecution_bal`). The `require` is the negative control:
+  `jointStep_rejects_of_withdrawals_ne` shows a block whose payload withdrawals differ from `ws`
+  is rejected.
 * **Amount and loop floor** (`ValidJoint.crediting_loop1`). `ws` splits as the pending-partial
   loop's emissions `ws1` followed by the sweep's; each `w ∈ ws1` comes from a distinct
   processed pending entry `p` with `w.amount ≤ p.amount`, and leaves the loop's running
@@ -29,9 +32,10 @@ reads (`jointWithdrawalsInput`: `process_block_header` applied to the state the 
   goes to a validator with a compounding credential: the anchor invariant holds at `st`
   (`ValidJoint.anchorInv_at_withdrawals`), carried from the anchor by Jaune's `Facts.Pres` along
   the run and through the step's slots, upgrade and header.
-* **Same address as the request** (`ValidJoint.crediting_address`). A partial withdrawal the
-  7002 path appended for `V` at a mid-block state `m` of step `j₀` (P1's hypotheses) is paid,
-  at the `st` of any later step `j > j₀`, to the request's `source_address`: the withdrawal
+* **Same address as the request** (`ValidJoint.crediting_address`). A safety statement, not
+  liveness: once the 7002 path has appended a partial withdrawal for `V` at a mid-block state `m`
+  of step `j₀` (P1's hypotheses), any withdrawal paid for `V` at a later step `j > j₀` goes to
+  the request's `source_address`, whether or not that entry is ever paid. The withdrawal
   address of every execution-credentialed validator is stable from `m` to `st`
   (`ValidJoint.addrStable_mid_to_withdrawals`), through the rest of block `j₀` (the remaining
   withdrawal requests, the consolidation requests, the sync aggregate), the steps between,
@@ -59,8 +63,9 @@ theorem payloadWithdrawals_eq_expected {P : Preset} {b : AnySignedBlock P}
   keeps `address` as `recipient`);
 * the body's request pass starts from the fold `processWithdrawalsState` of exactly those
   withdrawals over the post-transaction state, and its final state is the body's;
-* in that fold, each address `a`'s balance is what crediting only the `w ∈ ws` with
-  `w.address = a` gives. -/
+* in that fold, from any pre-state, each address `a`'s balance is its balance before plus the
+  sum of `w.amount * 10^9` over `{w ∈ ws | w.address = a}`, modulo `2^256` (an exact
+  statement; under the configured trace's no-overflow bound the reduction is the identity). -/
 theorem ValidJoint.crediting_recipient {P : Preset} {cfg : ChainConfig} {ccfg : Config}
     {bls : Bool} {checkpoint : BlockChain} {anchor final : JointState P}
     (v : ValidJoint cfg ccfg bls checkpoint anchor final)
@@ -79,9 +84,10 @@ theorem ValidJoint.crediting_recipient {P : Preset} {cfg : ChainConfig} {ccfg : 
               (ws.toList.map JauneConsensus.Withdrawal.toExecution)))
           D.stepTrace.trace.bodyState D.stepTrace.trace.bodyTrace.requestBout) ∧
         ∀ (pre : State) (a : Adr),
-          (processWithdrawalsState pre (ws.toList.map JauneConsensus.Withdrawal.toExecution)).bal a =
-            (processWithdrawalsState pre ((ws.toList.filter fun w => decide (w.address = a)).map
-              JauneConsensus.Withdrawal.toExecution)).bal a := by
+          ((processWithdrawalsState pre
+              (ws.toList.map JauneConsensus.Withdrawal.toExecution)).bal a).toNat =
+            ((pre.bal a).toNat + ((ws.toList.filter fun w => decide (w.address = a)).map
+              fun w => w.amount.toNat * 10 ^ 9).sum) % 2 ^ 256 := by
   obtain ⟨st, hst, ws, processed, hge, hpay, -⟩ :=
     jointStep_processWithdrawals (v.run.steps_jointStep stepD)
   have hwds : D.stepTrace.trace.block.wds =
@@ -92,9 +98,7 @@ theorem ValidJoint.crediting_recipient {P : Preset} {cfg : ChainConfig} {ccfg : 
   · have hreq := D.stepTrace.trace.bodyTrace.requests
     rw [D.stepTrace.trace.bodyTrace.requestState_eq] at hreq
     exact hwds ▸ hreq
-  · intro pre a
-    rw [processWithdrawalsState_bal_filter a, List.filter_map]
-    rfl
+  · exact processWithdrawalsState_toExecution_bal ws.toList
 
 /-- Steps of a joint run are Electra or Fulu blocks, so the pending-partial queue exists. -/
 theorem JointRunStep.atLeast_electra {P : Preset} {cfg : ChainConfig} {ccfg : Config}
@@ -369,12 +373,13 @@ theorem ValidJoint.crediting_address_of_addrStable {P : Preset} {cfg : ChainConf
   rw [hdrop, hsource, ConsensusSsz.toAdr?_toBytes] at haddr
   exact (Except.ok.inj haddr).symm
 
-/-- **P4 (3), same address as the request.** Take an application of the 7002 path that P1
-covers: step `j₀`'s withdrawal request `k₀`, `wr`, classified at its mid-block state `m` as a
-partial withdrawal of validator `V` (so a pending partial withdrawal for `V` is appended).
+/-- **P4 (3), same address as the request (safety).** Take an application of the 7002 path
+that P1 covers: step `j₀`'s withdrawal request `k₀`, `wr`, classified at its mid-block state `m`
+as a partial withdrawal of validator `V` (so a pending partial withdrawal for `V` is appended).
 At any later step `j > j₀` let `st` be the state `process_withdrawals` reads and `ws` its
-expected withdrawals. Every `w ∈ ws` paid to `V`, in particular the loop-1 payment of that
-pending entry, goes to the request's `source_address`, the address P1 checked. -/
+expected withdrawals. Any withdrawal paid for `V` at step `j` (any `w ∈ ws` with
+`w.validator_index = V`, the loop-1 payment of that entry among them) goes to
+`wr.source_address`, the address P1 checked. It does not claim the entry is ever paid. -/
 theorem ValidJoint.crediting_address {P : Preset} {cfg : ChainConfig} {ccfg : Config}
     {bls : Bool} {checkpoint : BlockChain} {anchor final : JointState P}
     (v : ValidJoint cfg ccfg bls checkpoint anchor final)

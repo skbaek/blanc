@@ -324,6 +324,27 @@ theorem jointStep_processWithdrawals {P : Preset} {cfg : ChainConfig} {ccfg : Co
   · exact ⟨ws, processed, hge, consensusWithdrawals_eq_of_beq (by assumption), sw, hw⟩
   · cases hreq
 
+/-- **P4's negative control: the payload-withdrawals check bites.** If a block's payload
+withdrawals differ from `get_expected_withdrawals` of the state its `process_withdrawals` reads,
+the joint step rejects it. This is the `require (payload.withdrawals == expected)` of
+`process_withdrawals`: an engine without that check would accept such a block, and its execution
+side would credit withdrawals other than the expected ones, breaking P4 (1)'s per-address sums
+over `{w ∈ ws | w.address = a}` (`ValidJoint.crediting_recipient`). -/
+theorem jointStep_rejects_of_withdrawals_ne {P : Preset} {cfg : ChainConfig} {ccfg : Config}
+    {bls : Bool} {s : JointState P} {b : AnySignedBlock P} {st : BeaconState P b.1}
+    (hst : jointWithdrawalsInput ccfg bls s b = .ok st)
+    {ws : Array JauneConsensus.Withdrawal} {processed : Nat}
+    (hge : getExpectedWithdrawals st = .ok (ws, processed))
+    (hne : b.2.message.body.execution_payload.withdrawals.toArray ≠ ws) (s' : JointState P) :
+    jointStep cfg ccfg bls s b ≠ .ok s' := by
+  intro h
+  obtain ⟨st', hst', ws', processed', hge', hpay, -⟩ := jointStep_processWithdrawals h
+  rw [hst] at hst'
+  cases hst'
+  rw [hge] at hge'
+  obtain ⟨rfl, -⟩ := Prod.mk.inj (Except.ok.inj hge')
+  exact hne hpay
+
 /-! ## Per-address withdrawal credits -/
 
 /-- A credit moves only its recipient's balance. -/
@@ -371,6 +392,45 @@ theorem processWithdrawalsState_bal_filter (a : Adr) :
       refine (processWithdrawalsState_bal_filter a rest _).trans ?_
       apply processWithdrawalsState_bal_congr
       rw [addBal_bal, ite_eq_right hr]
+
+/-- **Per-address sum.** An address's balance after the withdrawal fold is its balance before
+plus the sum of the credits `wd.amount * 10^9` over the withdrawals whose recipient it is, in
+wrapping 256-bit arithmetic. No premise: the reduction modulo `2^256` is exact. -/
+theorem processWithdrawalsState_bal_toNat (a : Adr) :
+    ∀ (wds : List Jaune.Withdrawal) (st : State),
+      ((processWithdrawalsState st wds).bal a).toNat =
+        ((st.bal a).toNat + ((wds.filter fun wd => decide (wd.recipient = a)).map
+          fun wd => (wd.amount * (10 ^ 9).toB256).toNat).sum) % 2 ^ 256
+  | [], st => by
+    rw [List.filter_nil, List.map_nil, List.sum_nil, Nat.add_zero,
+      Nat.mod_eq_of_lt (B256.toNat_lt _)]
+    rfl
+  | wd :: rest, st => by
+    have ih := processWithdrawalsState_bal_toNat a rest
+    unfold processWithdrawalsState at ih ⊢
+    rw [List.foldl_cons, ih, addBal_bal, List.filter_cons]
+    by_cases hr : wd.recipient = a
+    · rw [ite_eq_left hr, ite_eq_left (decide_eq_true hr), List.map_cons, List.sum_cons,
+        B256.toNat_add, Nat.lo_eq, Nat.mod_add_mod, Nat.add_assoc]
+    · rw [ite_eq_right hr,
+        ite_eq_right (by simp only [hr, decide_false, Bool.false_eq_true, not_false_eq_true])]
+
+/-- **Per-address sum for converted consensus withdrawals.** Crediting `ws` converted, an
+address `a`'s balance becomes its balance before plus `Σ w.amount * 10^9` over the
+`w ∈ ws` with `w.address = a`, modulo `2^256` (exact, no premise; each converted credit is a
+Gwei amount below `2^64` times `10^9`, so it never wraps on its own). -/
+theorem processWithdrawalsState_toExecution_bal (ws : List JauneConsensus.Withdrawal)
+    (pre : State) (a : Adr) :
+    ((processWithdrawalsState pre (ws.map JauneConsensus.Withdrawal.toExecution)).bal a).toNat =
+      ((pre.bal a).toNat + ((ws.filter fun w => decide (w.address = a)).map
+        fun w => w.amount.toNat * 10 ^ 9).sum) % 2 ^ 256 := by
+  rw [processWithdrawalsState_bal_toNat, List.filter_map, List.map_map]
+  refine congrArg (fun s => ((pre.bal a).toNat + s) % 2 ^ 256) (congrArg List.sum
+    (List.map_congr_left fun w _ => ?_))
+  have hlt := U64.toNat_lt w.amount
+  rw [Function.comp_apply, B256.toNat_mul, B256.toNat_toB256_of_lt (n := 10 ^ 9) (by omega),
+    show w.toExecution.amount = Nat.toB256 w.amount.toNat from rfl,
+    B256.toNat_toB256_of_lt (by omega), Nat.lo_eq, Nat.mod_eq_of_lt (by omega)]
 
 /-! ## Joint runs -/
 
