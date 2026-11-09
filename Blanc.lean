@@ -26,6 +26,7 @@ import Blanc.CompiledWalkInversion
 import Blanc.Composition.BuilderRequestCarrier
 import Blanc.Composition.BuilderRequestCodesKept
 import Blanc.Composition.BuilderRequestJointG
+import Blanc.Composition.BuilderRequestJointGBalance
 import Blanc.Composition.BuilderRequestJointGFate
 import Blanc.Composition.BuilderRequestPublicBounds
 import Blanc.Composition.BuilderRequestPublicFindings
