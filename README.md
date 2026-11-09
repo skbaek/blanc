@@ -707,7 +707,7 @@ over this module found 253 such lines, still being elaborated on every build.
 
 **What you are trusting.** Blanc's trusted base is Jaune's plus three
 additions, so the base document is Jaune's
-[`TRUSTED.md`](https://github.com/skbaek/jaune/blob/e8db2742bab025fe3c0e399f00d0dba7ca908926/TRUSTED.md) — the
+[`TRUSTED.md`](https://github.com/skbaek/jaune/blob/5d7abb73ac333f80d60dc91a4280d4823f58488c/TRUSTED.md) — the
 kernel and pins, what is deliberately absent from the library and which gate
 enforces each absence, the known exceptions, and where the line between testing
 and proof falls. It is not duplicated here. Blanc adds exactly:
@@ -738,7 +738,7 @@ about whether they are the right theorems. Read the statement in the file
 the claim map cites rather than inferring it from a theorem's name.
 
 Blanc builds against a **pinned revision** of
-[Jaune](https://github.com/skbaek/jaune) — `require jaune from git … @ e8db2742…`
+[Jaune](https://github.com/skbaek/jaune) — `require jaune from git … @ 5d7abb73…`
 in [`lakefile.lean`](lakefile.lean) — so a fresh clone builds reproducibly
 without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 

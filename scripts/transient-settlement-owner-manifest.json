@@ -32,8 +32,8 @@
     "scripts/execution-settlement-lift-manifest.json": "fd40bc4a604e2767d5f1adeb60003c2e8562c35f52412c80451bafcd89a0b4d3"
   },
   "jaunePinFiles": {
-    "lake-manifest.json": "1a44c067d38dfb02169cf5561933128c1653c704e2ca034e665fff5ee5a463f8",
-    "lakefile.lean": "c995fe7b4ee6e84f5244284a6972572bc11b95757deabb1a520b95decb77a004"
+    "lake-manifest.json": "009b939c4270f9e3b8bbddd6f86a238fb179e853410106d5408d6f16251f5b98",
+    "lakefile.lean": "4b964a83f9bf5823d8caaf680f813f3b028dbfda82b8d1318958f98e2eb010a1"
   },
   "movedDonors": [
     [
