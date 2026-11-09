@@ -1,5 +1,6 @@
 import JauneConsensus.Joint
 import Blanc.ExecutionHistory
+import Blanc.ExecutionHistoryExtension
 
 /-!
 # Joint execution–consensus histories
@@ -268,5 +269,116 @@ theorem JointRun.toExec_snoc {P : Preset} {cfg : ChainConfig} {ccfg : Config}
     (bound : sum s.exec.state.bal + wdsum (payloadWithdrawals b) < 2 ^ 256) :
     (run.snoc b step bound).toExec pre =
       .step (run.toExec pre) (JointStepTrace.choose step bound).trace := rfl
+
+/-! ## The steps of a joint run -/
+
+/-- One step of a joint run: its endpoints, its signed beacon block, and the chosen execution
+block trace that `JointRun.toExec` appends for it. -/
+structure JointRunStep {P : Preset} (cfg : ChainConfig) (ccfg : Config) (bls : Bool) : Type where
+  pre : JointState P
+  post : JointState P
+  block : AnySignedBlock P
+  stepTrace : JointStepTrace cfg ccfg bls pre post block
+
+/-- The steps of a joint run, in order. Step `j` carries the `j`-th execution block that
+`JointRun.toExec` appends after the pre-anchor history. -/
+noncomputable def JointRun.steps {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    {s₀ : JointState P} :
+    {s : JointState P} → JointRun cfg ccfg bls s₀ s → List (JointRunStep (P := P) cfg ccfg bls)
+  | _, .nil => []
+  | _, .snoc run b step bound => run.steps ++ [⟨_, _, b, JointStepTrace.choose step bound⟩]
+
+theorem JointRun.steps_nil {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    {s₀ : JointState P} : (JointRun.nil : JointRun cfg ccfg bls s₀ s₀).steps = [] := rfl
+
+theorem JointRun.steps_snoc {P : Preset} {cfg : ChainConfig} {ccfg : Config}
+    {bls : Bool} {s₀ s s' : JointState P} (run : JointRun cfg ccfg bls s₀ s)
+    (b : AnySignedBlock P) (step : jointStep cfg ccfg bls s b = .ok s')
+    (bound : sum s.exec.state.bal + wdsum (payloadWithdrawals b) < 2 ^ 256) :
+    (run.snoc b step bound).steps = run.steps ++ [⟨_, _, b, JointStepTrace.choose step bound⟩] :=
+  rfl
+
+/-- The last element of `l ++ [x]` at index `i` is `x` exactly at `i = l.length`. -/
+private theorem getElem?_append_singleton_of_not_lt {α : Type} {l : List α} {x y : α} {i : Nat}
+    (hi : ¬i < l.length) (h : (l ++ [x])[i]? = some y) : i = l.length ∧ x = y := by
+  rw [List.getElem?_append_right (by omega)] at h
+  cases hk : i - l.length with
+  | zero =>
+    rw [hk, List.getElem?_cons_zero, Option.some.injEq] at h
+    exact ⟨by omega, h⟩
+  | succ k =>
+    rw [hk, List.getElem?_cons_succ, List.getElem?_nil] at h
+    exact absurd h (by simp only [reduceCtorEq, not_false_eq_true])
+
+/-- The joint history through step `i` of a run extends to the whole joint history by the
+remaining steps: `run.toExec pre` is some configured history to step `i`'s execution chain,
+followed by step `i`'s execution block, followed by exactly `steps.length - 1 - i` blocks. -/
+theorem JointRun.extendsBy_toExec {P : Preset} {cfg : ChainConfig} {ccfg : Config}
+    {bls : Bool} {s₀ : JointState P} {checkpoint : BlockChain}
+    (pre : ConfiguredHistoryTrace cfg checkpoint s₀.exec) :
+    {s : JointState P} → (run : JointRun cfg ccfg bls s₀ s) → {i : Nat} →
+    {A : JointRunStep (P := P) cfg ccfg bls} → run.steps[i]? = some A →
+    ∃ history : ConfiguredHistoryTrace cfg checkpoint A.pre.exec,
+      (ConfiguredHistoryTrace.step history A.stepTrace.trace).ExtendsBy (run.toExec pre)
+        (run.steps.length - 1 - i)
+  | _, .nil, _, _, h => by
+    simp only [JointRun.steps, List.getElem?_nil, reduceCtorEq] at h
+  | _, .snoc run b step bound, i, A, h => by
+    rw [JointRun.steps_snoc] at h
+    rw [JointRun.steps_snoc, List.length_append, List.length_singleton, JointRun.toExec_snoc]
+    by_cases hi : i < run.steps.length
+    · rw [List.getElem?_append_left hi] at h
+      obtain ⟨history, ext⟩ := JointRun.extendsBy_toExec pre run h
+      refine ⟨history, ?_⟩
+      rw [show run.steps.length + 1 - 1 - i = run.steps.length - 1 - i + 1 by omega]
+      exact ext.step _
+    · obtain ⟨hlen, rfl⟩ := getElem?_append_singleton_of_not_lt hi h
+      refine ⟨run.toExec pre, ?_⟩
+      rw [show run.steps.length + 1 - 1 - i = 0 by omega]
+      exact .refl
+
+/-- Steps `i ≤ j` of a joint run: for some configured histories to their execution chains,
+the history through step `j` extends the history through step `i` by exactly `j - i` blocks,
+and the whole joint history extends the history through step `j` by the remaining
+`steps.length - 1 - j` blocks. -/
+theorem JointRun.extendsBy_steps {P : Preset} {cfg : ChainConfig} {ccfg : Config}
+    {bls : Bool} {s₀ : JointState P} {checkpoint : BlockChain}
+    (pre : ConfiguredHistoryTrace cfg checkpoint s₀.exec) :
+    {s : JointState P} → (run : JointRun cfg ccfg bls s₀ s) → {i j : Nat} →
+    {A C : JointRunStep (P := P) cfg ccfg bls} → i ≤ j →
+    run.steps[i]? = some A → run.steps[j]? = some C →
+    ∃ (historyA : ConfiguredHistoryTrace cfg checkpoint A.pre.exec)
+      (historyC : ConfiguredHistoryTrace cfg checkpoint C.pre.exec),
+      (ConfiguredHistoryTrace.step historyA A.stepTrace.trace).ExtendsBy
+        (ConfiguredHistoryTrace.step historyC C.stepTrace.trace) (j - i) ∧
+      (ConfiguredHistoryTrace.step historyC C.stepTrace.trace).ExtendsBy (run.toExec pre)
+        (run.steps.length - 1 - j)
+  | _, .nil, _, _, _, _, _, h, _ => by
+    simp only [JointRun.steps, List.getElem?_nil, reduceCtorEq] at h
+  | _, .snoc run b step bound, i, j, A, C, hij, hA, hC => by
+    rw [JointRun.steps_snoc] at hA hC
+    rw [JointRun.steps_snoc, List.length_append, List.length_singleton, JointRun.toExec_snoc]
+    by_cases hj : j < run.steps.length
+    · rw [List.getElem?_append_left hj] at hC
+      rw [List.getElem?_append_left (by omega)] at hA
+      obtain ⟨historyA, historyC, ext, tail⟩ := JointRun.extendsBy_steps pre run hij hA hC
+      refine ⟨historyA, historyC, ext, ?_⟩
+      rw [show run.steps.length + 1 - 1 - j = run.steps.length - 1 - j + 1 by omega]
+      exact tail.step _
+    · obtain ⟨hlen, rfl⟩ := getElem?_append_singleton_of_not_lt hj hC
+      by_cases hi : i < run.steps.length
+      · rw [List.getElem?_append_left hi] at hA
+        obtain ⟨historyA, ext⟩ := JointRun.extendsBy_toExec pre run hA
+        refine ⟨historyA, run.toExec pre, ?_, ?_⟩
+        · rw [show j - i = run.steps.length - 1 - i + 1 by omega]
+          exact ext.step _
+        · rw [show run.steps.length + 1 - 1 - j = 0 by omega]
+          exact .refl
+      · obtain ⟨hlen', rfl⟩ := getElem?_append_singleton_of_not_lt hi hA
+        refine ⟨run.toExec pre, run.toExec pre, ?_, ?_⟩
+        · rw [show j - i = 0 by omega]
+          exact .refl
+        · rw [show run.steps.length + 1 - 1 - j = 0 by omega]
+          exact .refl
 
 end Blanc

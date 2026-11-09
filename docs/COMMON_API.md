@@ -1341,6 +1341,13 @@ engine verdict from a successful step; `engineVerdict_ok` turns a verdict into t
 selected covered fork, `stateTransitionUsing`, the body run and the requests
 equality. `JointStepTrace` pins each step's `ConfiguredBlockTrace` block to
 `payloadToBlock req` and its body requests to `req.executionRequests`.
+To index a run by step, use `JointRun.steps` (each `JointRunStep` carries the step's
+endpoints, signed block and the chosen `JointStepTrace`). `JointRun.extendsBy_steps`
+turns steps `i ≤ j` into configured histories through them with
+`ConfiguredHistoryTrace.ExtendsBy` of exactly `j - i` blocks and of the remaining
+`steps.length - 1 - j` blocks to `run.toExec pre`; `JointRun.extendsBy_toExec` is
+the one-step form. These are the premises `Blanc/ExecutionHistoryExtension.lean`
+consumers (delivery bounds, restricted exclusion premises) take.
 
 For consensus SSZ byte equations, use
 [`Blanc/ConsensusSsz.lean`](../Blanc/ConsensusSsz.lean):
