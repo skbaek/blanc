@@ -175,9 +175,9 @@ theorem jointWithdrawalTrace_step {P : Preset} {ccfg : Config} {bls : Bool}
 /-- Every step of a valid joint chain has its mid-block trace: one state per withdrawal request
 of its beacon block, plus the final state. -/
 theorem ValidJoint.jointWithdrawalTrace_ok {P : Preset}
-    {AnchorInv : ∀ {f : CFork}, BeaconState P f → Prop} {cfg : ChainConfig} {ccfg : Config}
+    {cfg : ChainConfig} {ccfg : Config}
     {bls : Bool} {checkpoint : BlockChain} {anchor final : JointState P}
-    (v : ValidJoint AnchorInv cfg ccfg bls checkpoint anchor final)
+    (v : ValidJoint cfg ccfg bls checkpoint anchor final)
     {j : Nat} {D : JointRunStep (P := P) cfg ccfg bls} (stepD : v.run.steps[j]? = some D)
     {requests : ExecutionRequests P}
     (hread : Gated.read D.block.2.message.body.execution_requests
@@ -202,9 +202,9 @@ partial withdrawal of validator `V`, then:
   `wr.source_address`, which is the caller the contract recorded for that submission (the
   record's first 20 bytes). -/
 theorem ValidJoint.authorization {P : Preset}
-    {AnchorInv : ∀ {f : CFork}, BeaconState P f → Prop} {cfg : ChainConfig} {ccfg : Config}
+    {cfg : ChainConfig} {ccfg : Config}
     {bls : Bool} {checkpoint : BlockChain} {anchor final : JointState P}
-    (v : ValidJoint AnchorInv cfg ccfg bls checkpoint anchor final)
+    (v : ValidJoint cfg ccfg bls checkpoint anchor final)
     {j : Nat} {D : JointRunStep (P := P) cfg ccfg bls} (stepD : v.run.steps[j]? = some D)
     {requests : ExecutionRequests P}
     (hread : Gated.read D.block.2.message.body.execution_requests

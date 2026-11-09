@@ -32,9 +32,9 @@ request boundary of the execution block of joint step `j₀`, and let the run re
 `q % 16 + 1` withdrawal requests serialize to exactly the queue records at positions
 `16 * (q / 16), …, q`. The queue index and the reach condition are the ones Blanc's delivery
 bound states; no premise beyond `ValidJoint` is added. -/
-theorem ValidJoint.latency {P : Preset} {AnchorInv : ∀ {f : CFork}, BeaconState P f → Prop}
+theorem ValidJoint.latency {P : Preset}
     {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain}
-    {anchor final : JointState P} (v : ValidJoint AnchorInv cfg ccfg bls checkpoint anchor final)
+    {anchor final : JointState P} (v : ValidJoint cfg ccfg bls checkpoint anchor final)
     {j₀ q : Nat} {B D : JointRunStep (P := P) cfg ccfg bls}
     (stepB : v.run.steps[j₀]? = some B) (stepD : v.run.steps[j₀ + q / 16]? = some D)
     {record : Bytes} (queued : (queueAtRequests B.stepTrace.trace)[q]? = some record) :

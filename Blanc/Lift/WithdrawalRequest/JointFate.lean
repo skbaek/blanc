@@ -85,9 +85,9 @@ exactly one of three fates; the index ranges are disjoint, so exactly one disjun
   (`processWithdrawalRequest_eq`).
 * (c) `E ≤ n`: it is the final queue's entry `n − E`. -/
 theorem ValidJoint.fate {P : Preset}
-    {AnchorInv : ∀ {f : CFork}, BeaconState P f → Prop} {cfg : ChainConfig} {ccfg : Config}
+    {cfg : ChainConfig} {ccfg : Config}
     {bls : Bool} {checkpoint : BlockChain} {anchor final : JointState P}
-    (v : ValidJoint AnchorInv cfg ccfg bls checkpoint anchor final)
+    (v : ValidJoint cfg ccfg bls checkpoint anchor final)
     {n : Nat} (hn : n < (submissions (v.run.toExec v.pre)).length) :
     (n < (emissions v.pre).length ∧
       (emissions v.pre)[n]? = some (submissions (v.run.toExec v.pre))[n]) ∨
@@ -174,9 +174,9 @@ theorem ValidJoint.fate_outcome {P : Preset} {f : CFork} {ccfg : Config}
 predeploy's balance at the chain's end is at least its checkpoint balance plus the value of
 every committed submission of the joint history, whatever each submission's fate. -/
 theorem ValidJoint.fee_retained {P : Preset}
-    {AnchorInv : ∀ {f : CFork}, BeaconState P f → Prop} {cfg : ChainConfig} {ccfg : Config}
+    {cfg : ChainConfig} {ccfg : Config}
     {bls : Bool} {checkpoint : BlockChain} {anchor final : JointState P}
-    (v : ValidJoint AnchorInv cfg ccfg bls checkpoint anchor final) :
+    (v : ValidJoint cfg ccfg bls checkpoint anchor final) :
     (checkpoint.state.bal withdrawalRequestPredeployAddress).toNat +
         submissionPaid (v.run.toExec v.pre) ≤
       (final.exec.state.bal withdrawalRequestPredeployAddress).toNat :=

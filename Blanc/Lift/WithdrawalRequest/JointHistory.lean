@@ -1,5 +1,6 @@
 import Blanc.JointHistory
 import Blanc.Lift.WithdrawalRequest.HistoryFifo
+import JauneConsensus.Facts.AnchorInv
 
 /-!
 # Valid joint chains for EIP-7002
@@ -9,8 +10,9 @@ run from that anchor, the anchor invariant, the two preset premises, and the tra
 execution premises of `history_fifo` stated over the joint history `run.toExec pre`. Nothing
 is hidden: every premise is a field.
 
-The anchor invariant is a parameter, `AnchorInv : ∀ {f}, BeaconState P f → Prop`, so the
-consensus-side invariant (Jaune `JauneConsensus/Facts/AnchorInv.lean`) plugs in unchanged.
+The anchor invariant is Jaune's `JauneConsensus.Facts.AnchorInv`: every pending partial
+withdrawal names a validator with a compounding credential, and a validator that has not
+started exiting has no withdrawable epoch.
 -/
 
 namespace Blanc.Lift.WithdrawalRequest
@@ -18,7 +20,7 @@ namespace Blanc.Lift.WithdrawalRequest
 open Jaune JauneConsensus ExecutionTrace
 
 /-- A valid joint chain from a deployment-rooted checkpoint, through `anchor`, to `final`. -/
-structure ValidJoint {P : Preset} (AnchorInv : ∀ {f : CFork}, BeaconState P f → Prop)
+structure ValidJoint {P : Preset}
     (cfg : ChainConfig) (ccfg : Config) (bls : Bool) (checkpoint : BlockChain)
     (anchor final : JointState P) : Type where
   /-- The canonical deployment and its preactivation history to the checkpoint. -/
@@ -29,7 +31,7 @@ structure ValidJoint {P : Preset} (AnchorInv : ∀ {f : CFork}, BeaconState P f 
   /-- The joint run from the anchor. -/
   run : JointRun cfg ccfg bls anchor final
   /-- The anchor invariant on the anchor's beacon state. -/
-  anchorInv : AnchorInv anchor.beacon
+  anchorInv : Facts.AnchorInv anchor.beacon
   slotsPerEpoch : 2 ≤ P.SLOTS_PER_EPOCH
   activationBalance : P.MIN_ACTIVATION_BALANCE ≤ P.MAX_EFFECTIVE_BALANCE_ELECTRA
   otherInstalled : OtherSystemCodeInstalled checkpoint.state
@@ -41,16 +43,16 @@ structure ValidJoint {P : Preset} (AnchorInv : ∀ {f : CFork}, BeaconState P f 
   occurrences : (submissions (run.toExec pre)).length ≤ wordOccurrenceCap
 
 /-- The joint history of a valid joint chain: the pre-anchor history extended by the run. -/
-noncomputable abbrev ValidJoint.history {P : Preset} {AnchorInv : ∀ {f : CFork}, BeaconState P f → Prop}
+noncomputable abbrev ValidJoint.history {P : Preset}
     {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain}
-    {anchor final : JointState P} (v : ValidJoint AnchorInv cfg ccfg bls checkpoint anchor final) :
+    {anchor final : JointState P} (v : ValidJoint cfg ccfg bls checkpoint anchor final) :
     ConfiguredHistoryTrace cfg checkpoint final.exec :=
   v.run.toExec v.pre
 
 /-- The EIP-7002 FIFO along a valid joint chain's joint history, by `history_fifo` unchanged. -/
-theorem ValidJoint.history_fifo {P : Preset} {AnchorInv : ∀ {f : CFork}, BeaconState P f → Prop}
+theorem ValidJoint.history_fifo {P : Preset}
     {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain}
-    {anchor final : JointState P} (v : ValidJoint AnchorInv cfg ccfg bls checkpoint anchor final) :
+    {anchor final : JointState P} (v : ValidJoint cfg ccfg bls checkpoint anchor final) :
     HistoryFifo (v.run.toExec v.pre) :=
   Blanc.Lift.WithdrawalRequest.history_fifo v.deployment v.admission (v.run.toExec v.pre)
     v.otherInstalled v.senders v.authorities v.avoid v.occurrences
