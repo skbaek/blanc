@@ -1,6 +1,7 @@
 import Blanc.Lift.WithdrawalRequest.JointHistory
 import Blanc.Lift.WithdrawalRequest.RequestCodec
 import Blanc.Lift.WithdrawalRequest.HeadlineHistory
+import Blanc.Lift.WithdrawalRequest.JointAuthorization
 
 /-!
 # End-to-end EIP-7002 latency along a valid joint chain (P3)
@@ -31,7 +32,8 @@ request boundary of the execution block of joint step `j₀`, and let the run re
 `requests` whose withdrawal request `q % 16` serializes to `record`, and whose first
 `q % 16 + 1` withdrawal requests serialize to exactly the queue records at positions
 `16 * (q / 16), …, q`. The queue index and the reach condition are the ones Blanc's delivery
-bound states; no premise beyond `ValidJoint` is added. -/
+bound states; the proof reads exactly the `ValidJoint` fields `deployment`, `admission`,
+`otherInstalled`, `senders`, `authorities`, `avoid`, `occurrences`, and `run`/`pre`. -/
 theorem ValidJoint.latency {P : Preset}
     {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain}
     {anchor final : JointState P} (v : ValidJoint cfg ccfg bls checkpoint anchor final)
@@ -66,5 +68,41 @@ theorem ValidJoint.latency {P : Preset}
     obtain ⟨wr, hwr, rfl⟩ := position
     exact ⟨wr, by rwa [Array.getElem?_toList] at hwr, rfl⟩
   · rwa [blockWithdrawals, records, ← List.map_take] at ahead
+
+/-- **P3 in submission terms.** Under `ValidJoint.latency`'s hypotheses, let `n` be the anchor
+offset plus the delivering step's feed position. Then `n` is an emitted submission index, the
+committed paid submission at `n` is the delivered `record`, and the run's feed at that position
+is the latency witness `wr` with `Ssz.serialize wr = record`. This identifies the delivered
+record with the committed submission at the delivering step's feed position; it does not prove
+that this occurrence index equals the queue position's own occurrence index, which would need a
+request-boundary FIFO lemma not proved here. -/
+theorem ValidJoint.latency_submission {P : Preset}
+    {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain}
+    {anchor final : JointState P} (v : ValidJoint cfg ccfg bls checkpoint anchor final)
+    {j₀ q : Nat} {B D : JointRunStep (P := P) cfg ccfg bls}
+    (stepB : v.run.steps[j₀]? = some B) (stepD : v.run.steps[j₀ + q / 16]? = some D)
+    {record : Bytes} (queued : (queueAtRequests B.stepTrace.trace)[q]? = some record) :
+    ∃ wr, ((emissions v.pre).length + feedPosition v.run (j₀ + q / 16) (q % 16) <
+      (emissions (v.run.toExec v.pre)).length) ∧
+      (submissions (v.run.toExec v.pre))[(emissions v.pre).length +
+        feedPosition v.run (j₀ + q / 16) (q % 16)]? = some record ∧
+      (withdrawalFeed v.run)[feedPosition v.run (j₀ + q / 16) (q % 16)]? = some wr ∧
+      Ssz.serialize wr = record := by
+  obtain ⟨requests, hread, hex, -⟩ := v.latency stepB stepD queued
+  obtain ⟨wr, hwr, hser⟩ := hex
+  have hstep : (stepWithdrawalRequests D)[q % 16]? = some wr := by
+    rw [stepWithdrawalRequests, hread, Array.getElem?_toList]
+    exact hwr
+  obtain ⟨hfeed, hsub⟩ := v.submission_of_feed stepD hstep
+  have hlt : (emissions v.pre).length + feedPosition v.run (j₀ + q / 16) (q % 16) <
+      (emissions (v.run.toExec v.pre)).length := by
+    have hflen : feedPosition v.run (j₀ + q / 16) (q % 16) <
+        (withdrawalFeed v.run).length :=
+      (List.getElem?_eq_some_iff.mp hfeed).1
+    have hlen := congrArg List.length (emissions_toExec v.pre v.run)
+    rw [List.length_append, List.length_map] at hlen
+    omega
+  rw [hser] at hsub
+  exact ⟨wr, hlt, hsub, hfeed, hser⟩
 
 end Blanc.Lift.WithdrawalRequest

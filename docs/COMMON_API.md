@@ -1378,7 +1378,10 @@ big-endian `UInt64.toBytes` reversed), `leNat_leBytes`, `leBytes_eight_injective
 `adr_toBytes_injective`, `toAdr?_toBytes` (an address's 20 bytes decode back to it, with
 `toAdr?_append` and `uint32_ofBytes_eq_toUInt32`), `serialize_byteVector`, and
 `serializeSeq_of_fixedSize`/`serialize_sszList_of_fixedSize` (a list of
-fixed-size elements serializes to the concatenation of its elements).
+fixed-size elements serializes to the concatenation of its elements). For a consensus
+`WithdrawalRequest`, `serialize_withdrawalRequest` gives its serialization field by field
+(source address, public key, little-endian amount), `serialize_withdrawalRequest_length`
+its 76 bytes, and `serialize_withdrawalRequest_injective` its injectivity.
 
 To turn a block's transaction or receipt trie entries into body and receipt
 facts, use [`Blanc/ExecutionTrieBinding.lean`](../Blanc/ExecutionTrieBinding.lean).
