@@ -1,6 +1,7 @@
 import JauneConsensus.Joint
 import JauneConsensus.Facts.Joint
 import JauneConsensus.Facts.Operations
+import JauneConsensus.Facts.AnchorInvComposite
 import Blanc.ExecutionHistory
 import Blanc.ExecutionHistoryExtension
 
@@ -157,21 +158,99 @@ def jointBlockInput {P : Preset} (ccfg : Config) (bls : Bool) :
     else processSlots (jointCtx ccfg bls) beacon sb.message.slot
   | _, _ => throw (.assert "joint step: fork pair outside Electra and Fulu")
 
+/-- `jointBlockInput` preserves `Facts.Pres` from the step's beacon state: it is made of
+`process_slots` and `upgrade_to_fulu` only. -/
+theorem jointBlockInput_pres {P : Preset} {ccfg : Config} {bls : Bool} {s : JointState P}
+    {b : AnySignedBlock P} {st : BeaconState P b.1} (h : jointBlockInput ccfg bls s b = .ok st) :
+    Facts.Pres s.beacon st := by
+  obtain ⟨sf, beacon, exec⟩ := s
+  obtain ⟨bf, sb⟩ := b
+  cases sf <;> cases bf
+  all_goals try (simp only [jointBlockInput, throw, throwThe, MonadExceptOf.throw,
+    reduceCtorEq] at h; done)
+  · exact Facts.processSlots_pres _ rfl h
+  · obtain ⟨_, -, h⟩ := Except.bind_eq_ok h
+    obtain ⟨beacon1, h1, h⟩ := Except.bind_eq_ok h
+    obtain ⟨beacon2, h2, h⟩ := Except.bind_eq_ok h
+    have p1 : Facts.Pres beacon beacon1 := by
+      split at h1
+      · exact Facts.processSlots_pres _ rfl h1
+      · cases h1
+        exact Facts.Pres.refl _
+    have p3 : Facts.Pres beacon2 st := by
+      split at h
+      · cases h
+        exact Facts.Pres.refl _
+      · exact Facts.processSlots_pres _ rfl h
+    exact p1.trans ((Facts.upgradeToFulu_pres _ h2).trans p3)
+  · exact Facts.processSlots_pres _ rfl h
+
 /-- A successful state transition ran `process_slots` to the block's slot and then
-`process_block` on the result. -/
-theorem stateTransition_processBlock {P : Preset} {f : CFork} {ctx : Ctx}
+`process_block` on the result, whose output is the transition's (the state-root check only
+reads it). -/
+theorem stateTransition_processBlock_post {P : Preset} {f : CFork} {ctx : Ctx}
     {state state' : BeaconState P f} {sb : SignedBeaconBlock P f}
     (h : stateTransition ctx state sb = .ok state') :
     ∃ st, processSlots ctx state sb.message.slot = .ok st ∧
-      ∃ post, processBlock ctx st sb.message = .ok post := by
+      processBlock ctx st sb.message = .ok state' := by
   unfold JauneConsensus.stateTransition stateTransitionWith at h
   obtain ⟨st, hslots, h⟩ := Except.bind_eq_ok h
   refine ⟨st, hslots, ?_⟩
   simp only [ite_true] at h
   obtain ⟨_, _, h⟩ := Except.bind_eq_ok h
   obtain ⟨_, _, h⟩ := Except.bind_eq_ok h
-  obtain ⟨post, hpost, _⟩ := Except.bind_eq_ok h
-  exact ⟨post, hpost⟩
+  obtain ⟨post, hpost, h⟩ := Except.bind_eq_ok h
+  obtain ⟨_, _, h⟩ := Except.bind_eq_ok h
+  cases h
+  exact hpost
+
+/-- A successful state transition ran `process_slots` to the block's slot and then
+`process_block` on the result. -/
+theorem stateTransition_processBlock {P : Preset} {f : CFork} {ctx : Ctx}
+    {state state' : BeaconState P f} {sb : SignedBeaconBlock P f}
+    (h : stateTransition ctx state sb = .ok state') :
+    ∃ st, processSlots ctx state sb.message.slot = .ok st ∧
+      ∃ post, processBlock ctx st sb.message = .ok post :=
+  let ⟨st, hslots, hpost⟩ := stateTransition_processBlock_post h
+  ⟨st, hslots, state', hpost⟩
+
+/-- A successful joint step ran `process_block` on the beacon state `jointBlockInput`
+computes, and its output reaches the step's beacon state (`Facts.Pres`; it is that state, at
+the block's fork). -/
+theorem jointStep_processBlock_post {P : Preset} {cfg : ChainConfig} {ccfg : Config}
+    {bls : Bool} {s s' : JointState P} {b : AnySignedBlock P}
+    (h : jointStep cfg ccfg bls s b = .ok s') :
+    ∃ st, jointBlockInput ccfg bls s b = .ok st ∧
+      ∃ post, processBlock (jointCtx ccfg bls) st b.2.message = .ok post ∧
+        Facts.Pres post s'.beacon := by
+  obtain ⟨sf, beacon, exec⟩ := s
+  obtain ⟨bf, sb⟩ := b
+  cases sf <;> cases bf
+  all_goals try (simp only [jointStep, ExceptT.stM_eq, throw, throwThe, MonadExceptOf.throw,
+    reduceCtorEq] at h; done)
+  · obtain ⟨-, _, _, _, -, -, hbeacon, rfl⟩ := jointStep_electra_ok_iff.mp h
+    obtain ⟨st, hst, hpost⟩ := stateTransition_processBlock_post hbeacon
+    exact ⟨st, hst, _, hpost, Facts.Pres.refl _⟩
+  · obtain ⟨-, -, _, forkSlot, beacon1, beacon2, _, _, hforkSlot, hslots, hup, -, -, hbeacon,
+      rfl⟩ := jointStep_cross_ok_iff.mp h
+    by_cases hat : (sb.message.slot == beacon2.slot) = true
+    · rw [ite_eq_left hat] at hbeacon
+      obtain ⟨_, _, hbeacon⟩ := Except.bind_eq_ok hbeacon
+      obtain ⟨_, _, hbeacon⟩ := Except.bind_eq_ok hbeacon
+      obtain ⟨post, hpost, hbeacon⟩ := Except.bind_eq_ok hbeacon
+      obtain ⟨_, _, hbeacon⟩ := Except.bind_eq_ok hbeacon
+      cases hbeacon
+      refine ⟨beacon2, ?_, _, hpost, Facts.Pres.refl _⟩
+      simp only [jointBlockInput, hforkSlot, Except.bind_ok, hslots, hup, hat, ↓reduceIte]
+      rfl
+    · rw [ite_eq_right hat] at hbeacon
+      obtain ⟨st, hst, hpost⟩ := stateTransition_processBlock_post hbeacon
+      refine ⟨st, ?_, _, hpost, Facts.Pres.refl _⟩
+      simp only [jointBlockInput, hforkSlot, Except.bind_ok, hslots, hup, hat]
+      exact hst
+  · obtain ⟨_, _, _, _, -, hbeacon, rfl⟩ := jointStep_fulu_ok_iff.mp h
+    obtain ⟨st, hst, hpost⟩ := stateTransition_processBlock_post hbeacon
+    exact ⟨st, hst, _, hpost, Facts.Pres.refl _⟩
 
 /-- A successful joint step ran `process_block` on the beacon state `jointBlockInput`
 computes. -/
@@ -179,31 +258,9 @@ theorem jointStep_processBlock {P : Preset} {cfg : ChainConfig} {ccfg : Config} 
     {s s' : JointState P} {b : AnySignedBlock P}
     (h : jointStep cfg ccfg bls s b = .ok s') :
     ∃ st, jointBlockInput ccfg bls s b = .ok st ∧
-      ∃ post, processBlock (jointCtx ccfg bls) st b.2.message = .ok post := by
-  obtain ⟨sf, beacon, exec⟩ := s
-  obtain ⟨bf, sb⟩ := b
-  cases sf <;> cases bf
-  all_goals try (simp only [jointStep, ExceptT.stM_eq, throw, throwThe, MonadExceptOf.throw,
-    reduceCtorEq] at h; done)
-  · obtain ⟨-, _, _, _, -, -, hbeacon, -⟩ := jointStep_electra_ok_iff.mp h
-    exact stateTransition_processBlock hbeacon
-  · obtain ⟨-, -, _, forkSlot, beacon1, beacon2, _, _, hforkSlot, hslots, hup, -, -, hbeacon, -⟩ :=
-      jointStep_cross_ok_iff.mp h
-    by_cases hat : (sb.message.slot == beacon2.slot) = true
-    · rw [ite_eq_left hat] at hbeacon
-      obtain ⟨_, _, hbeacon⟩ := Except.bind_eq_ok hbeacon
-      obtain ⟨_, _, hbeacon⟩ := Except.bind_eq_ok hbeacon
-      obtain ⟨post, hpost, -⟩ := Except.bind_eq_ok hbeacon
-      refine ⟨beacon2, ?_, post, hpost⟩
-      simp only [jointBlockInput, hforkSlot, Except.bind_ok, hslots, hup, hat, ↓reduceIte]
-      rfl
-    · rw [ite_eq_right hat] at hbeacon
-      obtain ⟨st, hst, post, hpost⟩ := stateTransition_processBlock hbeacon
-      refine ⟨st, ?_, post, hpost⟩
-      simp only [jointBlockInput, hforkSlot, Except.bind_ok, hslots, hup, hat]
-      exact hst
-  · obtain ⟨_, _, _, _, -, hbeacon, -⟩ := jointStep_fulu_ok_iff.mp h
-    exact stateTransition_processBlock hbeacon
+      ∃ post, processBlock (jointCtx ccfg bls) st b.2.message = .ok post :=
+  let ⟨st, hst, post, hpost, _⟩ := jointStep_processBlock_post h
+  ⟨st, hst, post, hpost⟩
 
 /-! ## The withdrawals of a joint step -/
 
@@ -214,6 +271,14 @@ def jointWithdrawalsInput {P : Preset} (ccfg : Config) (bls : Bool) (s : JointSt
     (b : AnySignedBlock P) : M (BeaconState P b.1) := do
   let st ← jointBlockInput ccfg bls s b
   processBlockHeader st b.2.message
+
+/-- `jointWithdrawalsInput` preserves `Facts.Pres` from the step's beacon state. -/
+theorem jointWithdrawalsInput_pres {P : Preset} {ccfg : Config} {bls : Bool} {s : JointState P}
+    {b : AnySignedBlock P} {st : BeaconState P b.1}
+    (h : jointWithdrawalsInput ccfg bls s b = .ok st) : Facts.Pres s.beacon st := by
+  unfold jointWithdrawalsInput at h
+  obtain ⟨st0, h0, h⟩ := Except.bind_eq_ok h
+  exact (jointBlockInput_pres h0).trans (Facts.processBlockHeader_pres h)
 
 /-- The derived `BEq` of consensus withdrawals is equality. -/
 theorem consensusWithdrawal_eq_of_beq {a b : JauneConsensus.Withdrawal} (h : (a == b) = true) :
@@ -541,5 +606,67 @@ theorem JointRun.steps_jointStep {P : Preset} {cfg : ChainConfig} {ccfg : Config
       exact JointRun.steps_jointStep run h
     · obtain ⟨-, rfl⟩ := getElem?_append_singleton_of_not_lt hj h
       exact step
+
+
+/-! ## Reachability along a joint run -/
+
+/-- The end state of a joint run is reachable from its start by successful joint steps. -/
+theorem JointRun.reach {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    {s₀ : JointState P} :
+    {s : JointState P} → JointRun cfg ccfg bls s₀ s → Facts.JointReach cfg ccfg bls s₀ s
+  | _, .nil => .refl
+  | _, .snoc run b step _ => .step b (JointRun.reach run) step
+
+/-- The pre-state of every step of a joint run is reachable from the run's start. -/
+theorem JointRun.reach_pre {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    {s₀ : JointState P} :
+    {s : JointState P} → (run : JointRun cfg ccfg bls s₀ s) → {j : Nat} →
+    {D : JointRunStep (P := P) cfg ccfg bls} → run.steps[j]? = some D →
+    Facts.JointReach cfg ccfg bls s₀ D.pre
+  | _, .nil, _, _, h => by
+    simp only [JointRun.steps, List.getElem?_nil, reduceCtorEq] at h
+  | _, .snoc run b step bound, j, D, h => by
+    rw [JointRun.steps_snoc] at h
+    by_cases hj : j < run.steps.length
+    · rw [List.getElem?_append_left hj] at h
+      exact JointRun.reach_pre run h
+    · obtain ⟨-, rfl⟩ := getElem?_append_singleton_of_not_lt hj h
+      exact JointRun.reach run
+
+/-- The end state of a joint run is reachable from the post-state of each of its steps. -/
+theorem JointRun.reach_post {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    {s₀ : JointState P} :
+    {s : JointState P} → (run : JointRun cfg ccfg bls s₀ s) → {i : Nat} →
+    {A : JointRunStep (P := P) cfg ccfg bls} → run.steps[i]? = some A →
+    Facts.JointReach cfg ccfg bls A.post s
+  | _, .nil, _, _, h => by
+    simp only [JointRun.steps, List.getElem?_nil, reduceCtorEq] at h
+  | _, .snoc run b step bound, i, A, h => by
+    rw [JointRun.steps_snoc] at h
+    by_cases hi : i < run.steps.length
+    · rw [List.getElem?_append_left hi] at h
+      exact .step b (JointRun.reach_post run h) step
+    · obtain ⟨-, rfl⟩ := getElem?_append_singleton_of_not_lt hi h
+      exact .refl
+
+/-- Steps `i < j` of a joint run: step `j`'s pre-state is reachable from step `i`'s
+post-state. -/
+theorem JointRun.reach_post_pre {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    {s₀ : JointState P} :
+    {s : JointState P} → (run : JointRun cfg ccfg bls s₀ s) → {i j : Nat} →
+    {A C : JointRunStep (P := P) cfg ccfg bls} → i < j →
+    run.steps[i]? = some A → run.steps[j]? = some C →
+    Facts.JointReach cfg ccfg bls A.post C.pre
+  | _, .nil, _, _, _, _, _, h, _ => by
+    simp only [JointRun.steps, List.getElem?_nil, reduceCtorEq] at h
+  | _, .snoc run b step bound, i, j, A, C, hij, hA, hC => by
+    rw [JointRun.steps_snoc] at hA hC
+    by_cases hj : j < run.steps.length
+    · rw [List.getElem?_append_left hj] at hC
+      rw [List.getElem?_append_left (by omega)] at hA
+      exact JointRun.reach_post_pre run hij hA hC
+    · obtain ⟨hlen, rfl⟩ := getElem?_append_singleton_of_not_lt hj hC
+      rw [List.getElem?_append_left (by omega)] at hA
+      exact JointRun.reach_post run hA
 
 end Blanc
