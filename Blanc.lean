@@ -610,6 +610,7 @@ import Blanc.Lift.WithdrawalRequest.HistoryFifo
 import Blanc.Lift.WithdrawalRequest.InhibitedHistory
 import Blanc.Lift.WithdrawalRequest.InhibitedObservations
 import Blanc.Lift.WithdrawalRequest.JointAuthorization
+import Blanc.Lift.WithdrawalRequest.JointFate
 import Blanc.Lift.WithdrawalRequest.JointHistory
 import Blanc.Lift.WithdrawalRequest.JointLatency
 import Blanc.Lift.WithdrawalRequest.Jumps
@@ -677,6 +678,7 @@ import Blanc.Lift.WriteSiteSound
 import Blanc.Lift.WriteSiteStep
 import Blanc.Lift.WriteSiteTerm
 import Blanc.Lift.WriteSiteZero
+import Blanc.ListFlatMapPosition
 import Blanc.LockExclusion
 import Blanc.LogBloom
 import Blanc.MachineDataFacts

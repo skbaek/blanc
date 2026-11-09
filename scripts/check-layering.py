@@ -208,6 +208,8 @@ SHARED += ["Lift.MemPotential", "Lift.FreePtr", "Lift.SymTransfer", "Lift.FreePt
 # The shared symbol-interval reading of the bound checkers (ns-h1b): imports
 # nothing but core Lean, so it is contract-neutral.
 SHARED += ["Lift.BndInterval", "Lift.ReturnDataKeep"]
+# Generic list positions in a flatMap (EIP-7002 cross-layer P2); imports nothing.
+SHARED += ["ListFlatMapPosition"]
 # Chain assembly of `fpCert` from per-entry kernel decisions (ns-f5b): imports only
 # Lift.FreePtr; no statement names a contract.
 SHARED += ["Lift.FreePtrChain", "Lift.WriteSiteChain"]
@@ -442,6 +444,7 @@ CONTRACTS = {
                            "Lift.WithdrawalRequest.HistoryFifo", "Lift.WithdrawalRequest.JointHistory",
                            "Lift.WithdrawalRequest.RequestCodec", "Lift.WithdrawalRequest.JointLatency",
                            "Lift.WithdrawalRequest.JointAuthorization",
+                           "Lift.WithdrawalRequest.JointFate",
                            "Lift.WithdrawalRequest.InhibitedHistory",
                            "Lift.WithdrawalRequest.InhibitedObservations",
                            "Lift.WithdrawalRequest.DeploymentHistory",

@@ -1354,6 +1354,12 @@ step hands to `process_block` (same calls as `jointStep`), and `jointStep_proces
 shows a successful step ran `processBlock (jointCtx ccfg bls)` on it successfully
 (`stateTransition_processBlock` is the within-fork piece). Combine with Jaune's
 `Facts.processBlockWith_split`/`Facts.processOperations_split` to reach a mid-block state.
+To address a flattened per-step list (any `l.flatMap f`, e.g. the requests of all of a
+run's steps) by step and offset, use
+[`Blanc/ListFlatMapPosition.lean`](../Blanc/ListFlatMapPosition.lean):
+`Blanc.List.exists_flatMap_position` gives every position `i` a pair `(j, k)` with
+`k < (f l[j]).length` and `((l.take j).flatMap f).length + k = i`, and
+`Blanc.List.flatMap_position_inj` makes that pair unique.
 
 For consensus SSZ byte equations, use
 [`Blanc/ConsensusSsz.lean`](../Blanc/ConsensusSsz.lean):
