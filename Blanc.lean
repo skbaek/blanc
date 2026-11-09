@@ -575,6 +575,7 @@ import Blanc.Lift.WalkSteps
 import Blanc.Lift.WithdrawalRequest.AmsterdamSystem
 import Blanc.Lift.WithdrawalRequest.BalanceHistory
 import Blanc.Lift.WithdrawalRequest.BlockRequests
+import Blanc.Lift.WithdrawalRequest.BoundaryFifo
 import Blanc.Lift.WithdrawalRequest.Cert
 import Blanc.Lift.WithdrawalRequest.Check
 import Blanc.Lift.WithdrawalRequest.CodeFacts
