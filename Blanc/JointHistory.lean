@@ -21,7 +21,7 @@ open Jaune JauneConsensus ExecutionTrace
 theorem coveredFork_of_consensusFork? {f : Jaune.Fork} {cf : CFork}
     (hpair : f.consensusFork? = some cf) (hcf : cf = .electra ∨ cf = .fulu) :
     CoveredFork f := by
-  rcases hcf with rfl | rfl <;> cases f <;> simp_all [Fork.consensusFork?, CoveredFork, coveredForks]
+  rcases hcf with rfl | rfl <;> cases f <;> simp_all only [Fork.consensusFork?, reduceCtorEq, Option.some.injEq, CoveredFork, coveredForks, List.mem_cons, List.not_mem_nil, or_self, or_false, or_true]
 
 /-- A successful configured transition from its parts. -/
 theorem stateTransitionUsing_of_scheduled {cfg : ChainConfig} {pre post : BlockChain}
@@ -50,45 +50,45 @@ theorem engineVerdict_ok {P : Preset} {cfg : ChainConfig} {cf : CFork} {pre post
   simp only [engineVerdict, bind, Except.bind, throw, throwThe, MonadExceptOf.throw,
     Except.mapError, pure, Except.pure] at h
   split at h
-  · simp at h
+  · simp only [reduceCtorEq] at h
   split at h
-  · simp at h
+  · simp only [reduceCtorEq] at h
   cases hb : blobVersionedHashesOf req.executionPayload.txBytes with
-  | error => simp [hb] at h
+  | error => simp only [hb, reduceCtorEq] at h
   | ok hashes =>
   simp only [hb] at h
   split at h
-  · simp at h
+  · simp only [reduceCtorEq] at h
   cases hid : cfg.checkChainId pre with
-  | error => simp [hid] at h
+  | error => simp only [hid, reduceCtorEq] at h
   | ok u =>
   simp only [hid] at h
   cases hf : cfg.forkAt (payloadToBlock req).header.number (payloadToBlock req).header.timestamp with
-  | error => simp [hf] at h
+  | error => simp only [hf, reduceCtorEq] at h
   | ok fork =>
   simp only [hf] at h
   split at h
-  · simp at h
+  · simp only [reduceCtorEq] at h
   rename_i hpair
-  have hpair : fork.consensusFork? = some cf := by simpa using hpair
+  have hpair : fork.consensusFork? = some cf := by simpa only [bne_iff_ne, ne_eq, Decidable.not_not] using hpair
   cases hs : stateTransitionScheduledE cfg fork pre (payloadToBlock req) with
-  | error => simp [hs] at h
+  | error => simp only [hs, reduceCtorEq] at h
   | ok r =>
   cases r with
-  | error => simp [hs] at h
+  | error => simp only [hs, reduceCtorEq] at h
   | ok post' =>
   simp only [hs] at h
   cases hrun : applyBody (initBenv fork pre (payloadToBlock req).header) (payloadToBlock req).txs
       (payloadToBlock req).ommers (payloadToBlock req).wds with
-  | error => simp [hrun] at h
+  | error => simp only [hrun, reduceCtorEq] at h
   | ok out =>
   simp only [hrun] at h
   split at h
-  · simp at h
+  · simp only [reduceCtorEq] at h
   rename_i hreq
   cases h
   exact ⟨fork, out.1, out.2, rfl, hpair, coveredFork_of_consensusFork? hpair hcf,
-    stateTransitionUsing_of_scheduled hid hf hs, hrun, by simpa using hreq⟩
+    stateTransitionUsing_of_scheduled hid hf hs, hrun, by simpa only [bne_iff_ne, ne_eq, Decidable.not_not] using hreq⟩
 
 /-! ## The joint step's engine verdict -/
 
@@ -124,7 +124,7 @@ theorem jointStep_engine {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls :
         engineVerdict cfg b.1 s.exec req = .ok s'.exec := by
   obtain ⟨sf, beacon, exec⟩ := s
   obtain ⟨bf, signedBlock⟩ := b
-  cases sf <;> cases bf <;> simp only [jointStep] at h <;> try (simp [throw, throwThe, MonadExceptOf.throw] at h; done)
+  cases sf <;> cases bf <;> simp only [jointStep] at h <;> try (simp only [ExceptT.stM_eq, throw, throwThe, MonadExceptOf.throw, reduceCtorEq] at h; done)
   · obtain ⟨_, _, h⟩ := Except.bind_eq_ok h
     obtain ⟨⟨_, _⟩, ht, h⟩ := Except.bind_eq_ok h
     cases h
@@ -154,6 +154,19 @@ theorem ofBlock_executionPayload {P : Preset} {f : CFork} {block : BeaconBlock P
   obtain ⟨_, _, h⟩ := Except.bind_eq_ok h
   cases h
   rfl
+
+/-- The request `process_execution_payload` builds carries the body's execution requests as
+`get_execution_requests_list`. -/
+theorem ofBlock_executionRequests {P : Preset} {f : CFork} {block : BeaconBlock P f}
+    {req : NewPayloadRequest P} (h : NewPayloadRequest.ofBlock block = .ok req) :
+    ∃ requests : ExecutionRequests P,
+      Gated.read block.body.execution_requests "NewPayloadRequest: execution_requests" =
+        .ok requests ∧
+      req.executionRequests = getExecutionRequestsList requests := by
+  unfold NewPayloadRequest.ofBlock at h
+  obtain ⟨requests, hread, h⟩ := Except.bind_eq_ok h
+  cases h
+  exact ⟨requests, hread, rfl⟩
 
 /-! ## Joint runs -/
 
@@ -243,12 +256,12 @@ noncomputable def JointRun.toExec {P : Preset} {cfg : ChainConfig} {ccfg : Confi
   | _, .nil => pre
   | _, .snoc run _ step bound => .step (run.toExec pre) (JointStepTrace.choose step bound).trace
 
-@[simp] theorem JointRun.toExec_nil {P : Preset} {cfg : ChainConfig} {ccfg : Config}
+theorem JointRun.toExec_nil {P : Preset} {cfg : ChainConfig} {ccfg : Config}
     {bls : Bool} {s₀ : JointState P} {checkpoint : BlockChain}
     (pre : ConfiguredHistoryTrace cfg checkpoint s₀.exec) :
     (JointRun.nil : JointRun cfg ccfg bls s₀ s₀).toExec pre = pre := rfl
 
-@[simp] theorem JointRun.toExec_snoc {P : Preset} {cfg : ChainConfig} {ccfg : Config}
+theorem JointRun.toExec_snoc {P : Preset} {cfg : ChainConfig} {ccfg : Config}
     {bls : Bool} {s₀ s s' : JointState P} {checkpoint : BlockChain}
     (pre : ConfiguredHistoryTrace cfg checkpoint s₀.exec) (run : JointRun cfg ccfg bls s₀ s)
     (b : AnySignedBlock P) (step : jointStep cfg ccfg bls s b = .ok s')

@@ -39,6 +39,7 @@ import Blanc.Composition.WithdrawalRequestFeeCounterexample
 import Blanc.Composition.WithdrawalRequestFeeHeadline
 import Blanc.Composition.WithdrawalRequestFeeRefutation
 import Blanc.ConcreteRun
+import Blanc.ConsensusSsz
 import Blanc.ContractAdmission
 import Blanc.ContractAdmissionSem
 import Blanc.DelegatecallEnvelope
@@ -608,6 +609,7 @@ import Blanc.Lift.WithdrawalRequest.HeadlineSystem
 import Blanc.Lift.WithdrawalRequest.HistoryFifo
 import Blanc.Lift.WithdrawalRequest.InhibitedHistory
 import Blanc.Lift.WithdrawalRequest.InhibitedObservations
+import Blanc.Lift.WithdrawalRequest.JointHistory
 import Blanc.Lift.WithdrawalRequest.Jumps
 import Blanc.Lift.WithdrawalRequest.Layout
 import Blanc.Lift.WithdrawalRequest.MainnetDeployment
@@ -619,6 +621,7 @@ import Blanc.Lift.WithdrawalRequest.NatLiveness
 import Blanc.Lift.WithdrawalRequest.NumericFacts
 import Blanc.Lift.WithdrawalRequest.Prog
 import Blanc.Lift.WithdrawalRequest.ProtocolOccurrences
+import Blanc.Lift.WithdrawalRequest.RequestCodec
 import Blanc.Lift.WithdrawalRequest.ResetOccurrence
 import Blanc.Lift.WithdrawalRequest.ResetWindowCount
 import Blanc.Lift.WithdrawalRequest.Semantics

@@ -1342,6 +1342,14 @@ selected covered fork, `stateTransitionUsing`, the body run and the requests
 equality. `JointStepTrace` pins each step's `ConfiguredBlockTrace` block to
 `payloadToBlock req` and its body requests to `req.executionRequests`.
 
+For consensus SSZ byte equations, use
+[`Blanc/ConsensusSsz.lean`](../Blanc/ConsensusSsz.lean):
+`leBytes_eight_eq_reverse_toBytes` (little-endian `uint64` bytes are Jaune's
+big-endian `UInt64.toBytes` reversed), `leNat_leBytes`, `leBytes_eight_injective`,
+`adr_toBytes_injective`, `serialize_byteVector`, and
+`serializeSeq_of_fixedSize`/`serialize_sszList_of_fixedSize` (a list of
+fixed-size elements serializes to the concatenation of its elements).
+
 To turn a block's transaction or receipt trie entries into body and receipt
 facts, use [`Blanc/ExecutionTrieBinding.lean`](../Blanc/ExecutionTrieBinding.lean).
 `transactionsEntries` and `receiptsEntries` are the entry lists that
