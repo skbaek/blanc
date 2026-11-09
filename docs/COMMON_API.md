@@ -1331,6 +1331,17 @@ Configured transitions and histories continue in
 `exists_configuredHistoryTrace_of_reachUsing` retain the schedule-selected
 rules and body traces without hard-coding a fork.
 
+To extend a configured history by consensus blocks, use
+[`Blanc/JointHistory.lean`](../Blanc/JointHistory.lean). `JointRun cfg ccfg bls s₀`
+is a snoc-shaped run of successful `JauneConsensus.jointStep`s, each carrying the
+balance no-wrap bound, and `JointRun.toExec pre` extends a
+`ConfiguredHistoryTrace` ending at the anchor's execution chain by the run's
+engine blocks. `jointStep_engine` extracts the block's `NewPayloadRequest` and the
+engine verdict from a successful step; `engineVerdict_ok` turns a verdict into the
+selected covered fork, `stateTransitionUsing`, the body run and the requests
+equality. `JointStepTrace` pins each step's `ConfiguredBlockTrace` block to
+`payloadToBlock req` and its body requests to `req.executionRequests`.
+
 To turn a block's transaction or receipt trie entries into body and receipt
 facts, use [`Blanc/ExecutionTrieBinding.lean`](../Blanc/ExecutionTrieBinding.lean).
 `transactionsEntries` and `receiptsEntries` are the entry lists that

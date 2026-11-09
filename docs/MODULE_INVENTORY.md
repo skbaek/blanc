@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-540 shared modules, 513 with a module summary.
+541 shared modules, 514 with a module summary.
 
 ## `Blanc/`
 
@@ -211,6 +211,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`ForwardStorageAccess.lean`](../Blanc/ForwardStorageAccess.lean) | **Selected storage-access projections.** Contract-neutral access-set and gas carriers for a warm-or-cold `SLOAD`, plus the unchanged-state projections commonly threaded through compiled loops. | [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term) |
 | [`GasErasure.lean`](../Blanc/GasErasure.lean) | Contract-neutral gas erasure: equality of EVM states modulo `gasLeft`, and per-instruction congruence of successful source runs over a gas-free whitelist. | [E5](COMMON_API.md#e5-i-need-to-inspect-what-happened-in-an-exec), [I1](COMMON_API.md#i1-one-instructionlinefunction-preserves-an-observation) |
 | [`HistoricalFork.lean`](../Blanc/HistoricalFork.lean) | *(no module summary)* | [Root](COMMON_API.md#root-what-are-you-trying-to-do), [T5](COMMON_API.md#t5-the-wrapper-is-a-block-body-and-the-fact-is-about-an-installed-contract) |
+| [`JointHistory.lean`](../Blanc/JointHistory.lean) | **Joint execution–consensus histories.** A joint run is a sequence of successful `JauneConsensus.jointStep`s from a joint anchor. | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
 | [`Ladder.lean`](../Blanc/Ladder.lean) | *(no module summary)* | [Root](COMMON_API.md#root-what-are-you-trying-to-do), [I3](COMMON_API.md#i3-a-foreign-or-childless-frame-must-preserve-a-contract-precondition), [T1](COMMON_API.md#t1-i-have-exec-initevm-msg-and-need-processmessage-msg), [C9.13](COMMON_API.md#c913-i-need-a-whole-contract-property-without-per-path-walks) |
 | [`LadderBase.lean`](../Blanc/LadderBase.lean) | *(no module summary)* | [Root](COMMON_API.md#root-what-are-you-trying-to-do), [E2](COMMON_API.md#e2-the-walk-crosses-a-child-frame), [E4](COMMON_API.md#e4-i-need-a-common-terminal-walk), [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result), [I1](COMMON_API.md#i1-one-instructionlinefunction-preserves-an-observation), [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames), [I3](COMMON_API.md#i3-a-foreign-or-childless-frame-must-preserve-a-contract-precondition), [S2](COMMON_API.md#s2-i-need-a-reusable-composite-projection-cut), [S3](COMMON_API.md#s3-i-need-state-relation-or-write-frame-composition), [S5](COMMON_API.md#s5-i-need-the-address-shaped-storage-rows-a-token-ledger-sums-over), [C9.6](COMMON_API.md#c96-i-need-the-calls-child-frames-and-logs-of-a-lifted-frame), [C9.13](COMMON_API.md#c913-i-need-a-whole-contract-property-without-per-path-walks) |
 | [`LadderReached.lean`](../Blanc/LadderReached.lean) | Reached-segment fork coverage for configured chains. | [Root](COMMON_API.md#root-what-are-you-trying-to-do) |

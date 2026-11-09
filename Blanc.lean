@@ -216,6 +216,7 @@ import Blanc.ForwardSha256
 import Blanc.ForwardStorageAccess
 import Blanc.GasErasure
 import Blanc.HistoricalFork
+import Blanc.JointHistory
 import Blanc.Ladder
 import Blanc.LadderBase
 import Blanc.LadderReached

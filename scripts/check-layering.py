@@ -142,7 +142,7 @@ SHARED = ["Basic", "BytePattern", "Semantics", "HistoricalFork", "ShanghaiOnward
           "AbstractStackTransfer", "CodeTrie", "GasErasure", "RunPrefix", "PrefixTransport",
           "RevertPayload", "CompiledWalkInversion", "CompiledFixedInvariance", "ExecDeterminism", "ExecIdentification", "ExecutionSettlement", "ExecutionPath",
           "ExecutionStateTrace", "ExecutionTrace", "ExecutionStagedBodyTrace", "ExecutionStagedBodyStateTrace", "RequestsOutput", "ExecutionMessageStateTrace",
-          "ExecutionTransactionStateTrace", "ExecutionSelectedTransactionStateTrace", "ExecutionTransactionGas", "ExecutionBodyGas", "ExecutionBodyStateTrace", "ExecutionHistory", "ExecutionHistoryExtension",
+          "ExecutionTransactionStateTrace", "ExecutionSelectedTransactionStateTrace", "ExecutionTransactionGas", "ExecutionBodyGas", "ExecutionBodyStateTrace", "ExecutionHistory", "JointHistory", "ExecutionHistoryExtension",
           "ExecutionHistoryStateTrace", "ExecutionHistoryInStateTrace", "ExecutionOccurrence", "ExecutionNoninterference", "TransientSettlement", "TransientInvariance", "ExecutionCreateGuard",
                                  "ExecutionDeletionProvenance",
                                  "ExecutionEmptyContext",
