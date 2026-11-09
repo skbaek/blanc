@@ -17,11 +17,13 @@ the records emitted before the anchor and `E = (emissions H).length`. Every occu
   gives exactly one outcome `o`, and the next mid-block state is `applyWithdrawalOutcome` of
   `m` for `o`. The outcome's meaning is Jaune's W2a: `classify_fullExit_iff`,
   `classify_partial_amount`, `classify_fullExit_or_partial_spec` and `apply_ignored`
-  (`ValidJoint.fate_outcome` restates the ignored and partial cases);
+  (`ValidJoint.fate_outcome` restates the three cases);
 * (c) `E ≤ n`: still in the contract's queue at the chain's end, at position `n − E`.
 
-The fee is retained in every case (`ValidJoint.fee_retained`, Blanc's E9 payments theorem
-`history_payments` on the joint history).
+The fee budget is retained in aggregate
+(`ValidJoint.fee_budget_retained_aggregate`, Blanc's E9 payments theorem
+`history_payments` on the joint history): the checkpoint balance plus the total paid over
+the whole joint history is at most the final balance.
 -/
 
 namespace Blanc.Lift.WithdrawalRequest
@@ -78,9 +80,9 @@ with joint history `H = v.run.toExec v.pre`, every committed paid submission `n`
 exactly one of three fates; the index ranges are disjoint, so exactly one disjunct holds.
 * (a) `n < E₀`: it is the pre-anchor history's emitted record `n`.
 * (b) `E₀ ≤ n < E`: it is the serialized request `wr` at index `k` of the beacon block of step
-  `j` of the run, where `feedPosition v.run j k = n − E₀` (the pair is unique,
-  `feedPosition_inj`). At the mid-block state `m` (element `k` of the step's
-  `jointWithdrawalTrace`), `classifyWithdrawalRequest` gives exactly one outcome `o`, and the
+  `j` of the run, where `feedPosition v.run j k = n − E₀`, and `(j, k)` is the only pair of
+  the run at that feed position (`feedPosition_inj`). At the mid-block state `m` (element `k`
+  of the step's `jointWithdrawalTrace`), `classifyWithdrawalRequest` gives exactly one outcome `o`, and the
   step's next mid-block state is `applyWithdrawalOutcome` of `m` for `o`
   (`processWithdrawalRequest_eq`).
 * (c) `E ≤ n`: it is the final queue's entry `n − E`. -/
@@ -103,7 +105,10 @@ theorem ValidJoint.fate {P : Preset}
         jointWithdrawalTrace ccfg bls D.pre D.block = .ok tr ∧ tr[k]? = some m ∧
         ∃ o, Facts.classifyWithdrawalRequest ccfg m wr = .ok o ∧
           (∀ o', Facts.classifyWithdrawalRequest ccfg m wr = .ok o' → o' = o) ∧
-          ∃ m', tr[k + 1]? = some m' ∧ Facts.applyWithdrawalOutcome ccfg m wr o = .ok m') ∨
+          ∃ m', tr[k + 1]? = some m' ∧ Facts.applyWithdrawalOutcome ccfg m wr o = .ok m' ∧
+          (∀ j' k' (D' : JointRunStep (P := P) cfg ccfg bls) (wr' : WithdrawalRequest),
+            v.run.steps[j']? = some D' → (stepWithdrawalRequests D')[k']? = some wr' →
+              feedPosition v.run j' k' = n - (emissions v.pre).length → j' = j ∧ k' = k)) ∨
     ((emissions (v.run.toExec v.pre)).length ≤ n ∧
       (remainingQueue (v.run.toExec v.pre))[n - (emissions (v.run.toExec v.pre)).length]? =
         some (submissions (v.run.toExec v.pre))[n]) := by
@@ -146,13 +151,18 @@ theorem ValidJoint.fate {P : Preset}
   obtain ⟨o, hclass, happly⟩ := Except.bind_eq_ok hproc
   refine ⟨j, k, D, requests, wr, tr, tr[k], stepD, hread, hwr, hpos, hser, htr,
     List.getElem?_eq_getElem hk, o, hclass, fun o' h' => Except.ok.inj (h'.symm.trans hclass),
-    m', hm', happly⟩
+    m', hm', happly, fun j' k' D' wr' hD' hwr' hpos' =>
+      let h := feedPosition_inj (run := v.run) (j := j) (k := k) (j' := j') (k' := k')
+        stepD hstep hD' hwr' (hpos.trans hpos'.symm)
+      ⟨h.1.symm, h.2.symm⟩⟩
 
 /-- **(b)'s outcome, read through W2a.** In the setting of `ValidJoint.fate` (b), an ignored
 request leaves the mid-block state unchanged (`apply_ignored`), and a partial withdrawal
 appends exactly `min (balance − MIN_ACTIVATION_BALANCE − pending) wr.amount`, with `balance`
 and `pending` read from the mid-block state, for a nonzero requested amount
-(`classify_partial_amount`). A full exit holds exactly under `classify_fullExit_iff`. -/
+(`classify_partial_amount`). A full exit of `V` happens exactly when the conditions of
+`classify_fullExit_iff` hold in the mid-block state, and the next mid-block state is
+`initiate_validator_exit` of `V`. -/
 theorem ValidJoint.fate_outcome {P : Preset} {f : CFork} {ccfg : Config}
     {m m' : BeaconState P f} {wr : WithdrawalRequest} {o : Facts.WithdrawalOutcome}
     (hclass : Facts.classifyWithdrawalRequest ccfg m wr = .ok o)
@@ -163,17 +173,36 @@ theorem ValidJoint.fate_outcome {P : Preset} {f : CFork} {ccfg : Config}
         getPendingBalanceToWithdraw m V = .ok pending ∧
         amount.toNat =
           min (balance.toNat - P.MIN_ACTIVATION_BALANCE - pending.toNat) wr.amount.toNat ∧
-        wr.amount ≠ U64.zero) := by
-  refine ⟨fun r ho => ?_, fun V amount ho => ?_⟩
+        wr.amount ≠ U64.zero) ∧
+    (∀ V, o = .fullExit V →
+      (wr.amount = FULL_EXIT_REQUEST_AMOUNT ∧
+      (∃ q, m.pendingPartialWithdrawals = .ok q) ∧
+      validatorIndexOf m wr.validator_pubkey = .ok (some V) ∧
+      (∃ v, m.validators.get V.toNat "process_withdrawal_request" = .ok v ∧
+        hasExecutionWithdrawalCredential v = true ∧
+        v.withdrawal_credentials.toBytes.drop 12 = wr.source_address.toBytes ∧
+        (∃ current, getCurrentEpoch m = .ok current ∧
+          isActiveValidator v current = true ∧
+          v.exit_epoch = FAR_FUTURE_EPOCH ∧
+          (∃ period, c64 ccfg.SHARD_COMMITTEE_PERIOD = .ok period ∧
+            (∃ actSum, U64.add? v.activation_epoch period
+              "process_withdrawal_request" = .ok actSum ∧
+              ¬ (current < actSum))))) ∧
+      getPendingBalanceToWithdraw m V = .ok U64.zero) ∧
+      initiateValidatorExit ccfg m V = .ok m') := by
+  refine ⟨fun r ho => ?_, fun V amount ho => ?_, fun V ho => ?_⟩
   · rw [ho, Facts.apply_ignored] at happly
     exact (Except.ok.inj happly).symm
   · rw [ho] at hclass
     exact Facts.classify_partial_amount hclass
+  · subst ho
+    exact ⟨Facts.classify_fullExit_iff.mp hclass, happly⟩
 
-/-- **The fee is retained (E9 on the joint history).** Along a valid joint chain, the EIP-7002
-predeploy's balance at the chain's end is at least its checkpoint balance plus the value of
-every committed submission of the joint history, whatever each submission's fate. -/
-theorem ValidJoint.fee_retained {P : Preset}
+/-- **The fee budget is retained in aggregate (E9 on the joint history).** Along a valid joint
+chain, one aggregate inequality holds over the whole joint history: the EIP-7002 predeploy's
+checkpoint balance plus the total paid value of every committed submission is at most its
+balance at the chain's end. -/
+theorem ValidJoint.fee_budget_retained_aggregate {P : Preset}
     {cfg : ChainConfig} {ccfg : Config}
     {bls : Bool} {checkpoint : BlockChain} {anchor final : JointState P}
     (v : ValidJoint cfg ccfg bls checkpoint anchor final) :

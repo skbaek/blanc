@@ -172,6 +172,29 @@ theorem jointWithdrawalTrace_step {P : Preset} {ccfg : Config} {bls : Bool}
 
 /-! ## P1 -/
 
+/-- Request `k` of step `j` is the run's feed element at its feed position `i`, and its
+serialization is the joint history's committed paid submission `E₀ + i` (`history_fifo` and
+`emissions_toExec`). -/
+theorem ValidJoint.submission_of_feed {P : Preset}
+    {cfg : ChainConfig} {ccfg : Config}
+    {bls : Bool} {checkpoint : BlockChain} {anchor final : JointState P}
+    (v : ValidJoint cfg ccfg bls checkpoint anchor final)
+    {j k : Nat} {D : JointRunStep (P := P) cfg ccfg bls} (stepD : v.run.steps[j]? = some D)
+    {wr : WithdrawalRequest} (hstep : (stepWithdrawalRequests D)[k]? = some wr) :
+    (withdrawalFeed v.run)[feedPosition v.run j k]? = some wr ∧
+    (submissions (v.run.toExec v.pre))[(emissions v.pre).length +
+      feedPosition v.run j k]? = some (Ssz.serialize wr) := by
+  have hfeed := withdrawalFeed_getElem? v.run stepD hstep
+  have hsub : (submissions (v.run.toExec v.pre))[(emissions v.pre).length +
+      feedPosition v.run j k]? = some (Ssz.serialize wr) := by
+    have hlt : feedPosition v.run j k < ((withdrawalFeed v.run).map Ssz.serialize).length := by
+      rw [List.length_map]
+      exact (List.getElem?_eq_some_iff.mp hfeed).1
+    rw [v.history_fifo, emissions_toExec, List.append_assoc,
+      List.getElem?_append_right (Nat.le_add_right _ _), Nat.add_sub_cancel_left,
+      List.getElem?_append_left hlt, List.getElem?_map, hfeed, Option.map_some]
+  exact ⟨hfeed, hsub⟩
+
 /-- Every step of a valid joint chain has its mid-block trace: one state per withdrawal request
 of its beacon block, plus the final state. -/
 theorem ValidJoint.jointWithdrawalTrace_ok {P : Preset}
@@ -228,15 +251,7 @@ theorem ValidJoint.authorization {P : Preset}
   have hstep : (stepWithdrawalRequests D)[k]? = some wr := by
     rw [stepWithdrawalRequests, hread, Array.getElem?_toList]
     exact hwr
-  have hfeed := withdrawalFeed_getElem? v.run stepD hstep
-  have hsub : (submissions (v.run.toExec v.pre))[(emissions v.pre).length +
-      feedPosition v.run j k]? = some (Ssz.serialize wr) := by
-    have hlt : feedPosition v.run j k < ((withdrawalFeed v.run).map Ssz.serialize).length := by
-      rw [List.length_map]
-      exact (List.getElem?_eq_some_iff.mp hfeed).1
-    rw [v.history_fifo, emissions_toExec, List.append_assoc,
-      List.getElem?_append_right (Nat.le_add_right _ _), Nat.add_sub_cancel_left,
-      List.getElem?_append_left hlt, List.getElem?_map, hfeed, Option.map_some]
+  obtain ⟨hfeed, hsub⟩ := v.submission_of_feed stepD hstep
   obtain ⟨hindex, validator, hget, hcred, hsource⟩ :=
     Facts.classify_fullExit_or_partial_spec hclass ho
   have happly : ∃ m', tr[k + 1]? = some m' ∧ Facts.applyWithdrawalOutcome ccfg m wr o = .ok m' := by
@@ -246,6 +261,74 @@ theorem ValidJoint.authorization {P : Preset}
   refine ⟨happly, hfeed, hsub, hindex, validator, hget, hcred, hsource, ?_⟩
   have hlen : wr.source_address.toBytes.length = 20 := by
     simp only [Adr.toBytes, List.length_append, UInt32.length_toBytes, B128.length_toBytes]
-  rw [hsource, serialize_withdrawalRequest, List.append_assoc, List.take_left' hlen]
+  rw [hsource, Blanc.ConsensusSsz.serialize_withdrawalRequest, List.append_assoc,
+    List.take_left' hlen]
+
+/-! ## P1 negative control -/
+
+/-- **P1 negative control, step fact.** If the pending partial-withdrawal queue does not
+refuse this amount, the request's public key resolves to `V`, and the validator at `V` lacks an
+execution withdrawal credential whose address is the request's source, then
+`classifyWithdrawalRequest` ignores the request for `badCredentialOrSource`. -/
+theorem classify_badCredentialOrSource {P : Preset} {f : CFork} {cfg : Config}
+    {state : BeaconState P f} {wr : WithdrawalRequest} {q} {V : ValidatorIndex} {v}
+    (hq : state.pendingPartialWithdrawals = .ok q)
+    (hlim : ¬ ((q.length == P.PENDING_PARTIAL_WITHDRAWALS_LIMIT &&
+      !(wr.amount == FULL_EXIT_REQUEST_AMOUNT)) = true))
+    (hidx : validatorIndexOf state wr.validator_pubkey = .ok (some V))
+    (hget : state.validators.get V.toNat "process_withdrawal_request" = .ok v)
+    (hbad : ¬ (hasExecutionWithdrawalCredential v = true ∧
+      v.withdrawal_credentials.toBytes.drop 12 = wr.source_address.toBytes)) :
+    Facts.classifyWithdrawalRequest cfg state wr = .ok (.ignored .badCredentialOrSource) := by
+  unfold Facts.classifyWithdrawalRequest
+  dsimp only
+  rw [hq]
+  simp only [Except.bind_ok]
+  rw [ite_eq_right hlim]
+  rw [hidx]
+  simp only [Except.bind_ok]
+  rw [hget]
+  simp only [Except.bind_ok]
+  have hcond : ((!(hasExecutionWithdrawalCredential v &&
+      v.withdrawal_credentials.toBytes.drop 12 == wr.source_address.toBytes)) = true) := by
+    cases hc : (hasExecutionWithdrawalCredential v &&
+      v.withdrawal_credentials.toBytes.drop 12 == wr.source_address.toBytes)
+    · rfl
+    · exfalso
+      simp only [Bool.and_eq_true, beq_iff_eq] at hc
+      exact hbad hc
+  rw [ite_eq_left hcond]
+  rfl
+
+/-- **P1 negative control, joint form.** Take a joint step's mid-block trace `tr` (for
+every step of a valid joint chain it exists, `ValidJoint.jointWithdrawalTrace_ok`), the beacon
+block's withdrawal request `wr` at index `k`, and the state `m = tr[k]` at which
+`process_withdrawal_request` processes it. If `wr`'s public key resolves in `m` to a validator
+whose withdrawal credential is not an execution credential carrying `wr.source_address`, and
+the partial-withdrawal queue does not refuse it first, then `wr` is ignored for
+`badCredentialOrSource` and the next mid-block state is `m` itself: a request from any address
+other than the validator's withdrawal address changes no consensus state. -/
+theorem jointWithdrawalTrace_badCredentialOrSource {P : Preset} {ccfg : Config} {bls : Bool}
+    {s : JointState P} {b : AnySignedBlock P} {requests : ExecutionRequests P}
+    (hread : Gated.read b.2.message.body.execution_requests
+      "NewPayloadRequest: execution_requests" = .ok requests)
+    {tr : List (BeaconState P b.1)} (htr : jointWithdrawalTrace ccfg bls s b = .ok tr)
+    {k : Nat} {wr : WithdrawalRequest} (hwr : requests.withdrawals.toArray[k]? = some wr)
+    {m : BeaconState P b.1} (hm : tr[k]? = some m)
+    {q} {V : ValidatorIndex} {validator}
+    (hq : m.pendingPartialWithdrawals = .ok q)
+    (hlim : ¬ ((q.length == P.PENDING_PARTIAL_WITHDRAWALS_LIMIT &&
+      !(wr.amount == FULL_EXIT_REQUEST_AMOUNT)) = true))
+    (hidx : validatorIndexOf m wr.validator_pubkey = .ok (some V))
+    (hget : m.validators.get V.toNat "process_withdrawal_request" = .ok validator)
+    (hbad : ¬ (hasExecutionWithdrawalCredential validator = true ∧
+      validator.withdrawal_credentials.toBytes.drop 12 = wr.source_address.toBytes)) :
+    Facts.classifyWithdrawalRequest ccfg m wr = .ok (.ignored .badCredentialOrSource) ∧
+    tr[k + 1]? = some m := by
+  have hclass := classify_badCredentialOrSource (cfg := ccfg) hq hlim hidx hget hbad
+  obtain ⟨m', hm', hproc⟩ := jointWithdrawalTrace_step hread htr hwr hm
+  rw [Facts.processWithdrawalRequest_eq, hclass, Except.bind_ok, Facts.apply_ignored] at hproc
+  obtain rfl := Except.ok.inj hproc
+  exact ⟨hclass, hm'⟩
 
 end Blanc.Lift.WithdrawalRequest

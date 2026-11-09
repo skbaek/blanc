@@ -16,48 +16,6 @@ namespace Blanc.Lift.WithdrawalRequest
 
 open Jaune JauneConsensus Blanc.ConsensusSsz Blanc.WithdrawalRequest
 
-/-- The SSZ serialization of a withdrawal request, field by field. -/
-theorem serialize_withdrawalRequest (wr : JauneConsensus.WithdrawalRequest) :
-    Ssz.serialize wr =
-      wr.source_address.toBytes ++ wr.validator_pubkey.toArray.toList ++
-        leBytes 8 wr.amount.toNat := by
-  change serializeParts [fieldPart wr.source_address, fieldPart wr.validator_pubkey,
-    fieldPart wr.amount] = _
-  simp only [fieldPart]
-  rw [show Ssz.fixedSize? Adr = some 20 from rfl, show Ssz.fixedSize? BLSPubkey = some 48 from rfl,
-    show Ssz.fixedSize? U64 = some 8 from rfl]
-  have := serializeParts_fixed (fun b : Bytes => b)
-    [Ssz.serialize wr.source_address, Ssz.serialize wr.validator_pubkey, Ssz.serialize wr.amount]
-  simp only [List.map] at this
-  rw [this, serialize_byteVector]
-  simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil, List.append_assoc]
-  rfl
-
-/-- A withdrawal request serializes to 76 bytes. -/
-theorem serialize_withdrawalRequest_length (wr : JauneConsensus.WithdrawalRequest) :
-    (Ssz.serialize wr).length = 76 := by
-  rw [serialize_withdrawalRequest]
-  simp only [List.length_append, length_leBytes, Array.length_toList,
-    wr.validator_pubkey.size_eq]
-  rfl
-
-/-- The SSZ serialization of a withdrawal request is injective. -/
-theorem serialize_withdrawalRequest_injective :
-    Function.Injective (Ssz.serialize : JauneConsensus.WithdrawalRequest → Bytes) := by
-  intro a b h
-  rw [serialize_withdrawalRequest, serialize_withdrawalRequest] at h
-  have hpk : ∀ wr : JauneConsensus.WithdrawalRequest,
-      wr.validator_pubkey.toArray.toList.length = 48 := fun wr => by
-    simp only [Array.length_toList, wr.validator_pubkey.size_eq]
-  obtain ⟨h, hamount⟩ := List.append_inj h (by simp only [List.length_append, hpk]; rfl)
-  obtain ⟨haddr, hkey⟩ := List.append_inj h rfl
-  obtain ⟨a₁, a₂, a₃⟩ := a
-  obtain ⟨b₁, b₂, b₃⟩ := b
-  obtain rfl := adr_toBytes_injective haddr
-  obtain rfl := SszVector.ext (Array.toList_inj.mp hkey)
-  obtain rfl := leBytes_eight_injective hamount
-  rfl
-
 /-- The EIP-7002 contract entry a consensus withdrawal request stands for. -/
 def consensusEntry (wr : JauneConsensus.WithdrawalRequest) : Blanc.WithdrawalRequest.Entry where
   caller := wr.source_address
