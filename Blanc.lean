@@ -615,6 +615,7 @@ import Blanc.Lift.WithdrawalRequest.JointFate
 import Blanc.Lift.WithdrawalRequest.JointHistory
 import Blanc.Lift.WithdrawalRequest.JointLatency
 import Blanc.Lift.WithdrawalRequest.Jumps
+import Blanc.Lift.WithdrawalRequest.LatencyControl
 import Blanc.Lift.WithdrawalRequest.Layout
 import Blanc.Lift.WithdrawalRequest.MainnetDeployment
 import Blanc.Lift.WithdrawalRequest.Model
