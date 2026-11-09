@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-543 shared modules, 516 with a module summary.
+544 shared modules, 517 with a module summary.
 
 ## `Blanc/`
 
@@ -219,6 +219,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`LadderSem.lean`](../Blanc/LadderSem.lean) | **Contract preservation over certified code semantics.** This module is the sem-parametric counterpart of the ordinary contract ladder. | [Root](COMMON_API.md#root-what-are-you-trying-to-do), [T1](COMMON_API.md#t1-i-have-exec-initevm-msg-and-need-processmessage-msg), [C9.13](COMMON_API.md#c913-i-need-a-whole-contract-property-without-per-path-walks) |
 | [`LedgerConservation.lean`](../Blanc/LedgerConservation.lean) | **Conservation of a token ledger at an arbitrary supply slot.** A token contract that keeps balances at address-shaped keys and a total supply at one reserved non-address key satisfies one invariant: the word at the supply slot is exactly the sum of the balances. | [S5](COMMON_API.md#s5-i-need-the-address-shaped-storage-rows-a-token-ledger-sums-over), [S7](COMMON_API.md#s7-i-need-a-token-ledger-conservation-invariant) |
 | [`LedgerUpdate.lean`](../Blanc/LedgerUpdate.lean) | **Functional single-row ledger updates.** A pure token model keeps its balances as a function `Adr → B256` and books a movement as a `Function.update` of one row. | [S5](COMMON_API.md#s5-i-need-the-address-shaped-storage-rows-a-token-ledger-sums-over) |
+| [`ListChunks.lean`](../Blanc/ListChunks.lean) | **Fixed-width pieces of a list, and a list's one marked element.** * `List.chunksOf w l` cuts `l` into consecutive pieces of `w` elements, keeping a short last piece (never padding or dropping it), so comparing the pieces with whole records detects a ragged tail. | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
 | [`ListFlatMapPosition.lean`](../Blanc/ListFlatMapPosition.lean) | **Positions in a `flatMap`.** Element `i` of `l.flatMap f` is element `k` of `f l[j]` for exactly one pair `(j, k)` with `k < (f l[j]).length`, and its position is `((l.take j).flatMap f).length + k`. | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
 | [`LockExclusion.lean`](../Blanc/LockExclusion.lean) | **Generic reentrancy-lock exclusion over the all-outcome frame tree.** A reentrancy lock is one persistent storage cell `slot` of a storage owner `P` that guarded code sets to a `locked` word before running a guarded body and checks on entry to every guarded body. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames), [T4](COMMON_API.md#t4-the-wrapper-is-a-message-call-and-i-must-see-through-delegation) |
 | [`LogBloom.lean`](../Blanc/LogBloom.lean) | Address membership in Jaune's log bloom has no false negatives. | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |

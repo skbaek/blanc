@@ -1369,7 +1369,17 @@ run's steps) by step and offset, use
 [`Blanc/ListFlatMapPosition.lean`](../Blanc/ListFlatMapPosition.lean):
 `Blanc.List.exists_flatMap_position` gives every position `i` a pair `(j, k)` with
 `k < (f l[j]).length` and `((l.take j).flatMap f).length + k = i`, and
-`Blanc.List.flatMap_position_inj` makes that pair unique.
+`Blanc.List.flatMap_position_inj` makes that pair unique. The element there is
+`Blanc.List.getElem?_flatMap_position` in
+[`Blanc/ListChunks.lean`](../Blanc/ListChunks.lean), which also cuts a list into fixed-width
+pieces (`Blanc.List.chunksOf`, with `Blanc.List.chunksOf_flatMap`: re-chunking blocks of exactly
+`w` elements gives the blocks back, so a byte string of fixed-length records reads back as its
+records) and splits a list around its one element satisfying `p`
+(`Blanc.List.split_of_filter_length_one`: the split, `find? p`, and the longest prefix avoiding `p`).
+The same module splits a list at an index it holds (`Blanc.List.eq_take_cons_drop`), splits a
+pointwise `Forall₂` relation alike (`Blanc.List.forall₂_split`), and follows a queue entry drained
+at a fixed rate along a list to where it is drained (`Blanc.List.drain_position`: entry `q` of the
+queue at index `j` is entry `q % cap` of what index `j + q / cap` drains).
 
 For consensus SSZ byte equations, use
 [`Blanc/ConsensusSsz.lean`](../Blanc/ConsensusSsz.lean):

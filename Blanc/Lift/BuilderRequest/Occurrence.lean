@@ -255,9 +255,11 @@ theorem _root_.Blanc.Lift.BuilderRequest.ChainLink.Linked.amsterdam_count (L : L
     rw [List.filter_filter]
     apply List.filter_congr
     intro p _
-    by_cases hp : p.2 = c.address <;> simp [hp]
-  rw [e, L.listed]
-  simp
+    by_cases hp : p.2 = c.address
+    · simp only [hp, decide_true, beq_self_eq_true, Bool.or_true, Bool.and_self]
+    · simp only [hp, decide_false, Bool.false_and]
+  rw [e, L.listed, List.filter_cons_of_pos (p := fun p : UInt8 × Adr => decide (p.2 = c.address)) (decide_eq_true rfl)]
+  rfl
 
 /-- **A body's system frames at the contract**: one at Amsterdam, none at a covered fork. -/
 theorem body_systemCount (L : Linked c ty) {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
@@ -372,14 +374,6 @@ theorem corresponds_flatten :
     show Corresponds c (_ ++ _) (List.flatMap _ (_ :: _))
     rw [List.flatMap_cons]
     exact List.rel_append hb.1 (corresponds_flatten rest)
-
-theorem forall₂_split {α β : Type _} {R : α → β → Prop} :
-    ∀ {pre : List β} {b : β} {post : List β} {xs : List α}, List.Forall₂ R xs (pre ++ b :: post) →
-      ∃ xpre x xpost, xs = xpre ++ x :: xpost ∧ List.Forall₂ R xpre pre ∧ R x b ∧ List.Forall₂ R xpost post
-  | [], _, _, _, .cons hb rest => ⟨[], _, _, rfl, .nil, hb, rest⟩
-  | _ :: _, _, _, _, .cons hb rest => by
-    obtain ⟨xpre, x, xpost, rfl, h1, h2, h3⟩ := forall₂_split rest
-    exact ⟨_ :: xpre, x, xpost, rfl, .cons hb h1, h2, h3⟩
 
 /-- The premises the history results share, for a contract whose start storage represents `st`: the history, the
 code, the system address free of code, senders, authorities and creations, and the word range over the submissions. -/
@@ -497,7 +491,7 @@ theorem history_block (R : Reading c) (L : Linked c ty) (P : Premises c cfg star
         emissions R ty pre ++ queueAtRequests R b) := by
   obtain ⟨fss, hf, chain, subs⟩ := P.frames L
   rw [split] at hf
-  obtain ⟨fpre, fs, fpost, rfl, hpre, hb, -⟩ := forall₂_split hf
+  obtain ⟨fpre, fs, fpost, rfl, hpre, hb, -⟩ := Blanc.List.forall₂_split hf
   have eF : (fpre ++ fs :: fpost).flatten = fpre.flatten ++ (fs ++ fpost.flatten) := by
     rw [List.flatten_append, List.flatten_cons]
   rw [eF] at chain subs
@@ -601,11 +595,6 @@ theorem history_block (R : Reading c) (L : Linked c ty) (P : Premises c cfg star
 
 /-! ## Occurrences -/
 
-theorem split_of_getElem? {α : Type _} {l : List α} {j : Nat} {x : α} (h : l[j]? = some x) :
-    l = l.take j ++ x :: l.drop (j + 1) := by
-  obtain ⟨hj, rfl⟩ := List.getElem?_eq_some_iff.mp h
-  conv_lhs => rw [← List.take_append_drop j l, List.drop_eq_getElem_cons hj]
-
 theorem emissions_take_succ (R : Reading c) {j : Nat} {x : KeptBlock} (h : blocks[j]? = some x) :
     emissions R ty (blocks.take (j + 1)) = emissions R ty (blocks.take j) ++ blockEmissions R ty x := by
   rw [List.take_add_one, h, Option.toList_some, emissions_append]
@@ -663,56 +652,6 @@ theorem history_fate (R : Reading c) (L : Linked c ty) (P : Premises c cfg start
     refine ⟨Nat.le_of_not_lt hE, ?_⟩
     rw [fifo, List.getElem?_append_right (Nat.le_of_not_lt hE)]
 
-theorem latency_core {α : Type} (cap : Nat) (hcap : 0 < cap) (xs : List α) (am : α → Prop)
-    (be Q : α → List Bytes) (T : Nat → α → List Bytes) (E : Nat → Nat)
-    (A1 : ∀ (i : Nat) x, xs[i]? = some x → am x → ∀ k : Nat, (T i x)[E i + k]? = (Q x)[k]?)
-    (A2 : ∀ (i : Nat) x, xs[i]? = some x → am x → be x = (Q x).take cap)
-    (B2 : ∀ (i : Nat) x y, xs[i]? = some x → xs[i + 1]? = some y → T i x <+: T (i + 1) y)
-    (B3 : ∀ (i : Nat) x, xs[i]? = some x → E (i + 1) = E i + (be x).length) :
-    ∀ (d j q : Nat) x r, q / cap = d → xs[j]? = some x → j + d < xs.length →
-      (∀ i ≤ d, ∀ y, xs[j + i]? = some y → am y) → (T j x)[E j + q]? = some r →
-      ∃ y, xs[j + d]? = some y ∧ (be y)[q % cap]? = some r ∧ E j + q = E (j + d) + q % cap := by
-  intro d
-  induction d with
-  | zero =>
-    intro j q x r hq hx _ ham hr
-    have lt : q < cap := (Nat.div_eq_zero_iff_lt hcap).mp hq
-    have amx := ham 0 (Nat.le_refl _) x hx
-    refine ⟨x, hx, ?_, by rw [Nat.mod_eq_of_lt lt, Nat.add_zero]⟩
-    rw [Nat.mod_eq_of_lt lt, A2 j x hx amx, List.getElem?_take_of_lt lt, ← A1 j x hx amx]
-    exact hr
-  | succ d ih =>
-    intro j q x r hq hx hlen ham hr
-    have amx := ham 0 (Nat.zero_le _) x hx
-    have le : cap ≤ q := by
-      by_contra h
-      rw [Nat.div_eq_of_lt (Nat.lt_of_not_le h)] at hq
-      omega
-    have hQ : (Q x)[q]? = some r := by rw [← A1 j x hx amx]; exact hr
-    have qlt : q < (Q x).length := (List.getElem?_eq_some_iff.mp hQ).1
-    have beLen : (be x).length = cap := by
-      rw [A2 j x hx amx, List.length_take]
-      omega
-    obtain ⟨y, hy⟩ : ∃ y, xs[j + 1]? = some y :=
-      ⟨xs[j + 1], List.getElem?_eq_getElem (by omega)⟩
-    have hE := B3 j x hx
-    rw [beLen] at hE
-    have pre := B2 j x y hx hy
-    obtain ⟨u, hu⟩ := pre
-    have hr' : (T (j + 1) y)[E (j + 1) + (q - cap)]? = some r := by
-      rw [← hu, hE, show E j + cap + (q - cap) = E j + q by omega,
-        List.getElem?_append_left (List.getElem?_eq_some_iff.mp hr).1]
-      exact hr
-    have hq' : (q - cap) / cap = d := by
-      rw [show q - cap = q - cap * 1 by rw [Nat.mul_one], Nat.sub_mul_div, hq, Nat.add_sub_cancel]
-    obtain ⟨z, hz, hbe, hidx⟩ := ih (j + 1) (q - cap) y r hq' hy (by omega)
-      (fun i hi w hw => ham (i + 1) (by omega) w (by rw [show j + (i + 1) = j + 1 + i by omega]; exact hw)) hr'
-    have mod : (q - cap) % cap = q % cap := (Nat.mod_eq_sub_mod le).symm
-    rw [mod] at hbe hidx
-    rw [show j + 1 + d = j + (d + 1) by omega] at hz hidx
-    refine ⟨z, hz, hbe, ?_⟩
-    omega
-
 /-- **Latency, occurrence-indexed.** Let record `r` sit at index `q` of the queue block `j`'s request step read,
 and let blocks `j` to `j + q / cap` all be Amsterdam blocks of the history. Then block `j + q / cap` emits `r` as its
 record `q % cap`, preceded by exactly the queue's records from position `cap * (q / cap)`; `r` is the history's
@@ -735,7 +674,7 @@ theorem history_latency (R : Reading c) (L : Linked c ty) (P : Premises c cfg st
       blockEmissions R ty x = (queueAtRequests R x).take c.cap ∧
       T i x = emissions R ty (blocks.take i) ++ queueAtRequests R x := by
     intro i x hx am
-    exact (history_block R L P (split_of_getElem? hx)).2.2 am
+    exact (history_block R L P (Blanc.List.eq_take_cons_drop hx)).2.2 am
   have A1 : ∀ i x, blocks[i]? = some x → x.fork = .amsterdam → ∀ k, (T i x)[E i + k]? = (queueAtRequests R x)[k]? := by
     intro i x hx am k
     rw [(A i x hx am).2, List.getElem?_append_right (Nat.le_add_right _ _), Nat.add_sub_cancel_left]
@@ -772,7 +711,7 @@ theorem history_latency (R : Reading c) (L : Linked c ty) (P : Premises c cfg st
     simp only [List.append_assoc]
   have hlen : j + q / c.cap < blocks.length := (List.getElem?_eq_some_iff.mp hD).1
   have amB : B.fork = .amsterdam := amsterdam 0 (Nat.zero_le _) B (by rw [Nat.add_zero]; exact hB)
-  have core := latency_core c.cap hcap blocks (fun x => x.fork = .amsterdam) (blockEmissions R ty)
+  have core := Blanc.List.drain_position c.cap hcap blocks (fun x => x.fork = .amsterdam) (blockEmissions R ty)
     (queueAtRequests R) T E A1 A2 B2 B3
   have hT : (T j B)[E j + q]? = some r := by rw [A1 j B hB amB]; exact queued
   obtain ⟨y, hy, hbe, hidx⟩ := core (q / c.cap) j q B r rfl hB hlen amsterdam hT

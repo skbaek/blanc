@@ -210,6 +210,9 @@ SHARED += ["Lift.MemPotential", "Lift.FreePtr", "Lift.SymTransfer", "Lift.FreePt
 SHARED += ["Lift.BndInterval", "Lift.ReturnDataKeep"]
 # Generic list positions in a flatMap (EIP-7002 cross-layer P2); imports nothing.
 SHARED += ["ListFlatMapPosition"]
+# Fixed-width list chunks, a list's one marked element, and the element at a flatMap position
+# (eip8282-gloas-cross-layer-v1 R1); imports nothing.
+SHARED += ["ListChunks"]
 # Chain assembly of `fpCert` from per-entry kernel decisions (ns-f5b): imports only
 # Lift.FreePtr; no statement names a contract.
 SHARED += ["Lift.FreePtrChain", "Lift.WriteSiteChain"]
@@ -630,6 +633,10 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.RevertCovered", "Lift.BuilderRequest.Progress",
     "Lift.BuilderRequest.CallerCovered",
 ]
+# EIP-8282 cross-layer R1 (eip8282-gloas-cross-layer-v1): occurrence-indexed submissions, emissions and queues over
+# `KeptHistory`, generic over a linked builder contract, and its deposit and exit instances.
+CONTRACTS["builder-request"].extend(["Lift.BuilderRequest.Occurrence", "Lift.BuilderRequest.Deposit.Indexed",
+                                     "Lift.BuilderRequest.Exit.Indexed"])
 # EIP-7251 consolidation requests: fee and user frames under covered forks.
 CONTRACTS.setdefault("consolidation-request", []).extend([
     "Lift.ConsolidationRequest.Fee", "Lift.ConsolidationRequest.Submission",

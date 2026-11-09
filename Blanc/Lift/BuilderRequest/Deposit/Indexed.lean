@@ -15,7 +15,8 @@ paid submission, in output form, amount little-endian), `blockEmissions` (a bloc
 * `history_block`: a block's type-3 request bytes are its emitted records; at Amsterdam it emits the first 64 records
   of the queue its request step read, and that queue is the submissions through its request boundary minus the
   earlier emissions; at a covered fork it emits nothing.
-* `history_fate`: every submission is emitted at exactly one block and position, or still queued at the end.
+* `Occurrence.history_fate reading linked H.premises n`: every submission is emitted at exactly one block and
+  position, or still queued at the end (the generic statement is used as is: the start queue is empty).
 * `history_latency`: a record at index `q` of block `j`'s request-boundary queue is emitted by block `j + q / 64` as
   its record `q % 64`, and is submission occurrence `E_j + q`.
 -/
@@ -121,27 +122,10 @@ theorem history_block (H : Clean cfg start blocks stop) {pre post : List KeptBlo
   rw [start_queue, List.nil_append] at h
   exact h
 
-/-- **The fate of every deposit submission.** Submission `n` is either emitted as record `k` of block `j` for exactly
-one pair `(j, k)` (with `j` before an anchor `a` exactly when `n` is below the first `a` blocks' emissions), or still
-queued at the end at position `n − E`. -/
-theorem history_fate (H : Clean cfg start blocks stop) (n : Nat) :
-    (n < (emissions blocks).length ∧
-      ∃ j k, ∃ hj : j < blocks.length, k < (blockEmissions blocks[j]).length ∧
-        (emissions (blocks.take j)).length + k = n ∧
-        (blockEmissions blocks[j])[k]? = (submissions blocks)[n]? ∧
-        (∀ a, j < a ↔ n < (emissions (blocks.take a)).length) ∧
-        ∀ j' k' (hj' : j' < blocks.length), k' < (blockEmissions blocks[j']).length →
-          (emissions (blocks.take j')).length + k' = n → j' = j ∧ k' = k) ∨
-    ((emissions blocks).length ≤ n ∧
-      (remainingQueue stop)[n - (emissions blocks).length]? = (submissions blocks)[n]?) := by
-  have h := Occurrence.history_fate reading linked H.premises n
-  rw [start_queue, List.nil_append] at h
-  exact h
-
 /-- **Deposit latency, occurrence-indexed.** A record at index `q` of the queue block `j`'s request step read, with
 blocks `j` to `j + q / 64` all at Amsterdam, is record `q % 64` of block `j + q / 64`'s type-3 requests, preceded by
 exactly the queue's records from position `64 * (q / 64)`; it is submission occurrence `E_j + q`, which is that
-block's record `q % 64` in `history_fate`'s indexing. -/
+block's record `q % 64` in `Occurrence.history_fate`'s indexing. -/
 theorem history_latency (H : Clean cfg start blocks stop) {j q : Nat} {B D : KeptBlock} {r : Bytes}
     (hB : blocks[j]? = some B) (hD : blocks[j + q / 64]? = some D)
     (amsterdam : ∀ i ≤ q / 64, ∀ x, blocks[j + i]? = some x → x.fork = .amsterdam)

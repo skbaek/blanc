@@ -1,3 +1,5 @@
+import Batteries.Data.List.Basic
+
 /-!
 # Fixed-width pieces of a list, and a list's one marked element
 
@@ -18,7 +20,7 @@ def List.chunksOf {α : Type _} (w : Nat) (l : List α) : List (List α) :=
 
 private theorem length_flatMap_const {α β : Type _} (w : Nat) (f : α → List β) :
     ∀ xs : List α, (∀ x ∈ xs, (f x).length = w) → (xs.flatMap f).length = w * xs.length
-  | [], _ => by simp
+  | [], _ => by rw [List.flatMap_nil, List.length_nil, List.length_nil, Nat.mul_zero]
   | x :: xs, h => by
     have rest := length_flatMap_const w f xs fun y hy => h y (List.mem_cons_of_mem _ hy)
     rw [List.flatMap_cons, List.length_append, h x List.mem_cons_self, rest, List.length_cons, Nat.mul_succ]
@@ -104,5 +106,75 @@ theorem List.getElem?_flatMap_position {α β : Type _} (f : α → List β) (l 
     rw [List.flatMap_append, List.flatMap_cons]
   rw [e, List.getElem?_append_right (Nat.le_add_right _ _), Nat.add_sub_cancel_left,
     List.getElem?_append_left hk]
+
+/-- A list with element `x` at index `j` is its first `j` elements, then `x`, then the rest. -/
+theorem List.eq_take_cons_drop {α : Type _} {l : List α} {j : Nat} {x : α} (h : l[j]? = some x) :
+    l = l.take j ++ x :: l.drop (j + 1) := by
+  obtain ⟨hj, rfl⟩ := List.getElem?_eq_some_iff.mp h
+  conv => lhs; rw [← List.take_append_drop j l, List.drop_eq_getElem_cons hj]
+
+/-- Two lists related pointwise split alike around a block of the second. -/
+theorem List.forall₂_split {α β : Type _} {R : α → β → Prop} :
+    ∀ {pre : List β} {b : β} {post : List β} {xs : List α}, List.Forall₂ R xs (pre ++ b :: post) →
+      ∃ xpre x xpost, xs = xpre ++ x :: xpost ∧ List.Forall₂ R xpre pre ∧ R x b ∧ List.Forall₂ R xpost post
+  | [], _, _, _, .cons hb rest => ⟨[], _, _, rfl, .nil, hb, rest⟩
+  | _ :: _, _, _, _, .cons hb rest => by
+    obtain ⟨xpre, x, xpost, rfl, h1, h2, h3⟩ := List.forall₂_split rest
+    exact ⟨_ :: xpre, x, xpost, rfl, .cons hb h1, h2, h3⟩
+
+/-- **Draining a queue at a fixed rate, by position.** A family of queues indexed along `xs`, where element `i`
+(when it satisfies `am`) drains the first `cap` entries of its queue `Q x` (`A2`), its queue is the tail past `E i`
+of a log `T i x` (`A1`), the logs grow along `xs` (`B2`) and `E` counts what was drained (`B3`). Then entry `q` of the
+queue at index `j` is drained at index `j + q / cap` as its entry `q % cap`, at log position `E j + q`. -/
+theorem List.drain_position {α β : Type _} (cap : Nat) (hcap : 0 < cap) (xs : List α) (am : α → Prop)
+    (be Q : α → List β) (T : Nat → α → List β) (E : Nat → Nat)
+    (A1 : ∀ (i : Nat) x, xs[i]? = some x → am x → ∀ k : Nat, (T i x)[E i + k]? = (Q x)[k]?)
+    (A2 : ∀ (i : Nat) x, xs[i]? = some x → am x → be x = (Q x).take cap)
+    (B2 : ∀ (i : Nat) x y, xs[i]? = some x → xs[i + 1]? = some y → T i x <+: T (i + 1) y)
+    (B3 : ∀ (i : Nat) x, xs[i]? = some x → E (i + 1) = E i + (be x).length) :
+    ∀ (d j q : Nat) (x : α) (r : β), q / cap = d → xs[j]? = some x → j + d < xs.length →
+      (∀ i ≤ d, ∀ y, xs[j + i]? = some y → am y) → (T j x)[E j + q]? = some r →
+      ∃ y, xs[j + d]? = some y ∧ (be y)[q % cap]? = some r ∧ E j + q = E (j + d) + q % cap := by
+  intro d
+  induction d with
+  | zero =>
+    intro j q x r hq hx _ ham hr
+    have lt : q < cap := (Nat.div_eq_zero_iff_lt hcap).mp hq
+    have amx := ham 0 (Nat.le_refl _) x hx
+    refine ⟨x, hx, ?_, by rw [Nat.mod_eq_of_lt lt, Nat.add_zero]⟩
+    rw [Nat.mod_eq_of_lt lt, A2 j x hx amx, List.getElem?_take_of_lt lt, ← A1 j x hx amx]
+    exact hr
+  | succ d ih =>
+    intro j q x r hq hx hlen ham hr
+    have amx := ham 0 (Nat.zero_le _) x hx
+    have le : cap ≤ q := by
+      rcases Nat.lt_or_ge q cap with h | h
+      · rw [Nat.div_eq_of_lt h] at hq
+        omega
+      · exact h
+    have hQ : (Q x)[q]? = some r := by rw [← A1 j x hx amx]; exact hr
+    have qlt : q < (Q x).length := (List.getElem?_eq_some_iff.mp hQ).1
+    have beLen : (be x).length = cap := by
+      rw [A2 j x hx amx, List.length_take]
+      omega
+    obtain ⟨y, hy⟩ : ∃ y, xs[j + 1]? = some y :=
+      ⟨xs[j + 1], List.getElem?_eq_getElem (by omega)⟩
+    have hE := B3 j x hx
+    rw [beLen] at hE
+    have pre := B2 j x y hx hy
+    obtain ⟨u, hu⟩ := pre
+    have hr' : (T (j + 1) y)[E (j + 1) + (q - cap)]? = some r := by
+      rw [← hu, hE, show E j + cap + (q - cap) = E j + q by omega,
+        List.getElem?_append_left (List.getElem?_eq_some_iff.mp hr).1]
+      exact hr
+    have hq' : (q - cap) / cap = d := by
+      rw [show q - cap = q - cap * 1 by rw [Nat.mul_one], Nat.sub_mul_div, hq, Nat.add_sub_cancel]
+    obtain ⟨z, hz, hbe, hidx⟩ := ih (j + 1) (q - cap) y r hq' hy (by omega)
+      (fun i hi w hw => ham (i + 1) (by omega) w (by rw [show j + (i + 1) = j + 1 + i by omega]; exact hw)) hr'
+    have mod : (q - cap) % cap = q % cap := (Nat.mod_eq_sub_mod le).symm
+    rw [mod] at hbe hidx
+    rw [show j + 1 + d = j + (d + 1) by omega] at hz hidx
+    refine ⟨z, hz, hbe, ?_⟩
+    omega
 
 end Blanc

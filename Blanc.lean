@@ -254,6 +254,7 @@ import Blanc.Lift.BuilderRequest.Deposit.FeeDomain
 import Blanc.Lift.BuilderRequest.Deposit.FeeWindow
 import Blanc.Lift.BuilderRequest.Deposit.Fifo
 import Blanc.Lift.BuilderRequest.Deposit.Frames
+import Blanc.Lift.BuilderRequest.Deposit.Indexed
 import Blanc.Lift.BuilderRequest.Deposit.Jumps
 import Blanc.Lift.BuilderRequest.Deposit.Latch
 import Blanc.Lift.BuilderRequest.Deposit.Message
@@ -280,6 +281,7 @@ import Blanc.Lift.BuilderRequest.Exit.FeeDomain
 import Blanc.Lift.BuilderRequest.Exit.Fifo
 import Blanc.Lift.BuilderRequest.Exit.Flood
 import Blanc.Lift.BuilderRequest.Exit.Frames
+import Blanc.Lift.BuilderRequest.Exit.Indexed
 import Blanc.Lift.BuilderRequest.Exit.Jumps
 import Blanc.Lift.BuilderRequest.Exit.Latch
 import Blanc.Lift.BuilderRequest.Exit.Message
@@ -299,6 +301,7 @@ import Blanc.Lift.BuilderRequest.Flood
 import Blanc.Lift.BuilderRequest.Latch
 import Blanc.Lift.BuilderRequest.LoadBound
 import Blanc.Lift.BuilderRequest.Message
+import Blanc.Lift.BuilderRequest.Occurrence
 import Blanc.Lift.BuilderRequest.Progress
 import Blanc.Lift.BuilderRequest.QueueLayout
 import Blanc.Lift.BuilderRequest.Revert
@@ -684,6 +687,7 @@ import Blanc.Lift.WriteSiteSound
 import Blanc.Lift.WriteSiteStep
 import Blanc.Lift.WriteSiteTerm
 import Blanc.Lift.WriteSiteZero
+import Blanc.ListChunks
 import Blanc.ListFlatMapPosition
 import Blanc.LockExclusion
 import Blanc.LogBloom
