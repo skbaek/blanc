@@ -445,6 +445,7 @@ CONTRACTS = {
                            "Lift.WithdrawalRequest.JointHistory",
                            "Lift.WithdrawalRequest.RequestCodec", "Lift.WithdrawalRequest.JointLatency",
                            "Lift.WithdrawalRequest.LatencyControl",
+                           "Lift.WithdrawalRequest.AnchorInvControl",
                            "Lift.WithdrawalRequest.JointAuthorization",
                            "Lift.WithdrawalRequest.JointFate",
                            "Lift.WithdrawalRequest.IgnoreWitnesses",
