@@ -646,7 +646,7 @@ CONTRACTS["builder-request"].extend(["Lift.BuilderRequest.Occurrence", "Lift.Bui
 # EIP-8282 cross-layer R13: the occurrence-indexed results across a covered (pre-Gloas) prefix.
 CONTRACTS["builder-request"].extend(["Lift.BuilderRequest.Carrier"])
 # EIP-8282 cross-layer RBA: the Gloas builder requests' serializations as the contracts' emitted records.
-CONTRACTS["builder-request"].extend(["Lift.BuilderRequest.RequestCodecG"])
+CONTRACTS["builder-request"].extend(["Lift.BuilderRequest.RequestCodecG", "Lift.BuilderRequest.RequestCodecGAmount"])
 # EIP-7251 consolidation requests: fee and user frames under covered forks.
 CONTRACTS.setdefault("consolidation-request", []).extend([
     "Lift.ConsolidationRequest.Fee", "Lift.ConsolidationRequest.Submission",
@@ -674,6 +674,8 @@ COMPOSITION = {
     "Composition.BuilderRequestJointG": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGFate": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGBalance": ('builder-request', 'withdrawal-request'),
+    "Composition.BuilderRequestJointGProvenance": ('builder-request', 'withdrawal-request'),
+    "Composition.BuilderRequestJointGLedger": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGPosition": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGRegistration": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGExitAuth": ('builder-request', 'withdrawal-request'),
