@@ -147,12 +147,12 @@ theorem processSlots_slotLoop {ctx : Ctx} {st st' : Gloas.BeaconState P} {T : U6
     obtain ⟨st2, he, hx⟩ := bind_eq_ok_iff.mp hx
     cases hx
     refine ⟨_, rfl, ?_⟩
-    have hz' : next.toNat % P.SLOTS_PER_EPOCH = 0 := by rw [← hmn]; simpa using hz
+    have hz' : next.toNat % P.SLOTS_PER_EPOCH = 0 := by rw [← hmn]; simpa only [beq_iff_eq] using hz
     simp only [slotTick, h1, hn, hz', he, bind, Except.bind, ite_true, pure, Except.pure]
   · rename_i hz
     cases hx
     refine ⟨_, rfl, ?_⟩
-    have hz' : ¬ next.toNat % P.SLOTS_PER_EPOCH = 0 := by rw [← hmn]; simpa using hz
+    have hz' : ¬ next.toNat % P.SLOTS_PER_EPOCH = 0 := by rw [← hmn]; simpa only [beq_iff_eq] using hz
     simp only [slotTick, h1, hn, hz', bind, Except.bind, ite_false, pure, Except.pure]
 
 theorem slotTick_cases {ctx : Ctx} {st st' : Gloas.BeaconState P} (h : slotTick ctx st = .ok st') :
@@ -242,7 +242,7 @@ def LiveAt (s : Nat) (w : Gloas.BuilderPendingWithdrawal) (st : Gloas.BeaconStat
 theorem not_liveAt_of_none {s : Nat} {w : Gloas.BuilderPendingWithdrawal} {st : Gloas.BeaconState P}
     (h : payIdx s st = none) : ¬ LiveAt s w st := by
   rintro ⟨p, hp, -⟩
-  simp [cell, h] at hp
+  simp only [cell, h, Option.bind_none, reduceCtorEq] at hp
 
 theorem not_liveAt_of_empty {s : Nat} {w : Gloas.BuilderPendingWithdrawal} {st : Gloas.BeaconState P}
     (h : cell s st = some Gloas.BuilderPendingPayment.empty) :
@@ -385,9 +385,9 @@ theorem slotLoop_track (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat}
       obtain ⟨-, q, hq, -⟩ := processBuilderPendingPayments_frame hb
       by_cases hqw : q ≤ p.weight
       · exact Or.inr (Or.inl (Or.inl ⟨st1, next, a, h1, hn, h0, ha, e1, p, q, hp, hpw, hq,
-          by simpa using hqw⟩))
+          decide_eq_true hqw⟩))
       · exact Or.inr (Or.inr (Or.inl ⟨st1, next, a, h1, hn, h0, ha, e1, p, q, hp, hpw, hq,
-          by simpa using hqw⟩))
+          decide_eq_false hqw⟩))
 
 theorem rotEval_live (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat}
     {w : Gloas.BuilderPendingWithdrawal} {b : Bool} :

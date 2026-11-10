@@ -152,7 +152,7 @@ theorem parent_cell (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat} {m s1 :
           cell s s1 = some Gloas.BuilderPendingPayment.empty)) := by
   rcases processParentExecutionPayload_cases h with ⟨rfl, _⟩ | ⟨hf, a, d, e, ha, hd, he, hs⟩
   · exact ⟨rfl, Or.inl rfl⟩
-  have hfull : parentFull m blk = true := by simp [parentFull, hf]
+  have hfull : parentFull m blk = true := by simp only [parentFull, hf, beq_self_eq_true]
   have fr := parentFull_frame ha hd he hs
   refine ⟨fr.2.2.2.2.2, ?_⟩
   have hda : d.builder_pending_payments = a.builder_pending_payments :=
@@ -178,7 +178,7 @@ theorem parent_cell (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat} {m s1 :
       by_cases hki : k = idx.toNat
       · subst hki
         right
-        refine ⟨hfull, by simp, by rw [hidx], ?_⟩
+        refine ⟨hfull, by simp only [ne_eq, reduceCtorEq, not_false_eq_true], by rw [hidx], ?_⟩
         unfold cell; rw [hsl, hk]; simp only [Option.bind_some]; rw [e1, hemp]
       · left
         unfold cell; rw [hsl, hk]; simp only [Option.bind_some]; rw [e1, hoth k hki]
@@ -191,7 +191,7 @@ theorem parent_settles (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {m s1 : Gloas.
     {k : Nat} (hk : payIdx (m.latest_block_header.slot.toNat + P.SLOTS_PER_EPOCH) m = some k) :
     s1.builder_pending_payments.toArray[k]? = some Gloas.BuilderPendingPayment.empty := by
   rcases processParentExecutionPayload_cases h with ⟨_, hne⟩ | ⟨_, a, d, e, ha, hd, he, hs⟩
-  · exact absurd (by simpa [parentFull] using hfull) hne
+  · exact absurd (by simpa only [parentFull, beq_iff_eq] using hfull) hne
   have hda : d.builder_pending_payments = a.builder_pending_payments :=
     forIn_yield_inv (fun m => m.builder_pending_payments = a.builder_pending_payments) _
       (fun m _ m' hI hm => by
@@ -464,7 +464,7 @@ theorem settle_excl (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat} {w : Gl
   obtain ⟨p, hp, -⟩ := hl
   obtain ⟨k, hk⟩ : ∃ k, payIdx s m = some k := by
     cases h : payIdx s m with
-    | none => simp [cell, h] at hp
+    | none => simp only [cell, h, Option.bind_none, reduceCtorEq] at hp
     | some k => exact ⟨k, rfl⟩
   obtain ⟨t1, t2, t3, t4, t5, t6, t7, g1, g2, g3, g4, g5, g6, g7, g8⟩ := processBlock_phases hb
   have he := parent_settles hspe g1 hf (hps ▸ hk)
@@ -521,7 +521,7 @@ theorem no_quorum_latest (hq : 2 * P.SLOTS_PER_EPOCH ≤ P.EFFECTIVE_BALANCE_INC
     · have hbi : bidIndex st = payIdx s st := by
         rw [← hI.2.2, payIdx_shift hspe]; rfl
       cases hk : payIdx s st with
-      | none => simp [cell, hk] at hp
+      | none => simp only [cell, hk, Option.bind_none, reduceCtorEq] at hp
       | some k =>
         obtain ⟨E, hE, hw0, -⟩ := hI.1 k (by rw [hbi, hk])
         rw [cell_of_payIdx hk, hE] at hp

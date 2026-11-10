@@ -94,8 +94,8 @@ theorem gloas_succ {i : Nat} {A : GloasStepData (P := P) cfg ccfg bls}
     (hC : run.steps[i + 1]? = some C) : ∃ C', C = .gloas C' ∧ C'.preB = A.postB := by
   have h := GJointRun.pre_succ run hA hC
   cases C with
-  | pre C => simp [GJointRunStep.preState, GJointRunStep.postState] at h
-  | crossing C => simp [GJointRunStep.preState, GJointRunStep.postState] at h
+  | pre C => simp only [GJointRunStep.preState, GJointRunStep.postState, reduceCtorEq] at h
+  | crossing C => simp only [GJointRunStep.preState, GJointRunStep.postState, reduceCtorEq] at h
   | gloas C' =>
     simp only [GJointRunStep.preState, GJointRunStep.postState, GJointState.gloas.injEq] at h
     exact ⟨C', rfl, h.1⟩
@@ -533,6 +533,28 @@ noncomputable def paymentAppends {s₀ sf : GJointState P} (run : GJointRun cfg 
     (D : GloasStepData (P := P) cfg ccfg bls) : Nat :=
   ((List.range run.steps.length).map (paymentAppendsAt run j D)).sum
 
+/-- At most one nonzero term, each at most `1`: the sum is at most `1`. -/
+theorem sum_range_le_one {f : Nat → Nat} (h1 : ∀ i, f i ≤ 1)
+    (hu : ∀ i j, f i ≠ 0 → f j ≠ 0 → i = j) : ∀ n, ((List.range n).map f).sum ≤ 1 ∧
+      (((List.range n).map f).sum ≠ 0 → ∃ i < n, f i ≠ 0) := by
+  intro n
+  induction n with
+  | zero => simp only [List.range_zero, List.map_nil, List.sum_nil, Nat.zero_le, ne_eq,
+      not_true_eq_false, false_implies, and_self]
+  | succ n ih =>
+    rw [List.range_succ, List.map_append, List.sum_append]
+    simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
+    by_cases hz : f n = 0
+    · rw [hz, Nat.add_zero]
+      exact ⟨ih.1, fun h => let ⟨i, hi, hp⟩ := ih.2 h; ⟨i, by omega, hp⟩⟩
+    · have h0 : ((List.range n).map f).sum = 0 := by
+        by_contra hne
+        obtain ⟨i, hi, hp⟩ := ih.2 hne
+        have := hu i n hp hz
+        omega
+      rw [h0]
+      exact ⟨by have := h1 n; omega, fun _ => ⟨n, by omega, hz⟩⟩
+
 namespace ValidJointG
 
 variable {checkpoint : BlockChain} {anchor final : GJointState P}
@@ -593,30 +615,12 @@ theorem payment_at_most_one_append (v : ValidJointG cfg ccfg bls checkpoint anch
     · exact ⟨_, h3, Or.inr (Or.inr rfl)⟩
     simp only [h1, h2, h3, ite_false] at h
     omega
-  have key : ∀ n, ((List.range n).map (paymentAppendsAt v.run j D)).sum ≤ 1 ∧
-      (0 < ((List.range n).map (paymentAppendsAt v.run j D)).sum →
-        ∃ i < n, 0 < paymentAppendsAt v.run j D i) := by
-    intro n
-    induction n with
-    | zero => simp
-    | succ n ih =>
-      rw [List.range_succ, List.map_append, List.sum_append]
-      simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
-      by_cases hz : paymentAppendsAt v.run j D n = 0
-      · rw [hz, Nat.add_zero]
-        exact ⟨ih.1, fun h => let ⟨i, hi, hp⟩ := ih.2 h; ⟨i, by omega, hp⟩⟩
-      · have hn1 := le1 n
-        have h0 : ((List.range n).map (paymentAppendsAt v.run j D)).sum = 0 := by
-          by_contra hne
-          obtain ⟨i, hi, hp⟩ := ih.2 (by omega)
-          obtain ⟨f, hf, ef⟩ := pos i hp
-          obtain ⟨g, hg, eg⟩ := pos n (by omega)
-          have := uq hf hg
-          subst this
-          rcases ef with rfl | rfl | rfl <;> rcases eg with h | h | h <;> cases h <;> omega
-        rw [h0]
-        exact ⟨by omega, fun _ => ⟨n, by omega, by omega⟩⟩
-  exact (key _).1
+  refine (sum_range_le_one le1 (fun i i₀ hi hi₀ => ?_) _).1
+  obtain ⟨f, hf, ef⟩ := pos i (Nat.pos_of_ne_zero hi)
+  obtain ⟨g, hg, eg⟩ := pos i₀ (Nat.pos_of_ne_zero hi₀)
+  have := uq hf hg
+  subst this
+  rcases ef with rfl | rfl | rfl <;> rcases eg with h | h | h <;> cases h <;> rfl
 
 end ValidJointG
 

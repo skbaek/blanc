@@ -28,12 +28,13 @@ variable {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
 theorem _root_.Blanc.GJointRun.nil_end {s₀ : GJointState P} :
     {sf : GJointState P} → (run : GJointRun cfg ccfg bls s₀ sf) → run.steps = [] → sf = s₀
   | _, .nil, _ => rfl
-  | _, .snoc run D _, h => by simp [GJointRun.steps] at h
+  | _, .snoc run D _, h => by
+    simp only [GJointRun.steps, List.append_eq_nil_iff, List.cons_ne_nil, and_false] at h
 
 theorem _root_.Blanc.GJointRun.first_pre {s₀ : GJointState P} :
     {sf : GJointState P} → (run : GJointRun cfg ccfg bls s₀ sf) →
     {C : GJointRunStep (P := P) cfg ccfg bls} → run.steps[0]? = some C → C.preState = s₀
-  | _, .nil, _, h => by simp [GJointRun.steps] at h
+  | _, .nil, _, h => by simp only [GJointRun.steps, List.getElem?_nil, reduceCtorEq] at h
   | _, .snoc run D hD, C, h => by
     rw [GJointRun.steps_snoc] at h
     by_cases hl : 0 < run.steps.length
@@ -55,8 +56,8 @@ theorem first_gloas {C : GJointRunStep (P := P) cfg ccfg bls} (h : run.steps[0]?
     ∃ C', C = .gloas C' ∧ C'.preB = a := by
   have hp := run.first_pre h
   cases C with
-  | pre C => simp [GJointRunStep.preState] at hp
-  | crossing C => simp [GJointRunStep.preState] at hp
+  | pre C => simp only [GJointRunStep.preState, reduceCtorEq] at hp
+  | crossing C => simp only [GJointRunStep.preState, reduceCtorEq] at hp
   | gloas C' =>
     simp only [GJointRunStep.preState, GJointState.gloas.injEq] at hp
     exact ⟨C', rfl, hp.1⟩
@@ -66,7 +67,7 @@ theorem anchor_step {i : Nat} (hi : i < run.steps.length) :
   obtain ⟨C, hC⟩ : ∃ C, run.steps[0]? = some C := ⟨_, List.getElem?_eq_getElem (by omega)⟩
   obtain ⟨C', rfl, -⟩ := first_gloas hC
   have := gloas_from run hC i (by omega)
-  simpa using this
+  simpa only [Nat.zero_add] using this
 
 theorem anchor_pred {i : Nat} {B : GloasStepData (P := P) cfg ccfg bls}
     (hB : run.steps[i]? = some (.gloas B)) :
@@ -264,7 +265,7 @@ theorem AnchorTrack.final_live {b : Gloas.BeaconState P} {e' : BlockChain} {p : 
   · have h := run.nil_end hn
     rw [hsf] at h
     simp only [GJointState.gloas.injEq] at h
-    refine ⟨fun i B hB => by simp [hn] at hB, h.1 ▸ hl⟩
+    refine ⟨fun i B hB => by simp only [hn, List.getElem?_nil, reduceCtorEq] at hB, h.1 ▸ hl⟩
   · obtain ⟨B0, hB0⟩ := anchor_step (run := run) (i := 0) (List.length_pos_iff.mpr hn)
     obtain ⟨n, Bn, -, hlen, hBn, hsf'⟩ := final_of run hB0
     rw [hsf] at hsf'

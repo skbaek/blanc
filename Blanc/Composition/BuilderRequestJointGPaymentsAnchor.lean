@@ -305,27 +305,6 @@ end Headline
 
 /-! ## Each anchor witness bid is charged at most once -/
 
-/-- At most one nonzero term, each at most `1`: the sum is at most `1`. -/
-theorem sum_range_le_one {f : Nat → Nat} (h1 : ∀ i, f i ≤ 1)
-    (hu : ∀ i j, f i ≠ 0 → f j ≠ 0 → i = j) : ∀ n, ((List.range n).map f).sum ≤ 1 ∧
-      (((List.range n).map f).sum ≠ 0 → ∃ i < n, f i ≠ 0) := by
-  intro n
-  induction n with
-  | zero => simp
-  | succ n ih =>
-    rw [List.range_succ, List.map_append, List.sum_append]
-    simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
-    by_cases hz : f n = 0
-    · rw [hz, Nat.add_zero]
-      exact ⟨ih.1, fun h => let ⟨i, hi, hp⟩ := ih.2 h; ⟨i, by omega, hp⟩⟩
-    · have h0 : ((List.range n).map f).sum = 0 := by
-        by_contra hne
-        obtain ⟨i, hi, hp⟩ := ih.2 hne
-        have := hu i n hp hz
-        omega
-      rw [h0]
-      exact ⟨by have := h1 n; omega, fun _ => ⟨n, by omega, hz⟩⟩
-
 section Charged
 
 variable {a : Gloas.BeaconState P} {ex : BlockChain} {pa : ParentPayload P} {checkpoint : BlockChain}
