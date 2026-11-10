@@ -66,7 +66,7 @@ contains call-type bytes at all (offsets 67, 123, 128, 141, all PUSH data).
 | Component | What is trusted | Evidence |
 |---|---|---|
 | Lean toolchain `v4.35.0` | Kernel soundness | For every constant of every Blanc module, and therefore for every theorem this map cites, the reachable axioms are within `propext`, `Classical.choice`, `Quot.sound`; one from-scratch union walk (Section 8), not `#print axioms` or `collectAxioms` |
-| Jaune revision `c00734b1` | That its EVM and transaction definitions match Ethereum | Not a theorem. Conformance, as reported by that Jaune revision's own README and not re-run here: **4,712/4,712** supported fixture files and **34,474/34,474** cases of the execution-specs mainnet corpus (`tests@v21.0.2`), Prague through BPO2 including configured fork transitions |
+| Jaune revision `23a4b07f` | That its EVM and transaction definitions match Ethereum | Not a theorem. Conformance, as reported by that Jaune revision's own README and not re-run here: **4,712/4,712** supported fixture files and **34,474/34,474** cases of the execution-specs mainnet corpus (`tests@v21.0.2`), Prague through BPO2 including configured fork transitions |
 | Lift certificates | Nothing | The Python producers are untrusted. Each certificate is accepted only by its Lean `cert_check`, a kernel decision, against the literal bytes |
 | Runtime identity | That the lifted bytes are the mainnet bytes | Recorded in each certificate's `provenance`, by `eth_getCode` agreement across separately operated public providers at one finalized block or by a source-verified record; each family file's Artifacts part states which. The codehashes in Section 2 are recomputed from the lifted files by the checker |
 | Fork scope | — | `CoveredFork` is Prague, Osaka, BPO1, BPO2. Amsterdam is not covered. A family whose rows use a wider fork range states it in its file's disclosures; the Jaune conformance figures above begin at Prague |
@@ -187,7 +187,7 @@ leaf theorems: theorems of a `Blanc.*` module that no other Blanc declaration
 uses (`scripts/leaf_audit.py`, `scripts/GATES.md` "Leaf audit"), each covered
 by the union walk. It is generated
 into `scripts/leaf-count.json` (never hand-edited) and quoted by the README and
-the sites. At this commit it is 1893 leaf results (1848 public, 45 private).
+the sites. At this commit it is 1896 leaf results (1851 public, 45 private).
 The review ledger separately records the last review; the audit reports new
 or changed leaves. The count is a property of the library at a commit, not of any cited theorem;
 a cited theorem that another theorem uses is simply not a leaf. Bind any
