@@ -19,7 +19,7 @@ address `Σ amount · 10^9` (the 7002 `processWithdrawalsState_toExecution_bal`,
 the field; Gloas `process_block` keeps it over an EMPTY parent (the early return, CL:2074, and no other phase writes
 it); over a FULL parent it ends as the withdrawals the step's `process_withdrawals` computed (CL:2086). It is proved
 (`expectedWithdrawalsFrame_holds`) from the Mac's G3c frames, Jaune `Facts/Gloas/FirstBlockFrames.lean`, on this
-Blanc's Jaune pin (c73f7ead).
+Blanc's Jaune pin (c30cf0a5).
 -/
 
 namespace Blanc.Lift.BuilderRequest
