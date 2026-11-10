@@ -674,6 +674,8 @@ COMPOSITION = {
     "Composition.BuilderRequestJointG": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGFate": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGBalance": ('builder-request', 'withdrawal-request'),
+    "Composition.BuilderRequestJointGPaymentsTrack": ('builder-request', 'withdrawal-request'),
+    "Composition.BuilderRequestJointGPaymentsBlock": ('builder-request', 'withdrawal-request'),
     "Composition.RequestPhaseOrder": ('builder-request', 'withdrawal-request'),
     "Composition.RequestPhaseAmsterdamBal": ('builder-request', 'withdrawal-request'),
     "Composition.WithdrawalRequestFeeCounterexample": ('withdrawal-request',),
