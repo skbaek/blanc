@@ -27,7 +27,11 @@ import Blanc.Composition.BuilderRequestCarrier
 import Blanc.Composition.BuilderRequestCodesKept
 import Blanc.Composition.BuilderRequestJointG
 import Blanc.Composition.BuilderRequestJointGBalance
+import Blanc.Composition.BuilderRequestJointGConservation
+import Blanc.Composition.BuilderRequestJointGExitAuth
 import Blanc.Composition.BuilderRequestJointGFate
+import Blanc.Composition.BuilderRequestJointGPosition
+import Blanc.Composition.BuilderRequestJointGRegistration
 import Blanc.Composition.BuilderRequestPublicBounds
 import Blanc.Composition.BuilderRequestPublicFindings
 import Blanc.Composition.BuilderRequestPublicGuarantees
