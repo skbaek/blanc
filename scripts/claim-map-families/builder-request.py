@@ -4,8 +4,8 @@ Loaded by the checker while `builder-request` is live; it leaves with the family
 (scripts/release.py) and comes back on restore."""
 
 # Its Section 5 subsections, then its parts of the shared sections, in this order.
-SECTIONS = []
-PARTS = ['Uses of the shared API']
+SECTIONS = ['5.13 EIP-8282 builder requests']
+PARTS = ['Disclosures and limits', 'Uses of the shared API']
 
 # The headline results the file exists to carry.  A row deleted from the document fails here.
 REQUIRED_HEADLINES = []
