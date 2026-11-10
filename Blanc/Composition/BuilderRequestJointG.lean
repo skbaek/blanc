@@ -1,12 +1,15 @@
 import Blanc.JointGloasInvariants
 import Blanc.Composition.BuilderRequestCarrier
 import Blanc.Composition.BuilderRequestPublicGuarantees
+import JauneConsensus.Facts.Gloas.FinalizedNotAhead
 
 /-!
 # A valid Gloas joint chain for EIP-8282: `ValidJointG`
 
 The frozen definition (Plans `recon/statements.md` §0.6, rev 3.1), with the master decisions of 2026-11-10: a
-deployment-rooted kept history to the anchor's built-upon chain, a Gloas joint run from the anchor
+checkpoint whose system address has no code (`noSystemCode`, the one premise the builder contracts' `Clean` reads;
+the 7002 deployment cut forced a Cancun-only checkpoint, final conformance review BLOCKER 1), a kept history from it
+to the anchor's built-upon chain, a Gloas joint run from the anchor
 (`GJointRun`), the anchor data, the 8282 execution premises over the whole kept history (decision
 eip8282-validjointg-8282-premises-20261110), the configuration bounds of design.md §5.1 (with `exitDelayPos`
 restored, decision eip8282-g3a-exitdelaypos-and-aux-invariants-20261110), the two registry bounds of G3-12 as
@@ -14,8 +17,9 @@ separate named fields over every joint state of the run (N7), and B2's value-cla
 field; nothing is hidden.
 
 * `GAnchorInv`: at a Gloas anchor, G3a's state invariants (G3-01, 03, 04, 05, 06, 07, 08; G3-02 is a relation
-  between states, with no anchor form) and the auxiliaries `LatestBidBuilderActive` and `FutureEmpty`; `True` at a
-  pre-Gloas anchor (no builders, nothing pending).
+  between states, with no anchor form), the auxiliaries `LatestBidBuilderActive` and `FutureEmpty`, and G3d's
+  `FinalizedNotAhead` (master decision eip8282-finalized-not-ahead-invariant-20261110); at a pre-Gloas anchor
+  (no builders, nothing pending) `FinalizedNotAheadF` only.
 * `AnchorPendingTrace`: a delivered anchor payload passed the envelope check over the anchor's built-upon chain
   (`verifyEnvelopeG … = .ok (req, post)`), hence is the engine's verdict and an Amsterdam kept step.
 * `AnchorBidWitness` (G3-14, option (b)): for every non-empty pending payment, every pending builder withdrawal,
@@ -25,8 +29,8 @@ field; nothing is hidden.
 
 Derived: the joint history `ValidJointG.keptHistory` (the prefix spliced with the run's built-upon blocks), the
 builder contracts' `Clean` (`depositClean`, `exitClean`, as R13's `ValidJoint.depositClean`/`exitClean`), and the
-joint invariants at every Gloas state of the run given the Fulu head relation at the crossing's fork state
-(`ValidJointG.gJointInv_states`).
+joint invariants at every state of the run (`ValidJointG.gJointInv_states`): G3-09 after a pre-Gloas step from the
+step itself, and at the crossing from its pre-state through the fork state (`CrossingData.fuluHead`).
 -/
 
 namespace Blanc.Lift.BuilderRequest
@@ -40,11 +44,12 @@ variable {P : Preset}
 
 /-- **The anchor invariant** (G3a, at a Gloas anchor). -/
 def GAnchorInv : GJointState P → Prop
-  | .pre _ => True
+  | .pre s => Inv.FinalizedNotAheadF s.beacon
   | .gloas b _ _ =>
     Inv.BuilderPubkeysUnique b ∧ Inv.PendingRefsInRange b ∧ Inv.ExitedHaveNoPending b ∧
       Inv.PendingCovered b ∧ Inv.NextBuilderIndexInRange b ∧ Inv.NoLiveWeightOnLatestBid b ∧
-      Inv.LatestBidCoherence b ∧ Inv.LatestBidBuilderActive b ∧ Inv.FutureEmpty b
+      Inv.LatestBidCoherence b ∧ Inv.LatestBidBuilderActive b ∧ Inv.FutureEmpty b ∧
+      Inv.FinalizedNotAhead b
 
 /-- **The anchor's pending payload** (design R5): a delivered payload passed the envelope check over the anchor's
 built-upon chain. -/
@@ -111,13 +116,12 @@ def _root_.JauneConsensus.GJointState.builderCount : GJointState P → Nat
 
 /-! ## The valid Gloas joint chain -/
 
-/-- **A valid Gloas joint chain** from a deployment-rooted checkpoint, through `anchor`, to `final`. `bls` is a
-parameter (B1 and B5(ii) add `bls = true`). -/
+/-- **A valid Gloas joint chain** from a checkpoint holding the builder contracts and no code at the system
+address, through `anchor`, to `final`. `bls` is a parameter (B1 and B5(ii) add `bls = true`). -/
 structure ValidJointG (cfg : ChainConfig) (ccfg : Config) (bls : Bool) (checkpoint : BlockChain)
     (anchor final : GJointState P) : Type where
-  /-- The canonical deployment and its preactivation history to the checkpoint. -/
-  deployment : DeploymentHistory cfg checkpoint
-  admission : deployment.Admission
+  /-- The system address has no code at the checkpoint (the builder contracts' `Clean` reads it). -/
+  noSystemCode : checkpoint.state.getCode systemAddress = ByteArray.empty
   /-- The kept history from the checkpoint to the anchor's built-upon chain. -/
   preBlocks : List KeptBlock
   prefixHistory : KeptHistory cfg checkpoint preBlocks anchor.exec
@@ -127,6 +131,8 @@ structure ValidJointG (cfg : ChainConfig) (ccfg : Config) (bls : Bool) (checkpoi
   anchorPending : AnchorPendingTrace cfg ccfg bls anchor
   anchorInv : GAnchorInv anchor
   anchorWitness : AnchorBidWitness anchor
+  /-- The joint-level invariants G3-09..11 at the anchor. No B row reads it directly: it starts G3-09, which every
+  step carries (`GJointRun.gJointInv_all`) and which the crossing's Fulu head relation reads at its pre-state. -/
   anchorJoint : GJointInv cfg anchor
   /-- The builder contracts' code and storage at the checkpoint. -/
   depositInstalled : checkpoint.state.getCode Deposit.Creation.address = Deposit.code
@@ -171,16 +177,16 @@ theorem keptHistory (v : ValidJointG cfg ccfg bls checkpoint anchor final) :
     KeptHistory cfg checkpoint v.blocks final.exec :=
   v.prefixHistory.append v.run.keptHistory
 
-/-- **The deposit contract's `Clean`** on the joint history; the system address's empty code from the deployment. -/
+/-- **The deposit contract's `Clean`** on the joint history; the system address's empty code at the checkpoint. -/
 theorem depositClean (v : ValidJointG cfg ccfg bls checkpoint anchor final) :
     Deposit.Indexed.Clean cfg checkpoint v.blocks final.exec :=
-  ⟨v.keptHistory, v.depositInstalled, v.depositFresh, (v.deployment.initialized v.admission).systemEmpty,
+  ⟨v.keptHistory, v.depositInstalled, v.depositFresh, v.noSystemCode,
     v.senders, v.authorities, v.creates, v.depositBudget⟩
 
 /-- **The exit contract's `Clean`** on the joint history. -/
 theorem exitClean (v : ValidJointG cfg ccfg bls checkpoint anchor final) :
     Exit.Indexed.Clean cfg checkpoint v.blocks final.exec :=
-  ⟨v.keptHistory, v.exitInstalled, v.exitFresh, (v.deployment.initialized v.admission).systemEmpty,
+  ⟨v.keptHistory, v.exitInstalled, v.exitFresh, v.noSystemCode,
     v.senders, v.authorities, v.creates, v.exitFew⟩
 
 /-- Every state of the run is coherent: the anchor by its pending trace, every step's post-state outright. -/
@@ -196,44 +202,34 @@ def _root_.JauneConsensus.GJointState.IsGloas : GJointState P → Prop
   | .pre _ => False
   | .gloas .. => True
 
-/-- **G3-09..11 at every Gloas state of a run**, from the anchor's and the Fulu head relation at the crossing's
-fork state: a `.pre` step ends in a pre-Gloas state, the crossing establishes them (`CrossingData.gJointInv`), and a
-Gloas step carries them (`GloasStepData.gJointInv`). -/
-theorem GJointRun.gJointInv {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {s₀ : GJointState P}
+/-- **G3-09..11 at every state of a run**, from the anchor's: every step carries them
+(`GJointRunStep.gJointInv_post`: a pre-Gloas step establishes G3-09 itself, the crossing reads its Fulu head
+relation from its pre-state, a Gloas step carries them). -/
+theorem GJointRun.gJointInv_all {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {s₀ : GJointState P}
     (h₀ : GJointInv cfg s₀) :
-    {s : GJointState P} → (run : GJointRun cfg ccfg bls s₀ s) →
-    (∀ D, GJointRunStep.crossing D ∈ run.steps →
-      execHeadHash D.exec = some D.atFork.latest_execution_payload_header.block_hash) →
-    ∀ st ∈ run.states, st.IsGloas → GJointInv cfg st
-  | _, .nil, _, st, hst, _ => by
+    {s : GJointState P} → (run : GJointRun cfg ccfg bls s₀ s) → ∀ st ∈ run.states, GJointInv cfg st
+  | _, .nil, st, hst => by
     simp only [GJointRun.states, GJointRun.steps, List.map_nil, List.mem_singleton] at hst
     exact hst ▸ h₀
-  | _, .snoc run D hD, hx, st, hst, hg => by
-    have hx' : ∀ C, GJointRunStep.crossing C ∈ run.steps →
-        execHeadHash C.exec = some C.atFork.latest_execution_payload_header.block_hash :=
-      fun C hC => hx C (by rw [GJointRun.steps_snoc]; exact List.mem_append_left _ hC)
-    have ih := GJointRun.gJointInv h₀ run hx'
+  | _, .snoc run D hD, st, hst => by
+    have ih := GJointRun.gJointInv_all h₀ run
     simp only [GJointRun.states, GJointRun.steps_snoc, List.map_append, List.map_cons, List.map_nil,
       List.mem_cons, List.mem_append, List.not_mem_nil, or_false] at hst
     rcases hst with rfl | hst | rfl
     · exact h₀
-    · exact ih st (List.mem_cons_of_mem _ hst) hg
-    · cases D with
-      | pre D => exact hg.elim
-      | crossing C =>
-        exact C.gJointInv (hx C (by rw [GJointRun.steps_snoc]; exact List.mem_append_right _ (List.mem_singleton_self _)))
-      | gloas G =>
-        have hpre : GJointInv cfg (GJointState.gloas G.preB G.preExec G.preParent) :=
-          ih _ (hD ▸ run.end_mem_states) trivial
-        exact G.gJointInv hpre
+    · exact ih st (List.mem_cons_of_mem _ hst)
+    · exact D.gJointInv_post (ih _ (hD ▸ run.end_mem_states))
 
-/-- **G3-09..11 at every Gloas state of a valid joint chain**, given the Fulu head relation at the crossing's
-fork state. -/
+/-- **G3-09..11 at every Gloas state of a run**, from the anchor's. -/
+theorem GJointRun.gJointInv {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {s₀ : GJointState P}
+    (h₀ : GJointInv cfg s₀) {s : GJointState P} (run : GJointRun cfg ccfg bls s₀ s) :
+    ∀ st ∈ run.states, st.IsGloas → GJointInv cfg st :=
+  fun st hst _ => GJointRun.gJointInv_all h₀ run st hst
+
+/-- **G3-09..11 at every Gloas state of a valid joint chain.** -/
 theorem ValidJointG.gJointInv_states {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain}
-    {anchor final : GJointState P} (v : ValidJointG cfg ccfg bls checkpoint anchor final)
-    (fuluHead : ∀ D, GJointRunStep.crossing D ∈ v.run.steps →
-      execHeadHash D.exec = some D.atFork.latest_execution_payload_header.block_hash) :
+    {anchor final : GJointState P} (v : ValidJointG cfg ccfg bls checkpoint anchor final) :
     ∀ st ∈ v.run.states, st.IsGloas → GJointInv cfg st :=
-  GJointRun.gJointInv v.anchorJoint v.run fuluHead
+  GJointRun.gJointInv v.anchorJoint v.run
 
 end Blanc.Lift.BuilderRequest

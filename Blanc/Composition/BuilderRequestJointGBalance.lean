@@ -1,6 +1,7 @@
 import Blanc.Composition.BuilderRequestJointGFate
 import JauneConsensus.Facts.Gloas.StepB5
 import JauneConsensus.Facts.Gloas.InvariantsCrossing
+import JauneConsensus.Facts.Gloas.FinalizedNotAhead
 
 /-!
 # B5 over a valid Gloas joint chain: the builder balance equation and the carried withdrawals
@@ -103,7 +104,8 @@ theorem anchor_gInvJ (v : ValidJointG cfg ccfg bls checkpoint anchor final) : GI
   have h := v.anchorInv
   rcases anchor with _ | ⟨b, _, _⟩
   · trivial
-  · exact h
+  · obtain ⟨g1, g3, g4, g5, g6, g7, g8, hA, fe, -⟩ := h
+    exact ⟨g1, g3, g4, g5, g6, g7, g8, hA, fe⟩
 
 /-- **The G3a invariants at every Gloas step's pre-state of a valid joint chain.** -/
 theorem gInv_pre (v : ValidJointG cfg ccfg bls checkpoint anchor final) {j : Nat}
@@ -145,6 +147,111 @@ theorem post_bounds (v : ValidJointG cfg ccfg bls checkpoint anchor final) {j : 
   have hmem : (GJointRunStep.gloas D).postState ∈ v.run.states :=
     List.mem_cons_of_mem _ (List.mem_map_of_mem (List.mem_of_getElem? hD))
   exact ⟨v.validatorsBound _ hmem, v.buildersBound _ hmem⟩
+
+end ValidJointG
+
+/-! ## FinalizedNotAhead along a run (G3d; master decision eip8282-finalized-not-ahead-invariant-20261110) -/
+
+/-- FinalizedNotAhead at a joint state: on the fork-indexed state before Gloas, on the Gloas state after. -/
+def FNAJ : GJointState P → Prop
+  | .pre s => FinalizedNotAheadF s.beacon
+  | .gloas b _ _ => FinalizedNotAhead b
+
+/-- `upgrade_to_fulu` copies the finalized checkpoint and the slot. -/
+theorem upgradeToFulu_finalizedNotAheadF {ccfg : Config} {pre : BeaconState P .electra}
+    {post : BeaconState P .fulu} (h : upgradeToFulu ccfg pre = .ok post) (hI : FinalizedNotAheadF pre) :
+    FinalizedNotAheadF post := by
+  unfold upgradeToFulu at h
+  repeat (obtain ⟨_, _, h⟩ := Facts.bind_eq_ok_iff.mp h)
+  cases h
+  exact hI
+
+/-- **A pre-Gloas joint step keeps FinalizedNotAhead.** -/
+theorem jointStep_finalizedNotAheadF {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    {s s' : JointState P} {b : AnySignedBlock P} (h : jointStep cfg ccfg bls s b = .ok s')
+    (hI : FinalizedNotAheadF s.beacon) : FinalizedNotAheadF s'.beacon := by
+  obtain ⟨sf, beacon, exec⟩ := s
+  obtain ⟨g, sb⟩ := b
+  cases sf <;> cases g
+  case electra.electra =>
+    obtain ⟨-, req, beacon', exec', -, -, hst, rfl⟩ := jointStep_electra_ok_iff.mp h
+    exact stateTransition_finalizedNotAheadF hst hI
+  case fulu.fulu =>
+    obtain ⟨req, beacon', exec', -, -, hst, rfl⟩ := jointStep_fulu_ok_iff.mp h
+    exact stateTransition_finalizedNotAheadF hst hI
+  case electra.fulu =>
+    obtain ⟨-, -, req, fs, b1, b2, beacon', exec', h1, h2, h3, h4, h5, hst, rfl⟩ :=
+      jointStep_cross_ok_iff.mp h
+    have f1 : FinalizedNotAheadF b1 := by
+      split at h2
+      · exact processSlots_finalizedNotAheadF h2 hI
+      · cases h2; exact hI
+    have f2 := upgradeToFulu_finalizedNotAheadF h3 f1
+    show FinalizedNotAheadF beacon'
+    split at hst
+    · exact processBlock_finalizedNotAheadF (atSlot_processBlock hst) f2
+    · exact stateTransition_finalizedNotAheadF hst f2
+  all_goals simp only [ExceptT.stM_eq, jointStep, reduceCtorEq] at h
+
+/-- **Every run step keeps FinalizedNotAhead**: a pre-Gloas step (above), the crossing (`crossFromFulu` copies the
+checkpoint and the slot, then the slots and the first block), a Gloas step (`state_transition`). -/
+theorem _root_.Blanc.GJointRunStep.fnaJ (D : GJointRunStep (P := P) cfg ccfg bls) (hpre : FNAJ D.preState) :
+    FNAJ D.postState := by
+  cases D with
+  | pre D => exact jointStep_finalizedNotAheadF D.step hpre
+  | crossing C =>
+    have hu : FinalizedNotAhead C.upgraded := crossFromFulu_finalizedNotAhead C.cross hpre
+    show FinalizedNotAhead C.postB
+    have hp : Gloas.processBlock (gloasCtx ccfg bls) C.postSlots C.block.message = .ok C.postB :=
+      applySignedBlockWith_ok C.transition
+    have hslots := C.slots
+    unfold crossingSlots at hslots
+    split at hslots
+    · rw [← Except.ok.inj hslots] at hp
+      exact processBlock_finalizedNotAhead hp hu
+    · exact processBlock_finalizedNotAhead hp (processSlots_finalizedNotAhead hslots hu)
+  | gloas D => exact stateTransition_finalizedNotAhead D.stateTransition hpre
+
+namespace ValidJointG
+
+variable {checkpoint : BlockChain} {anchor final : GJointState P}
+
+/-- The anchor satisfies FinalizedNotAhead (`GAnchorInv`). -/
+theorem anchor_fnaJ (v : ValidJointG cfg ccfg bls checkpoint anchor final) : FNAJ anchor := by
+  have h := v.anchorInv
+  rcases anchor with _ | ⟨b, _, _⟩
+  · exact h
+  · exact h.2.2.2.2.2.2.2.2.2
+
+/-- **FinalizedNotAhead at every Gloas step's pre-state of a valid joint chain.** -/
+theorem fna_pre (v : ValidJointG cfg ccfg bls checkpoint anchor final) {j : Nat}
+    {D : GloasStepData (P := P) cfg ccfg bls} (hD : v.run.steps[j]? = some (.gloas D)) :
+    FinalizedNotAhead D.preB := by
+  suffices key : ∀ {s : GJointState P} (run : GJointRun cfg ccfg bls anchor s),
+      FNAJ s ∧ ∀ {j : Nat} {C : GJointRunStep (P := P) cfg ccfg bls}, run.steps[j]? = some C → FNAJ C.preState by
+    exact (key v.run).2 hD
+  intro s run
+  induction run with
+  | nil => exact ⟨v.anchor_fnaJ, fun h => by simp only [GJointRun.steps, List.getElem?_nil, reduceCtorEq] at h⟩
+  | @snoc s run C hC ih =>
+    obtain ⟨hs, hsteps⟩ := ih
+    have hpre : FNAJ C.preState := hC ▸ hs
+    refine ⟨C.fnaJ hpre, fun {j} {C'} h => ?_⟩
+    rw [GJointRun.steps_snoc] at h
+    by_cases hj : j < run.steps.length
+    · rw [List.getElem?_append_left hj] at h
+      exact hsteps h
+    · rw [List.getElem?_append_right (Nat.le_of_not_lt hj), List.getElem?_singleton] at h
+      split at h
+      · cases h
+        exact hpre
+      · cases h
+
+end ValidJointG
+
+namespace ValidJointG
+
+variable {checkpoint : BlockChain} {anchor final : GJointState P}
 
 /-! ## B5(i): the builder balance equation -/
 

@@ -3,6 +3,8 @@ import JauneConsensus.Facts.Gloas.Invariants
 import JauneConsensus.Facts.Gloas.InvariantsBid
 import JauneConsensus.Facts.Gloas.InvariantsCrossing
 import JauneConsensus.Facts.Gloas.InvariantsRequests
+import JauneConsensus.Facts.Gloas.HeaderFrames
+import JauneConsensus.Facts.Gloas.FirstBlockFrames
 
 /-!
 # The joint-level Gloas invariants G3-09, G3-10, G3-11, and the crossing's FULL settlement (O-b)
@@ -20,8 +22,16 @@ The three joint-level rows of Plans `recon/design.md` §5 (rev 3.1), over `GJoin
 
 Preservation (`GloasStepData.gJointInv`, `CrossingData.gJointInv`, `GJointRunStep.postState_ledger`): G3-10 and
 G3-11 hold at every run step's post-state outright (the envelope check establishes them); G3-09 is carried by a
-Gloas step from G3-09 and G3-10 at its pre-state, and established by the crossing from the Fulu head relation at the
-fork state `atFork`.
+Gloas step from G3-09 and G3-10 at its pre-state, established by every pre-Gloas step outright (`PreStepData.execHead`,
+from Jaune's `jointStep_head`), and established by the crossing from the Fulu head relation at its pre-state
+(`CrossingData.fuluHead`, through Jaune's `crossFromFulu_header`); so every run step carries all three
+(`GJointRunStep.gJointInv_post`).
+
+**G3-11, full ledger form** (`GJointRun.expectedWithdrawals_ledger`): at a Gloas state the run ends in,
+`payload_expected_withdrawals` is the withdrawals debited by the last step that wrote it (the crossing or a FULL
+Gloas step, `GloasStepData.pew_full`, `CrossingData.pew_full`), every later step settling EMPTY, which keeps it
+exactly (`GloasStepData.pew_empty`) and builds upon nothing; or the anchor's, every step settling EMPTY. The debited
+withdrawals are thus credited in no built-upon payload yet.
 
 **O-b** (`crossing_parentFull`, `jointStepG_cross_ok_of_spec`): at the crossing, Gloas `process_block` succeeding
 forces the FULL settlement, because `upgrade_to_gloas` sets `latest_block_hash` to the synthetic bid's
@@ -31,7 +41,9 @@ joint step's named refusal of an EMPTY first settlement excludes no chain the be
 **O-a** (the builder half of `crossing_builders`, `CrossingData.buildersPkWe`, `CrossingData.buildersFar`): after
 the first Gloas block every builder has `upgrade_to_gloas`'s pubkey and `withdrawable_epoch`, all
 `FAR_FUTURE_EPOCH`, and there are as many: the first block's requests are empty, so neither a builder request nor a
-fresh record runs (the writers of `withdrawable_epoch` are only those, `withdrawableEpoch_writers`).
+fresh record runs (the writers of `withdrawable_epoch` are only those, `withdrawableEpoch_writers`). Complete
+(`CrossingData.builders_eq`, Jaune's `crossing_builders_eq`): the builders are exactly `upgrade_to_gloas`'s,
+balances included, and `builder_pending_withdrawals` is `upgrade_to_gloas`'s (empty).
 -/
 
 namespace Blanc
@@ -338,5 +350,195 @@ theorem CrossingData.buildersFar {cfg : ChainConfig} {ccfg : Config} {bls : Bool
     simp only [Option.map_some, Option.some.injEq, Prod.mk.injEq] at hi
     rw [hi.2]
     exact hf i y hu
+
+/-! ## G3-09 over pre-Gloas steps and the crossing's Fulu head relation (G3c) -/
+
+/-- The engine's chain after an accepted Electra/Fulu payload ends with the payload's block. -/
+theorem engineVerdict_getLast {cfg : ChainConfig} {cf : CFork} {exec post : BlockChain}
+    {req : NewPayloadRequest P} (h : engineVerdict cfg cf exec req = .ok post) :
+    post.blocks.getLast? = some (payloadToBlock req) := by
+  obtain ⟨_, _, _, hc, f, hf, _, _, hs, _⟩ := engineVerdict_ok_iff.mp h
+  obtain ⟨_, _, _, _, _, _, rfl⟩ :=
+    exists_configuredBody_of_transition (stateTransitionUsing_of_scheduled hc hf hs)
+  exact appendBlock_getLast? _ _
+
+/-- **G3-09 after every pre-Gloas joint step**, whatever held before: the step's chain ends with its
+payload's block, whose hash is the post-state's `latest_execution_payload_header.block_hash`
+(Jaune's `jointStep_head`). -/
+theorem jointStep_execHead {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {s s' : JointState P}
+    {b : AnySignedBlock P} (h : jointStep cfg ccfg bls s b = .ok s') :
+    ExecHeadIsLatestBlockHash (GJointState.pre s') := by
+  obtain ⟨req, hv, hh⟩ := jointStep_head h
+  show execHeadHash s'.exec = some _
+  rw [execHeadHash, engineVerdict_getLast hv, Option.map_some, hh]
+
+/-- **G3-09 across a pre-Gloas run step.** -/
+theorem PreStepData.execHead {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    (D : PreStepData (P := P) cfg ccfg bls) : ExecHeadIsLatestBlockHash (GJointState.pre D.post) :=
+  jointStep_execHead D.step
+
+/-- **The crossing's Fulu head relation from its pre-state**: `crossFromFulu` upgrades a state carrying the
+pre-state's `latest_execution_payload_header` (Jaune's `crossFromFulu_header`), and `upgrade_to_gloas` copies its
+`block_hash` into `latest_block_hash`, so every fork state that upgrades to the crossing's upgraded state has the
+pre-state's `block_hash`. -/
+theorem CrossingData.fuluHead {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    (D : CrossingData (P := P) cfg ccfg bls)
+    (h : ExecHeadIsLatestBlockHash (GJointState.pre ⟨.fulu, D.preFulu, D.exec⟩)) :
+    execHeadHash D.exec = some D.atFork.latest_execution_payload_header.block_hash := by
+  obtain ⟨atFork', hup', hhd⟩ := crossFromFulu_header D.cross
+  have e1 := (upgradeToGloas_latestBlockHash hup').1
+  have e2 := (upgradeToGloas_latestBlockHash D.upgrade).1
+  change execHeadHash D.exec = some D.preFulu.latest_execution_payload_header.block_hash at h
+  rw [← e2, e1, hhd]
+  exact h
+
+/-- **The joint invariants after every run step**, from G3-09 at its pre-state (only the crossing reads it). -/
+theorem GJointRunStep.gJointInv_post {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    (D : GJointRunStep (P := P) cfg ccfg bls) (h : GJointInv cfg D.preState) :
+    GJointInv cfg D.postState := by
+  cases D with
+  | pre D => exact ⟨D.execHead, trivial, trivial⟩
+  | crossing C => exact C.gJointInv (C.fuluHead h.1)
+  | gloas G => exact G.gJointInv h
+
+/-! ## O-a: the builders after the first Gloas block, as an equality (G3c) -/
+
+/-- **O-a, complete.** After the first Gloas block the builders are exactly `upgrade_to_gloas`'s, balances
+included, and `builder_pending_withdrawals` is `upgrade_to_gloas`'s (empty) (Jaune's `crossing_builders_eq`):
+the crossing's slots append nothing (every payment empty, the quorum positive), the settlement appends nothing,
+and `process_withdrawals` debits no builder (none pending, the validator phases route to validators only, the
+sweep finds every builder at `FAR_FUTURE_EPOCH`). The N7 bounds at the post-state and the configuration bounds
+`quorumPositive`, `slotsPerEpoch` are `ValidJointG` fields. -/
+theorem CrossingData.builders_eq {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    (D : CrossingData (P := P) cfg ccfg bls)
+    (quorumPositive : 2 * P.SLOTS_PER_EPOCH ≤ P.EFFECTIVE_BALANCE_INCREMENT)
+    (slotsPerEpoch : 2 ≤ P.SLOTS_PER_EPOCH)
+    (validatorsBound : D.postB.validators.toArray.size ≤ 2 ^ 40)
+    (buildersBound : D.postB.builders.toArray.size ≤ 2 ^ 40) :
+    D.postB.builders = D.upgraded.builders ∧
+      D.postB.builder_pending_withdrawals = D.upgraded.builder_pending_withdrawals :=
+  crossing_builders_eq quorumPositive slotsPerEpoch D.upgrade D.slots
+    (gloasBlockTransition_processBlock_eq D.transition) D.emptyRequests validatorsBound buildersBound
+
+/-! ## G3-11's frame: `payload_expected_withdrawals` across a step (G3c) -/
+
+/-- **G3-11, EMPTY preservation, per Gloas step.** A step that settles its parent EMPTY keeps
+`payload_expected_withdrawals` exactly (the early return of `process_withdrawals`, and no other phase or slot
+writes it) and withdraws nothing. -/
+theorem GloasStepData.pew_empty {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    (D : GloasStepData (P := P) cfg ccfg bls) (hE : parentFull D.postSlots D.block.message = false) :
+    D.postB.payload_expected_withdrawals = D.preB.payload_expected_withdrawals ∧
+      stepWithdrawals ccfg bls D.postSlots D.block.message = .ok [] := by
+  obtain ⟨e, hw⟩ :=
+    (processBlock_payloadExpectedWithdrawals (gloasBlockTransition_processBlock_eq D.transition)).1 hE
+  exact ⟨e.trans (processSlots_pew D.slots), hw⟩
+
+/-- **G3-11, the write, per Gloas step.** A step that settles its parent FULL (over a delivered or the landed
+payload) ends with `payload_expected_withdrawals` exactly the withdrawals its `process_withdrawals` debited. -/
+theorem GloasStepData.pew_full {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    (D : GloasStepData (P := P) cfg ccfg bls) (hF : parentFull D.postSlots D.block.message = true) :
+    ∃ ws, stepWithdrawals ccfg bls D.postSlots D.block.message = .ok ws ∧
+      D.postB.payload_expected_withdrawals.toArray.toList = ws :=
+  (processBlock_payloadExpectedWithdrawals (gloasBlockTransition_processBlock_eq D.transition)).2 hF
+
+/-- **G3-11, the write, at the crossing.** The first Gloas block settles FULL, so it ends with
+`payload_expected_withdrawals` exactly the withdrawals its `process_withdrawals` debited. -/
+theorem CrossingData.pew_full {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    (D : CrossingData (P := P) cfg ccfg bls) :
+    ∃ ws, stepWithdrawals ccfg bls D.postSlots D.block.message = .ok ws ∧
+      D.postB.payload_expected_withdrawals.toArray.toList = ws :=
+  (processBlock_payloadExpectedWithdrawals (gloasBlockTransition_processBlock_eq D.transition)).2 D.full
+
+/-- An EMPTY Gloas step builds upon nothing. -/
+theorem GloasStepData.kept_of_empty {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    (D : GloasStepData (P := P) cfg ccfg bls) (hE : parentFull D.postSlots D.block.message = false) :
+    D.kept = [] := by
+  rcases settleParent_ok_iff.mp D.settleOk with ⟨hf, -⟩ | ⟨hf, -⟩ | ⟨-, -, -, hs⟩
+  · rw [hE] at hf; cases hf
+  · rw [hE] at hf; cases hf
+  · rcases D.keptSpec with ⟨_, _, _, h, -⟩ | ⟨-, hk⟩
+    · rw [hs] at h; cases h
+    · exact hk
+
+/-- A run step that writes `payload_expected_withdrawals` to `ws`: the crossing, or a Gloas step settling its
+parent FULL, whose `process_withdrawals` debited `ws`. -/
+def _root_.Blanc.GJointRunStep.WritesExpected {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    (ws : List JauneConsensus.Withdrawal) : GJointRunStep (P := P) cfg ccfg bls → Prop
+  | .pre _ => False
+  | .crossing D => stepWithdrawals ccfg bls D.postSlots D.block.message = .ok ws
+  | .gloas D => parentFull D.postSlots D.block.message = true ∧
+      stepWithdrawals ccfg bls D.postSlots D.block.message = .ok ws
+
+/-- A run step that settles its parent EMPTY: a Gloas step that withdraws nothing and builds upon nothing. -/
+def _root_.Blanc.GJointRunStep.SettlesEmpty {cfg : ChainConfig} {ccfg : Config} {bls : Bool} :
+    GJointRunStep (P := P) cfg ccfg bls → Prop
+  | .gloas D => parentFull D.postSlots D.block.message = false ∧ D.kept = []
+  | _ => False
+
+/-- **G3-11, the full ledger form, over a joint run.** At a Gloas state the run ends in,
+`payload_expected_withdrawals` is either
+
+* exactly the withdrawals `ws` debited by the last step `i` that wrote it (the crossing, or a Gloas step settling
+  FULL), and every later step settles EMPTY, preserving it exactly and building upon nothing: `ws` has been
+  debited on the consensus side and credited in no built-upon payload yet; or
+* the anchor's `payload_expected_withdrawals`, every step of the run settling EMPTY and building upon nothing. -/
+theorem _root_.Blanc.GJointRun.expectedWithdrawals_ledger {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    {s₀ : GJointState P} :
+    {s : GJointState P} → (run : GJointRun cfg ccfg bls s₀ s) →
+    ∀ {b : Gloas.BeaconState P} {exec : BlockChain} {par : ParentPayload P}, s = .gloas b exec par →
+    (∃ (i : Nat) (C : GJointRunStep (P := P) cfg ccfg bls) (ws : List JauneConsensus.Withdrawal),
+        run.steps[i]? = some C ∧ C.WritesExpected ws ∧ b.payload_expected_withdrawals.toArray.toList = ws ∧
+        ∀ k, i < k → k < run.steps.length →
+          ∃ C' : GJointRunStep (P := P) cfg ccfg bls, run.steps[k]? = some C' ∧ C'.SettlesEmpty) ∨
+      ((∀ (k : Nat) (C' : GJointRunStep (P := P) cfg ccfg bls), run.steps[k]? = some C' → C'.SettlesEmpty) ∧
+        ∃ (b₀ : Gloas.BeaconState P) (e₀ : BlockChain) (p₀ : ParentPayload P), s₀ = .gloas b₀ e₀ p₀ ∧
+          b.payload_expected_withdrawals = b₀.payload_expected_withdrawals)
+  | _, .nil, b, exec, par, h => Or.inr ⟨fun k C' h' => by simp only [GJointRun.steps, List.length_nil,
+      not_lt_zero, not_false_eq_true, getElem?_neg, reduceCtorEq] at h', b, exec, par, h, rfl⟩
+  | _, .snoc run D hD, b, exec, par, h => by
+    have hlen : (run.snoc D hD).steps.length = run.steps.length + 1 := by
+      simp only [GJointRun.steps_snoc, List.length_append, List.length_cons, List.length_nil, zero_add]
+    have hlast : (run.snoc D hD).steps[run.steps.length]? = some D := by
+      simp only [GJointRun.steps_snoc, List.length_append, List.length_cons, List.length_nil, zero_add,
+          lt_add_iff_pos_right, zero_lt_one, getElem?_pos, Std.le_refl, List.getElem_append_right,
+          tsub_self, List.getElem_cons_zero]
+    have hprev : ∀ k, k < run.steps.length → (run.snoc D hD).steps[k]? = run.steps[k]? := by
+      intro k hk; rw [GJointRun.steps_snoc, List.getElem?_append_left hk]
+    cases D with
+    | pre D => simp only [GJointRunStep.postState, reduceCtorEq] at h
+    | crossing C =>
+      simp only [GJointRunStep.postState, GJointState.gloas.injEq] at h
+      obtain ⟨rfl, -, -⟩ := h
+      obtain ⟨ws, hw, he⟩ := C.pew_full
+      exact Or.inl ⟨run.steps.length, .crossing C, ws, hlast, hw, he, fun k h1 h2 => by omega⟩
+    | gloas G =>
+      simp only [GJointRunStep.postState, GJointState.gloas.injEq] at h
+      obtain ⟨rfl, -, -⟩ := h
+      cases hF : parentFull G.postSlots G.block.message with
+      | true =>
+        obtain ⟨ws, hw, he⟩ := G.pew_full hF
+        exact Or.inl ⟨run.steps.length, .gloas G, ws, hlast, ⟨hF, hw⟩, he, fun k h1 h2 => by omega⟩
+      | false =>
+        obtain ⟨e, -⟩ := G.pew_empty hF
+        have hE : (GJointRunStep.gloas G).SettlesEmpty := ⟨hF, G.kept_of_empty hF⟩
+        rcases GJointRun.expectedWithdrawals_ledger run hD.symm with
+          ⟨i, C, ws, hi, hw, he', hk⟩ | ⟨hall, b₀, e₀, p₀, h₀, he'⟩
+        · have hil : i < run.steps.length := (List.getElem?_eq_some_iff.mp hi).1
+          refine Or.inl ⟨i, C, ws, by rw [hprev i hil]; exact hi, hw, by rw [e]; exact he', ?_⟩
+          intro k h1 h2
+          by_cases hkl : k < run.steps.length
+          · obtain ⟨C', hC', hs⟩ := hk k h1 hkl
+            exact ⟨C', by rw [hprev k hkl]; exact hC', hs⟩
+          · have : k = run.steps.length := by omega
+            subst this
+            exact ⟨_, hlast, hE⟩
+        · refine Or.inr ⟨fun k C' hk => ?_, b₀, e₀, p₀, h₀, by rw [e]; exact he'⟩
+          by_cases hkl : k < run.steps.length
+          · rw [hprev k hkl] at hk; exact hall k C' hk
+          · have hk' := (List.getElem?_eq_some_iff.mp hk).1
+            rw [hlen] at hk'
+            have : k = run.steps.length := by omega
+            subst this
+            rw [hlast] at hk; cases hk; exact hE
 
 end Blanc

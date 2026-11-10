@@ -214,7 +214,7 @@ theorem ValidJointG.anchor_payment_fate (v : ValidJointG cfg ccfg bls checkpoint
     (e : AnchorEntry a) (he : e.Present) : ∃! f : AnchorFate v.run e, f.Allowed ∧ f.holds := by
   have hspe : 0 < P.SLOTS_PER_EPOCH := by have := v.slotsPerEpoch; omega
   have hinv : GAnchorInv (GJointState.gloas a ex pa) := v.anchorInv
-  obtain ⟨-, -, -, -, -, g7, g8, -, fe⟩ := hinv
+  obtain ⟨-, -, -, -, -, g7, g8, -, fe, -⟩ := hinv
   have hLs : a.latest_execution_payload_bid.slot.toNat = a.latest_block_header.slot.toNat := by
     rw [g8.1]
   cases e with
