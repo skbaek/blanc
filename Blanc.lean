@@ -26,6 +26,8 @@ import Blanc.CompiledWalkInversion
 import Blanc.Composition.BuilderRequestCarrier
 import Blanc.Composition.BuilderRequestCodesKept
 import Blanc.Composition.BuilderRequestJointG
+import Blanc.Composition.BuilderRequestJointGBalance
+import Blanc.Composition.BuilderRequestJointGFate
 import Blanc.Composition.BuilderRequestPublicBounds
 import Blanc.Composition.BuilderRequestPublicFindings
 import Blanc.Composition.BuilderRequestPublicGuarantees
@@ -310,6 +312,7 @@ import Blanc.Lift.BuilderRequest.Message
 import Blanc.Lift.BuilderRequest.Occurrence
 import Blanc.Lift.BuilderRequest.Progress
 import Blanc.Lift.BuilderRequest.QueueLayout
+import Blanc.Lift.BuilderRequest.RequestCodecG
 import Blanc.Lift.BuilderRequest.Revert
 import Blanc.Lift.BuilderRequest.RevertCovered
 import Blanc.Lift.BuilderRequest.Static
