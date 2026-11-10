@@ -29,6 +29,7 @@ import Blanc.Composition.BuilderRequestJointG
 import Blanc.Composition.BuilderRequestJointGAnchorQueued
 import Blanc.Composition.BuilderRequestJointGAnchorQueuedControl
 import Blanc.Composition.BuilderRequestJointGAnchorReach
+import Blanc.Composition.BuilderRequestJointGAnchorReachDomain
 import Blanc.Composition.BuilderRequestJointGAnchorReachStep
 import Blanc.Composition.BuilderRequestJointGAppends
 import Blanc.Composition.BuilderRequestJointGBalance

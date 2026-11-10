@@ -1,4 +1,4 @@
-import Blanc.Composition.BuilderRequestJointGAnchorReachStep
+import Blanc.Composition.BuilderRequestJointGAnchorReachDomain
 import Blanc.Composition.BuilderRequestJointGAnchorQueued
 
 /-!
@@ -23,8 +23,8 @@ Gloas begins at the fork, and the witness is not an assumption: it is built from
   withdrawal (the element identity `crossing_bid_appended_at_most_once` lacked): block slots strictly increase
   from the crossing on (`gblock_slot_lt`), so the bid of that slot is the crossing's.
 
-The statements take `DomainKept` (the Gloas transition keeps `fork` and `genesis_validators_root`), the one
-fact about Jaune's transition functions that `BidSigned` at a later state needs.
+`BidSigned` at a later state reads the signing domain there; that the Gloas transition keeps `fork` and
+`genesis_validators_root` is `domainKept` (`BuilderRequestJointGAnchorReachDomain`).
 -/
 
 namespace Blanc.Lift.BuilderRequest
@@ -77,7 +77,7 @@ theorem _root_.Blanc.GJointRun.states_pre {s₀ : GJointState P} :
 
 /-- **Every Gloas state of a run from a pre-Gloas state has a history witness**, built from the steps before
 it; G3a's invariants ride along. -/
-theorem reach_hist (hk : DomainKept (gloasCtx ccfg bls) P) (hbls : bls = true)
+theorem reach_hist (hbls : bls = true)
     (hq : 2 * P.SLOTS_PER_EPOCH ≤ P.EFFECTIVE_BALANCE_INCREMENT)
     (hdel : 1 ≤ P.MIN_ATTESTATION_INCLUSION_DELAY) (hspe : 2 ≤ P.SLOTS_PER_EPOCH)
     (hdelay : 0 < ccfg.MIN_BUILDER_WITHDRAWABILITY_DELAY) {s₀ : JointState P} :
@@ -98,7 +98,7 @@ theorem reach_hist (hk : DomainKept (gloasCtx ccfg bls) P) (hbls : bls = true)
     have mem : ∀ st ∈ run.states, st ∈ (run.snoc C hC).states := fun st hst => by
       rw [GJointRun.states_snoc]; exact List.mem_append_left _ hst
     have hpost : C.postState ∈ (run.snoc C hC).states := GJointRun.end_mem_states _
-    obtain ⟨ihv, ih1, ih2⟩ := reach_hist hk hbls hq hdel hspe hdelay run
+    obtain ⟨ihv, ih1, ih2⟩ := reach_hist hbls hq hdel hspe hdelay run
       (fun st h => hv st (mem st h)) (fun st h => hb st (mem st h))
     have hpre : GInvJ C.preState := hC ▸ ihv
     have hinv : GInvJ C.postState := C.gInvJ hq hdel hspe hpre (hv _ hpost) (hb _ hpost)
@@ -114,12 +114,12 @@ theorem reach_hist (hk : DomainKept (gloasCtx ccfg bls) P) (hbls : bls = true)
       | crossing D =>
         simp only [GJointRunStep.postState, GJointState.gloas.injEq] at hs
         obtain ⟨rfl, -, -⟩ := hs
-        exact Hist.crossing hk hbls hq hspe D hCn (hinv : GInv D.postB).2.2.2.2.2.1 hvb hbb
+        exact Hist.crossing (domainKept _) hbls hq hspe D hCn (hinv : GInv D.postB).2.2.2.2.2.1 hvb hbb
       | gloas D =>
         simp only [GJointRunStep.postState, GJointState.gloas.injEq] at hs
         obtain ⟨rfl, -, -⟩ := hs
         obtain ⟨bid, hbid⟩ := ih1 D.preB D.preExec D.preParent hC.symm
-        exact Hist.step hk hbls hq hspe hdelay D hCn (hbid.append _) hpre
+        exact Hist.step (domainKept _) hbls hq hspe hdelay D hCn (hbid.append _) hpre
           (hinv : GInv D.postB).2.2.2.2.2.1 hbb
     rw [GJointRun.steps_snoc]
     refine ⟨hinv, fun b ex pa hs => by
@@ -229,9 +229,8 @@ Gloas anchor, injectivity included) such that
 * the latest reference's bid is the latest bid.
 
 So `b` with the rest of the chain is a Gloas-anchored chain whose `anchorWitness` can be this one, and
-`anchor_witness_charged_once_queued` then counts the real chain's own bids. `DomainKept`: the Gloas transition
-keeps `fork` and `genesis_validators_root` (what `BidSigned` at a later state reads). -/
-theorem reach_witness (hk : DomainKept (gloasCtx ccfg true) P)
+`anchor_witness_charged_once_queued` then counts the real chain's own bids. -/
+theorem reach_witness
     (v : ValidJointG cfg ccfg true checkpoint (.pre s₀) final) {i : Nat} {b : Gloas.BeaconState P}
     {ex : BlockChain} {pa : ParentPayload P} (hi : v.run.states[i]? = some (.gloas b ex pa)) :
     ∃ W : GloasBidWitness b,
@@ -243,7 +242,7 @@ theorem reach_witness (hk : DomainKept (gloasCtx ccfg true) P)
         e.slot = β.message.slot.toNat + P.SLOTS_PER_EPOCH ∧ e.w = bidWithdrawal β.message ∧
         b.builder_pending_withdrawals.toArray[k]? = some e.w) ∧
       (∀ β, W.bid .latest = some β → β.message = b.latest_execution_payload_bid) := by
-  obtain ⟨bid, hb⟩ := (reach_hist hk rfl v.quorumPositive v.inclusionDelay v.slotsPerEpoch v.exitDelayPos v.run
+  obtain ⟨bid, hb⟩ := (reach_hist rfl v.quorumPositive v.inclusionDelay v.slotsPerEpoch v.exitDelayPos v.run
     v.validatorsBound v.buildersBound).2.2 i b ex pa hi
   refine ⟨hb.toWitness (by have := v.slotsPerEpoch; omega), fun r β h => (hb.signed r β h).2,
     fun k β h => ⟨(hb.payOnly k β h).1, (hb.payOnly k β h).2.1⟩, fun k β h => ?_, hb.latOnly⟩
@@ -255,13 +254,13 @@ anchor, each element a step appends to `builder_pending_withdrawals` (`e ∈ C.p
 paths) is the payment of the signed bid of an earlier step's block: the bid pays, the append is attributed to
 that bid's slot, and the appended element is that bid's withdrawal. The bid is verified under real BLS at the
 appending step's pre-state. -/
-theorem push_is_step_bid (hk : DomainKept (gloasCtx ccfg true) P)
+theorem push_is_step_bid
     (v : ValidJointG cfg ccfg true checkpoint (.pre s₀) final) {j : Nat}
     {D : GloasStepData (P := P) cfg ccfg true} (hD : v.run.steps[j]? = some (.gloas D)) {e : Push}
     (he : e ∈ D.pushes) :
     ∃ β, StepBid v.run.steps j β ∧ BidSigned D.preB β ∧ U64.zero < β.message.value ∧
       e.slot = β.message.slot.toNat + P.SLOTS_PER_EPOCH ∧ e.w = bidWithdrawal β.message := by
-  obtain ⟨bid, hb⟩ := (reach_hist hk rfl v.quorumPositive v.inclusionDelay v.slotsPerEpoch v.exitDelayPos v.run
+  obtain ⟨bid, hb⟩ := (reach_hist rfl v.quorumPositive v.inclusionDelay v.slotsPerEpoch v.exitDelayPos v.run
     v.validatorsBound v.buildersBound).2.2 j D.preB D.preExec D.preParent (v.run.states_pre hD)
   obtain ⟨-, -, -, -, -, -, g8, hA, -⟩ := v.gInv_pre hD
   have hbb : D.preB.builders.toArray.size ≤ 2 ^ 40 :=
@@ -273,7 +272,7 @@ theorem push_is_step_bid (hk : DomainKept (gloasCtx ccfg true) P)
 /-- **An append at the first Gloas block's bid's slot is that bid's withdrawal.** With
 `crossing_bid_appended_at_most_once`: the crossing's bid is appended at most once, and what is appended is its
 own withdrawal. -/
-theorem crossing_bid_append_is_bid (hk : DomainKept (gloasCtx ccfg true) P)
+theorem crossing_bid_append_is_bid
     (v : ValidJointG cfg ccfg true checkpoint (.pre s₀) final) {j : Nat}
     {C : CrossingData (P := P) cfg ccfg true} (stepC : v.run.steps[j]? = some (.crossing C)) :
     ∀ e ∈ v.run.pushes, e.slot = C.block.message.slot.toNat + P.SLOTS_PER_EPOCH →
@@ -285,9 +284,9 @@ theorem crossing_bid_append_is_bid (hk : DomainKept (gloasCtx ccfg true) P)
   | pre _ => cases heC
   | crossing _ => cases heC
   | gloas D =>
-    obtain ⟨β, ⟨j', -, C'', blk, hC'', hblk, rfl⟩, -, -, hs, hw⟩ := v.push_is_step_bid hk hi heC
+    obtain ⟨β, ⟨j', -, C'', blk, hC'', hblk, rfl⟩, -, -, hs, hw⟩ := v.push_is_step_bid hi heC
     obtain ⟨m, pb, -, -, -, -, hp⟩ := gblock_post hblk
-    have hbs := (block_newBid hk rfl hp).2.1
+    have hbs := (block_newBid (domainKept _) rfl hp).2.1
     have heq : blk.message.slot.toNat = C.block.message.slot.toNat := by
       rw [hs, hbs] at hslot
       omega

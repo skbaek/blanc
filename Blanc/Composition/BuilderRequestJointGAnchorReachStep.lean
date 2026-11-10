@@ -22,7 +22,8 @@ anchor), the one-step half. `BuilderRequestJointGAnchorReach` runs it along a ru
 
 `BidSigned` at a later state reads the signing domain there. `DomainKept` names what that needs of Jaune's
 Gloas transition: `process_slots` and `process_block` (and the block's phases before the bid) keep `fork` and
-`genesis_validators_root` (`DomFrame`). It is a property of the transition functions, not of a chain.
+`genesis_validators_root` (`DomFrame`). It is a property of the transition functions, not of a chain, proved
+as `domainKept` in `BuilderRequestJointGAnchorReachDomain`.
 -/
 
 namespace Blanc.Lift.BuilderRequest
