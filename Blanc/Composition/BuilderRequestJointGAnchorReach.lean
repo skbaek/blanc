@@ -14,8 +14,8 @@ Gloas begins at the fork, and the witness is not an assumption: it is built from
   is a `GloasBidWitness b` whose every bid is the signed bid of an earlier step's block (the crossing's first
   Gloas block or a Gloas step's), with: a payment reference's bid the one whose payment is live at that index; a
   queue reference's bid the one whose payment an earlier step appended as that queue entry (its slot, its
-  withdrawal); the latest reference's bid the latest bid. So the anchor theorems apply to every Gloas state a
-  real chain reaches, with the witness the chain's own bids.
+  withdrawal); the latest reference's bid the latest bid. So at every Gloas state a real chain reaches, the
+  witness the Gloas-anchor theorems ask for exists and is the chain's own bids (the chain is not re-anchored there).
 * **`ValidJointG.push_is_step_bid`**: every element the run appends to `builder_pending_withdrawals` is the
   payment of the signed bid of an earlier step's block: the append's slot is that bid's and its element that
   bid's withdrawal. This attributes each append to a bid, the first Gloas block's included.
@@ -258,8 +258,8 @@ Gloas anchor, injectivity included) such that
   step's `pushes`), with the bid's slot and withdrawal, as the queue entry at that position;
 * the latest reference's bid is the latest bid.
 
-So `b` with the rest of the chain is a Gloas-anchored chain whose `anchorWitness` can be this one, and
-`anchor_witness_charged_once_queued` then counts the real chain's own bids. -/
+This gives the witness the Gloas-anchor theorems ask for; it does not re-anchor the chain at `b` (no theorem
+builds the `ValidJointG` from state `i`), so it is not composed with `anchor_witness_charged_once_queued`. -/
 theorem reach_witness
     (v : ValidJointG cfg ccfg true checkpoint (.pre s₀) final) {i : Nat} {b : Gloas.BeaconState P}
     {ex : BlockChain} {pa : ParentPayload P} (hi : v.run.states[i]? = some (.gloas b ex pa)) :
