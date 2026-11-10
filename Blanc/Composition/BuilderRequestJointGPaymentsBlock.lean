@@ -1,4 +1,5 @@
 import Blanc.Composition.BuilderRequestJointGPaymentsTrack
+import Blanc.Composition.BuilderRequestJointGLedger
 
 /-!
 # Tracking one builder payment entry through a Gloas block and a Gloas run step
@@ -9,7 +10,6 @@ continuing `BuilderRequestJointGPaymentsTrack`:
 * the parent settlement settles exactly the parent slot's window index (`applyParentPrefix_idx`,
   `parent_cell`, `parent_settles`), the bid writes only its own slot's entry (`mid_cell`, `bid_live`),
   and the operations only keep, empty or re-weigh entries (`ops_live_back`, `OpsClear`);
-* consecutive run steps (`GJointRun.link`, `GJointRun.last_post`);
 * per Gloas step: `live_back` (liveness only ends), `flip_cases` (where it ends), and
   `no_quorum_latest` (G3-07: no quorum while the bid is still the latest bid).
 -/
@@ -332,45 +332,6 @@ theorem block_track (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat} {w : Gl
   · left
     obtain ⟨k, hk⟩ := Option.ne_none_iff_exists'.mp hne
     exact ⟨hfull, payIdx_inj hk (heq ▸ hk)⟩
-
-/-! ## Runs: consecutive steps -/
-
-section Run
-
-variable {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
-
-theorem _root_.Blanc.GJointRun.last_post {s₀ : GJointState P} :
-    {sf : GJointState P} → (run : GJointRun cfg ccfg bls s₀ sf) → {i : Nat} →
-    {A : GJointRunStep (P := P) cfg ccfg bls} → run.steps[i]? = some A → i + 1 = run.steps.length →
-      A.postState = sf
-  | _, .nil, _, _, h, _ => by simp only [GJointRun.steps, List.getElem?_nil, reduceCtorEq] at h
-  | _, .snoc run C hC, i, A, h, hl => by
-    rw [GJointRun.steps_snoc] at h hl
-    simp only [List.length_append, List.length_singleton] at hl
-    rw [List.getElem?_append_right (by omega), List.getElem?_singleton] at h
-    rw [ite_eq_left (by omega)] at h
-    cases h; rfl
-
-theorem _root_.Blanc.GJointRun.link {s₀ : GJointState P} :
-    {sf : GJointState P} → (run : GJointRun cfg ccfg bls s₀ sf) → {i : Nat} →
-    {A C : GJointRunStep (P := P) cfg ccfg bls} → run.steps[i]? = some A → run.steps[i + 1]? = some C →
-      C.preState = A.postState
-  | _, .nil, _, _, _, h, _ => by simp only [GJointRun.steps, List.getElem?_nil, reduceCtorEq] at h
-  | _, .snoc run B hB, i, A, C, hA, hC => by
-    rw [GJointRun.steps_snoc] at hA hC
-    have hi : i + 1 < run.steps.length + 1 := by
-      have := (List.getElem?_eq_some_iff.mp hC).1; simpa using this
-    by_cases hlt : i + 1 < run.steps.length
-    · rw [List.getElem?_append_left hlt] at hC
-      rw [List.getElem?_append_left (by omega)] at hA
-      exact GJointRun.link run hA hC
-    · rw [List.getElem?_append_right (by omega), List.getElem?_singleton, ite_eq_left (by omega)] at hC
-      cases hC
-      rw [List.getElem?_append_left (by omega)] at hA
-      rw [hB]
-      exact (GJointRun.last_post run hA (by omega)).symm
-
-end Run
 
 /-! ## A Gloas step, for a tracked payment -/
 

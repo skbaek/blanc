@@ -92,7 +92,7 @@ variable {s₀ sf : GJointState P} (run : GJointRun cfg ccfg bls s₀ sf)
 theorem gloas_succ {i : Nat} {A : GloasStepData (P := P) cfg ccfg bls}
     {C : GJointRunStep (P := P) cfg ccfg bls} (hA : run.steps[i]? = some (.gloas A))
     (hC : run.steps[i + 1]? = some C) : ∃ C', C = .gloas C' ∧ C'.preB = A.postB := by
-  have h := run.link hA hC
+  have h := GJointRun.pre_succ run hA hC
   cases C with
   | pre C => simp [GJointRunStep.preState, GJointRunStep.postState] at h
   | crossing C => simp [GJointRunStep.preState, GJointRunStep.postState] at h
@@ -170,7 +170,7 @@ theorem final_of {a : Nat} {A : GloasStepData (P := P) cfg ccfg bls}
   have hlen := (List.getElem?_eq_some_iff.mp hA).1
   obtain ⟨B, hB⟩ := gloas_from run hA (run.steps.length - 1 - a) (by omega)
   refine ⟨_, B, by omega, by omega, hB, ?_⟩
-  exact (run.last_post hB (by omega)).symm
+  exact run.last_post hB (by omega)
 
 end Chain
 
