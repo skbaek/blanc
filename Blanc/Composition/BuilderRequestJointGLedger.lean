@@ -15,11 +15,11 @@ address `Σ amount · 10^9` (the 7002 `processWithdrawalsState_toExecution_bal`,
 `Withdrawal.toExecution`). If no later step settles FULL, they are still the final state's
 `payload_expected_withdrawals`.
 
-**Hypothesis `expectedWithdrawalsFrame`.** The frame of `payload_expected_withdrawals` (the Mac's G3c, Jaune
-`Facts/Gloas/FirstBlockFrames.lean`) is not on this Blanc's Jaune pin (c00734b1), so it is taken as an explicit
-hypothesis, `ExpectedWithdrawalsFrame`: Gloas `process_slots` keeps the field; Gloas `process_block` keeps it over
-an EMPTY parent (the early return, CL:2074, and no other phase writes it); over a FULL parent it ends as the
-withdrawals the step's `process_withdrawals` computed (CL:2086). Each clause is a function-level fact of the spec.
+**The frame `ExpectedWithdrawalsFrame`.** The frame of `payload_expected_withdrawals`: Gloas `process_slots` keeps
+the field; Gloas `process_block` keeps it over an EMPTY parent (the early return, CL:2074, and no other phase writes
+it); over a FULL parent it ends as the withdrawals the step's `process_withdrawals` computed (CL:2086). It is proved
+(`expectedWithdrawalsFrame_holds`) from the Mac's G3c frames, Jaune `Facts/Gloas/FirstBlockFrames.lean`, on this
+Blanc's Jaune pin (c73f7ead).
 -/
 
 namespace Blanc.Lift.BuilderRequest
@@ -28,7 +28,7 @@ open Jaune JauneConsensus ExecutionTrace Blanc JauneConsensus.Facts.Gloas JauneC
 
 variable {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
 
-/-- **G3c's expected-withdrawals frame** (hypothesis; not on Jaune c00734b1). -/
+/-- **G3c's expected-withdrawals frame** (proved: `expectedWithdrawalsFrame_holds`). -/
 structure ExpectedWithdrawalsFrame (P : Preset) : Prop where
   /-- Gloas `process_slots` keeps `payload_expected_withdrawals`. -/
   slots : ∀ {ctx : Ctx} {s s' : Gloas.BeaconState P} {slot : Slot}, Gloas.processSlots ctx s slot = .ok s' →
@@ -42,6 +42,45 @@ structure ExpectedWithdrawalsFrame (P : Preset) : Prop where
     {ws : List JauneConsensus.Withdrawal}, Gloas.processBlock (gloasCtx ccfg bls) s blk = .ok s' →
     parentFull s blk = true → stepWithdrawals ccfg bls s blk = .ok ws →
     s'.payload_expected_withdrawals.toArray.toList = ws
+
+/-- Gloas `process_block` over an EMPTY parent keeps `payload_expected_withdrawals`, in any context: the
+parent settlement is the identity, the bid then builds on `latest_block_hash`, so `process_withdrawals` returns
+early, and no other phase writes the field (G3c's frames). -/
+theorem processBlock_pew_of_empty {ctx : Ctx} {s s' : Gloas.BeaconState P} {blk : Gloas.BeaconBlock P}
+    (h : Gloas.processBlock ctx s blk = .ok s') (hE : parentFull s blk = false) :
+    s'.payload_expected_withdrawals = s.payload_expected_withdrawals := by
+  obtain ⟨s1, s2, s3, s4, s5, s6, s7, h1, h2, h3, h4, h5, h6, h7, h8⟩ := processBlock_phases h
+  have hpost := afterWithdrawals_pew h4 h5 h6 h7 h8
+  obtain ⟨_, _, hm2⟩ := processBlockHeader_post h2
+  have w3 := processWithdrawals_wFrame _ _ h3
+  have b4 := processExecutionPayloadBid_post h4
+  rcases processParentExecutionPayload_cases h1 with ⟨hs1, -⟩ | ⟨hpb, -⟩
+  · subst hs1
+    have hne : s2.latest_block_hash ≠ s2.latest_execution_payload_bid.block_hash := by
+      intro heq
+      have hpar : blk.body.signed_execution_payload_bid.message.parent_block_hash = s2.latest_block_hash := by
+        rw [b4.2.2.1, w3.2.1]
+      have : parentFull s1 blk = true := by
+        unfold parentFull
+        rw [hpar, heq, hm2]
+        exact beq_self_eq_true _
+      rw [this] at hE; cases hE
+    rw [processWithdrawalsG_early_return s2 hne] at h3
+    cases h3
+    rw [hpost, hm2]
+  · have : parentFull s blk = true := by unfold parentFull; rw [hpb]; exact beq_self_eq_true _
+    rw [this] at hE; cases hE
+
+/-- **The expected-withdrawals frame holds** (G3c's `processSlots_pew`, `processBlock_pew_of_empty` and
+`processBlock_payloadExpectedWithdrawals`). -/
+theorem expectedWithdrawalsFrame_holds : ExpectedWithdrawalsFrame P where
+  slots h := processSlots_pew h
+  empty h hE := processBlock_pew_of_empty h hE
+  full h hF hws := by
+    obtain ⟨ws', hws', he⟩ := (processBlock_payloadExpectedWithdrawals h).2 hF
+    rw [hws] at hws'
+    cases hws'
+    exact he
 
 /-! ## One step -/
 
@@ -181,10 +220,9 @@ theorem carry (v : ValidJointG cfg ccfg bls checkpoint anchor final) (frame : Ex
   `payload_expected_withdrawals`.
 
 Adaptations: `D.expectedWithdrawals` is RBA's `stepWithdrawals`, and `nonEarly` is `w ∈ ws` (a step that returns
-early withdraws `[]`), stated for the whole list; the frame of `payload_expected_withdrawals` is the explicit
-hypothesis `expectedWithdrawalsFrame` (G3c, not on the Jaune pin). -/
+early withdraws `[]`), stated for the whole list; the frame of `payload_expected_withdrawals` is
+`expectedWithdrawalsFrame_holds` (G3c). -/
 theorem withdrawal_ledger (v : ValidJointG cfg ccfg bls checkpoint anchor final)
-    (expectedWithdrawalsFrame : ExpectedWithdrawalsFrame P)
     {j : Nat} {D : GloasStepData (P := P) cfg ccfg bls} (stepD : v.run.steps[j]? = some (.gloas D))
     {ws : List JauneConsensus.Withdrawal} (hws : stepWithdrawals ccfg bls D.postSlots D.block.message = .ok ws)
     {w : JauneConsensus.Withdrawal} (hw : w ∈ ws) :
@@ -204,7 +242,7 @@ theorem withdrawal_ledger (v : ValidJointG cfg ccfg bls checkpoint anchor final)
           v.run.steps[k]? = some (.gloas Dk) ∧ Dk.kept = []) ∧
         b.payload_expected_withdrawals.toArray.toList = ws) := by
   classical
-  have frame := expectedWithdrawalsFrame
+  have frame : ExpectedWithdrawalsFrame P := expectedWithdrawalsFrame_holds
   have hfull : parentFull D.postSlots D.block.message = true :=
     D.withdrawals_full hws (List.ne_nil_of_mem hw)
   have hpost := frame.full (gloasBlockTransition_processBlock_eq D.transition) hfull hws

@@ -1,5 +1,6 @@
 import Blanc.Composition.BuilderRequestJointGPosition
 import JauneConsensus.Facts.Gloas.StepB1
+import Blanc.Composition.BuilderRequestJointGBalance
 
 /-!
 # B1 over a valid Gloas joint chain: registration authorization (`bls = true`)
@@ -13,8 +14,10 @@ step's post-slots state (erratum 2026-11-10).
   builds upon, the deposit contract's committed paid submission occurrence `|emissions before that block| + k`
   (`ValidJointG.deposit_position`); it has the `0xB0` prefix, a signature verifying under
   `DOMAIN_BUILDER_DEPOSIT`, and the fresh record with `execution_address = credentials[12:]`. The post-state clause
-  (the record at the step's post-state, with the later same-payload top-ups) uses the one pending hypothesis
-  `RegisteredRecordKept` (G3d, `FinalizedNotAhead`).
+  (the record at the step's post-state, with the later same-payload top-ups) is G3d's `registration_post` under
+  FinalizedNotAhead along the run (`ValidJointG.registeredRecordKept`).
+* `ValidJointG.crossing_builders`: the crossing creates exactly `upgrade_to_gloas`'s builders, balances included,
+  all at `FAR_FUTURE_EPOCH`, with `builder_pending_withdrawals` empty (G3c).
 * `ValidJointG.crossing_onboarding`: the fork clause, MBS's `jointStepG_crossing_onboarding` at the run's crossing
   step: its builders are exactly `upgrade_to_gloas`'s, all at `FAR_FUTURE_EPOCH`, and the first block creates none.
 -/
@@ -25,9 +28,10 @@ open Jaune JauneConsensus ExecutionTrace ChainLink Blanc JauneConsensus.Facts.Gl
 
 variable {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
 
-/-! ## The pending hypothesis (G3d) -/
+/-! ## The registered record survives the block (G3d), discharged below -/
 
-/-- **Pending hypothesis (G3d: `FinalizedNotAhead`, Jaune `Facts/Gloas/FinalizedNotAhead.lean`).** At every Gloas
+/-- **G3d: `FinalizedNotAhead`, Jaune `Facts/Gloas/FinalizedNotAhead.lean`** (discharged at `bls = true`:
+`ValidJointG.registeredRecordKept`). At every Gloas
 step of the run, a builder record created by the step survives the rest of the block unchanged: the step's
 post-state holds at index `i` the record the deposit trace ends with. A fresh builder's `deposit_epoch` is the
 current epoch, so it is inactive when finalization is not ahead of the current epoch and a same-payload exit
@@ -43,6 +47,24 @@ namespace ValidJointG
 
 variable {checkpoint : BlockChain} {anchor final : GJointState P}
 
+/-- **`RegisteredRecordKept`, discharged** (`bls = true`): G3d's `GStepView.registration_post` at every Gloas step,
+its premises FinalizedNotAhead (`fna_pre`, carried from `GAnchorInv` along the run), the G3a invariants
+(`gInv_pre`) and the N7 bounds at the post-state. -/
+theorem registeredRecordKept (v : ValidJointG cfg ccfg bls checkpoint anchor final) (hbls : bls = true) :
+    RegisteredRecordKept v.run := by
+  subst hbls
+  intro j D stepD i trD hD created
+  obtain ⟨-, g3, g4, g5, -, g7, g8, hA, fe⟩ := v.gInv_pre stepD
+  obtain ⟨vb, bb⟩ := v.post_bounds stepD
+  have hsp : D.postSlots.builders = D.preB.builders := Inv.processSlots_identityStable D.slots
+  have hcr : BuilderCreated D.postSlots D.postB i := (builderCreated_congr_left hsp).mpr created
+  obtain ⟨k, req, trD', m, m', dom, addr, e, bal, -, hD', -, -, -, -, -, -, -, -, -, -, hlast, hpost, -⟩ :=
+    D.view.registration_post v.slotsPerEpoch v.quorumPositive (v.fna_pre stepD) g5 g3 g4 g7 g8 fe hA vb bb hcr
+  replace hD' : builderDepositTrace ccfg true D.postSlots D.block = .ok trD' := hD'
+  rw [hD] at hD'
+  cases hD'
+  exact hpost.trans hlast.symm
+
 /-- **B1: registration authorization (`bls = true`).** Every builder record created at a Gloas step `j` of a valid
 joint chain (`BuilderCreated`: the pubkey at `i` changed, by append or reuse) came from the builder deposit request
 `req` at deposit-trace position `k` of the step block's `parent_execution_requests` (the trace read at the step's
@@ -57,9 +79,8 @@ post-slots state):
 * `tr[k+1]` holds at `i` the fresh record (`freshBuilder`): `req`'s pubkey, version `PAYLOAD_BUILDER_VERSION` (0), `execution_address = credentials[12:]`,
   balance `req.amount`, `deposit_epoch` the epoch of `tr[k]`'s slot, `withdrawable_epoch = FAR_FUTURE_EPOCH`;
 * the step's post-state holds at `i` that record with balance `req.amount` plus the later `0xB0` deposits for its
-  pubkey in the same payload (pending hypothesis `RegisteredRecordKept`, G3d). -/
+  pubkey in the same payload (G3d, `registeredRecordKept`). -/
 theorem registration_authorization (v : ValidJointG cfg ccfg bls checkpoint anchor final) (hbls : bls = true)
-    (kept : RegisteredRecordKept v.run)
     {j : Nat} {D : GloasStepData (P := P) cfg ccfg bls} (stepD : v.run.steps[j]? = some (.gloas D))
     {i : Nat} (created : BuilderCreated D.preB D.postB i) :
     ∃ (k : Nat) (req : Gloas.BuilderDepositRequest) (tr : List (Gloas.BeaconState P)) (m m' : Gloas.BeaconState P)
@@ -92,7 +113,7 @@ theorem registration_authorization (v : ValidJointG cfg ccfg bls checkpoint anch
     exact created
   obtain ⟨k, req, tr, m, m', dom, addr, e, bal, hreq, htr, hm, hm', -, hcl, hpre, hdom, hv, haddr, he, hat,
     hlast, hbal⟩ := D.view.registration v.slotsPerEpoch hcr
-  have hpost := kept stepD htr created
+  have hpost := v.registeredRecordKept rfl stepD htr created
   change (traceLast D.postSlots tr).builders.toArray[i]? = _ at hlast
   rw [hlast] at hpost
   refine ⟨k, req, tr, m, m', req.amount, dom, addr, e, hreq, htr, hm, hm', hcl, rfl, v.deposit_position stepD hreq,
@@ -116,6 +137,23 @@ theorem crossing_onboarding (v : ValidJointG cfg ccfg bls checkpoint anchor fina
   obtain rfl : upgraded = C.upgraded := Except.ok.inj (hup.symm.trans C.cross)
   have hcs : C.postSlots.builders = C.upgraded.builders := crossingSlots_builders C.slots
   exact ⟨hcs, hfu, hfp, hsz, hpk, fun i h => hnc i ((builderCreated_congr_left (hbs.trans hcs.symm)).mpr h)⟩
+
+/-- **The crossing step creates exactly `upgrade_to_gloas`'s builders** (statements.md B1 `crossing_builders`,
+SF-6; O-a complete): after the first Gloas block the builders are the upgraded state's, balances included, all at
+`FAR_FUTURE_EPOCH`, and `builder_pending_withdrawals` is the upgraded state's (empty). -/
+theorem crossing_builders (v : ValidJointG cfg ccfg bls checkpoint anchor final) {j : Nat}
+    {C : CrossingData (P := P) cfg ccfg bls} (stepC : v.run.steps[j]? = some (.crossing C)) :
+    C.postB.builders = C.upgraded.builders ∧
+      (∀ b ∈ C.postB.builders.toArray.toList, b.withdrawable_epoch = FAR_FUTURE_EPOCH) ∧
+      C.postB.builder_pending_withdrawals = C.upgraded.builder_pending_withdrawals := by
+  have hmem : (GJointRunStep.crossing C).postState ∈ v.run.states :=
+    List.mem_cons_of_mem _ (List.mem_map_of_mem (List.mem_of_getElem? stepC))
+  obtain ⟨hb, hw⟩ := C.builders_eq v.quorumPositive v.slotsPerEpoch (v.validatorsBound _ hmem)
+    (v.buildersBound _ hmem)
+  refine ⟨hb, fun b hb' => ?_, hw⟩
+  rw [Array.mem_toList_iff] at hb'
+  obtain ⟨i, hi, rfl⟩ := Array.getElem_of_mem hb'
+  exact C.buildersFar i _ (Array.getElem?_eq_getElem hi)
 
 end ValidJointG
 
