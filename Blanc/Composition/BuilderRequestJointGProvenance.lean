@@ -235,7 +235,8 @@ theorem stepDebit_provenance (hq : 2 * P.SLOTS_PER_EPOCH ≤ P.EFFECTIVE_BALANCE
     ∃ s1 s2 : Gloas.BeaconState P,
       Gloas.processParentExecutionPayload (gloasCtx ccfg bls) D.postSlots D.block.message = .ok s1 ∧
       Gloas.processBlockHeader s1 D.block.message = .ok s2 ∧
-      ((∃ (k : Nat) (e : Gloas.BuilderPendingWithdrawal), s2.builder_pending_withdrawals.toArray[k]? = some e ∧ w.address = e.fee_recipient ∧
+      ((∃ (k : Nat) (e : Gloas.BuilderPendingWithdrawal), s2.builder_pending_withdrawals.toArray[k]? = some e ∧
+          w.address = e.fee_recipient ∧
           w.amount = e.amount ∧ Gloas.convertBuilderIndexToValidatorIndex e.builder_index = .ok w.validator_index ∧
           Src D.preB e) ∨
         (∃ (bj : Gloas.BuilderIndex) (bb : Gloas.Builder) (ep : Epoch) (pre post : List JauneConsensus.Withdrawal),
@@ -257,7 +258,7 @@ theorem stepDebit_provenance (hq : 2 * P.SLOTS_PER_EPOCH ≤ P.EFFECTIVE_BALANCE
   refine ⟨s1, s2, h1, h2, ?_⟩
   simp only [stepWithdrawals, h1, h2, bind, Except.bind] at hws
   split at hws
-  · cases hws; simp at hw
+  · cases hws; simp only [List.not_mem_nil] at hw
   obtain ⟨ex, hex, hws⟩ := Except.bind_eq_ok hws
   cases hws
   unfold Gloas.getExpectedWithdrawals at hex
@@ -270,26 +271,31 @@ theorem stepDebit_provenance (hq : 2 * P.SLOTS_PER_EPOCH ≤ P.EFFECTIVE_BALANCE
   have hval : ∀ (l : Array JauneConsensus.Withdrawal),
       (keepAll (fun w => w.validator_index.toNat < s2.validators.toArray.size)).R #[] l →
       w ∈ l.toList → False := fun l hk hm =>
-    not_routes_of_lt (Nat.lt_of_lt_of_le (hk (fun _ hv => by simp at hv) w hm) vb) hr
+    not_routes_of_lt (Nat.lt_of_lt_of_le (hk (fun _ hv => by simp only [List.not_mem_nil] at hv) w hm) vb) hr
   rcases hw with ((hw | hw) | hw) | hw
   · obtain ⟨-, prov⟩ := getBuilderWithdrawals_provenance e1
     obtain ⟨k, hk, rfl⟩ := List.getElem_of_mem hw
-    have hk' : k < bw.size := by simpa using hk
+    have hk' : k < bw.size := by simpa only [Array.length_toList] using hk
     obtain ⟨e, he, ha, hm, hcv⟩ := prov k hk'
-    exact Or.inl ⟨k, e, he, by simpa using ha, by simpa using hm, by simpa using hcv,
+    exact Or.inl ⟨k, e, he, by simpa only [Array.getElem_toList] using ha,
+      by simpa only [Array.getElem_toList] using hm, by simpa only [ExceptT.stM_eq, Array.getElem_toList] using hcv,
       hsrc e (Or.inl (mem_of_getElem?' he))⟩
   · exact (hval pw (getPendingPartialWithdrawals_inRange _ _ _ _ e2) hw).elim
   · obtain ⟨k, hk, rfl⟩ := List.getElem_of_mem hw
-    have hk' : k < sw.size := by simpa using hk
+    have hk' : k < sw.size := by simpa only [Array.length_toList] using hk
     obtain ⟨bj, bb, ep, hep, hcv, hbb, hwe, hadr, hbal, hpos⟩ := getBuildersSweepWithdrawals_provenance e3 k hk'
     have hpre : (bw.toList ++ pw.toList ++ sw.toList.take k).toArray = #[] ++ bw ++ pw ++ sw.extract 0 k := by
       apply Array.toList_inj.mp
-      simp [Array.toList_extract, List.extract]
+      simp only [List.append_assoc, Array.empty_append, Array.append_assoc, Array.toList_append,
+        Array.toList_extract, List.extract, tsub_zero, List.drop_zero]
     have hsw := List.take_append_drop k sw.toList
     rw [List.drop_eq_getElem_cons hk] at hsw
     refine Or.inr ⟨bj, bb, ep, bw.toList ++ pw.toList ++ sw.toList.take k, sw.toList.drop (k + 1) ++ vw.toList,
-      by simpa using hcv, hbb, hep, hwe, by simpa using hadr, ?_, by rw [hpre]; simpa using hbal,
-      by simpa using hpos⟩
+      by simpa only [ExceptT.stM_eq, Array.getElem_toList] using hcv, hbb, hep, hwe,
+      by simpa only [Array.getElem_toList] using hadr, ?_,
+      by rw [hpre]
+         simpa only [ExceptT.stM_eq, Array.empty_append, Array.append_assoc, Array.getElem_toList] using hbal,
+      by simpa only [Array.getElem_toList] using hpos⟩
     simp only [Array.toList_append, List.nil_append, List.append_assoc]
     conv_lhs => rw [← hsw]
     simp only [List.append_assoc, List.cons_append]
@@ -334,7 +340,8 @@ theorem builder_withdrawal_provenance (v : ValidJointG cfg ccfg bls checkpoint a
     ∃ s1 s2 : Gloas.BeaconState P,
       Gloas.processParentExecutionPayload (gloasCtx ccfg bls) D.postSlots D.block.message = .ok s1 ∧
       Gloas.processBlockHeader s1 D.block.message = .ok s2 ∧
-      ((∃ (k : Nat) (e : Gloas.BuilderPendingWithdrawal), s2.builder_pending_withdrawals.toArray[k]? = some e ∧ w.address = e.fee_recipient ∧
+      ((∃ (k : Nat) (e : Gloas.BuilderPendingWithdrawal), s2.builder_pending_withdrawals.toArray[k]? = some e ∧
+          w.address = e.fee_recipient ∧
           w.amount = e.amount ∧ Gloas.convertBuilderIndexToValidatorIndex e.builder_index = .ok w.validator_index ∧
           (BidPayment v.run.steps j e ∨ AnchorEntryWitnessed anchor v.anchorWitness e)) ∨
         (∃ (bj : Gloas.BuilderIndex) (bb : Gloas.Builder) (ep : Epoch) (pre post : List JauneConsensus.Withdrawal),

@@ -28,7 +28,7 @@ open Jaune JauneConsensus ChainLink
 /-- Little-endian decoding of `l ++ [b]`. -/
 theorem leNat_append_singleton : ∀ (l : Bytes) (b : UInt8),
     leNat (l ++ [b]) = leNat l + 256 ^ l.length * b.toNat
-  | [], b => by simp [leNat]
+  | [], b => by simp only [List.nil_append, leNat, mul_zero, add_zero, List.length_nil, pow_zero, one_mul, zero_add]
   | x :: l, b => by
     simp only [List.cons_append, leNat, leNat_append_singleton l b, List.length_cons, Nat.pow_succ]
     ring
@@ -36,7 +36,7 @@ theorem leNat_append_singleton : ∀ (l : Bytes) (b : UInt8),
 /-- The big-endian accumulator, in terms of little-endian decoding of the reversed bytes. -/
 theorem toNat_aux_eq : ∀ (acc : Nat) (bs : Bytes),
     Bytes.toNat.aux acc bs = acc * 256 ^ bs.length + leNat bs.reverse
-  | acc, [] => by simp [Bytes.toNat.aux, leNat]
+  | acc, [] => by simp only [Bytes.toNat.aux, List.length_nil, pow_zero, mul_one, List.reverse_nil, leNat, add_zero]
   | acc, b :: bs => by
     simp only [Bytes.toNat.aux, toNat_aux_eq _ bs, List.reverse_cons, leNat_append_singleton,
       List.length_reverse, List.length_cons, Nat.pow_succ]
@@ -45,7 +45,7 @@ theorem toNat_aux_eq : ∀ (acc : Nat) (bs : Bytes),
 /-- **Big-endian is little-endian of the reverse.** -/
 theorem leNat_reverse (bs : Bytes) : leNat bs.reverse = Bytes.toNat bs := by
   rw [Bytes.toNat, toNat_aux_eq]
-  simp
+  simp only [zero_mul, zero_add]
 
 /-- An 8-byte scope decodes as a `uint64` to its little-endian value. -/
 theorem deserialize_u64_ok {bs : Bytes} (h : bs.length = 8) :
@@ -65,7 +65,7 @@ theorem mapM_except_ok {α β ε : Type} (f : α → Except ε β) :
   | a :: l, h => by
     obtain ⟨b, hb⟩ := h a List.mem_cons_self
     obtain ⟨bs, hbs, hl⟩ := mapM_except_ok f l fun x hx => h x (List.mem_cons_of_mem _ hx)
-    refine ⟨b :: bs, ?_, by simp [hl]⟩
+    refine ⟨b :: bs, ?_, by simp only [List.length_cons, hl]⟩
     rw [List.mapM_cons, hb, hbs]
     rfl
 
@@ -89,7 +89,7 @@ theorem deserialize_byteVector_ok {n : Nat} (hn : n ≠ 0) {bs : Bytes} (h : bs.
       Nat.div_one, bind, Except.bind, pure, Except.pure]
     rw [hys]
   rw [hseq]
-  have hs : ys.toArray.size = n := by simp [hl]
+  have hs : ys.toArray.size = n := by simp only [List.size_toArray, hl, List.length_range]
   exact ⟨⟨ys.toArray, hs⟩, by simp only [bind, Except.bind, hs, ↓reduceDIte]; rfl⟩
 
 /-- **The fixed 184-byte `BuilderDepositRequest` layout decodes field by field.** -/
@@ -101,15 +101,22 @@ theorem deserialize_builderDepositRequest {pk cr am sg : Bytes} (hpk : pk.length
   obtain ⟨vpk, hvpk⟩ := deserialize_byteVector_ok (n := 48) (by decide) hpk
   obtain ⟨vsg, hvsg⟩ := deserialize_byteVector_ok (n := 96) (by decide) hsg
   obtain ⟨a, ha, -⟩ := deserialize_u64_ok ham
-  have hlen : (pk ++ cr ++ am ++ sg).length = 184 := by simp [hpk, hcr, ham, hsg]
+  have hlen : (pk ++ cr ++ am ++ sg).length = 184 := by simp only [List.append_assoc, List.length_append, hpk, hcr,
+      ham, hsg, Nat.reduceAdd]
   have s0 : slice (pk ++ cr ++ am ++ sg).toArray 0 (0 + 48) = pk := by
-    rw [slice_eq_take_drop]; simp [hpk]
+    rw [slice_eq_take_drop]; simp only [zero_add, tsub_zero, List.append_assoc, List.drop_zero, hpk, List.take_left']
   have s1 : slice (pk ++ cr ++ am ++ sg).toArray (0 + 48) (0 + 48 + 32) = cr := by
-    rw [slice_eq_take_drop]; simp [hpk, hcr]
+    rw [slice_eq_take_drop]; simp only [zero_add, Nat.reduceAdd, Nat.reduceSub, List.append_assoc, hpk,
+        List.drop_left', hcr, List.take_left']
   have s2 : slice (pk ++ cr ++ am ++ sg).toArray (0 + 48 + 32) (0 + 48 + 32 + 8) = am := by
-    rw [slice_eq_take_drop]; simp [List.drop_append, List.drop_eq_nil_of_le, hpk, hcr, ham]
+    rw [slice_eq_take_drop]
+    simp only [zero_add, Nat.reduceAdd, Nat.reduceSub, List.append_assoc, List.drop_append, hpk, Nat.reduceLeDiff,
+      List.drop_eq_nil_of_le, hcr, List.nil_append, ham, List.drop_zero, List.take_left']
   have s3 : slice (pk ++ cr ++ am ++ sg).toArray (0 + 48 + 32 + 8) (0 + 48 + 32 + 8 + 96) = sg := by
-    rw [slice_eq_take_drop]; simp [List.drop_append, List.drop_eq_nil_of_le, hpk, hcr, ham, hsg]
+    rw [slice_eq_take_drop]
+    simp only [zero_add, Nat.reduceAdd, Nat.reduceSub, List.append_assoc, List.drop_append, hpk, Nat.reduceLeDiff,
+      List.drop_eq_nil_of_le, hcr, List.nil_append, ham, List.drop_zero]
+    exact List.take_of_length_le (by rw [hsg])
   refine ⟨⟨vpk, Bytes.toB256 cr, a, vsg⟩, ?_, ha⟩
   show (do
     let scopes ← splitContainer (pk ++ cr ++ am ++ sg)
