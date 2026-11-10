@@ -31,6 +31,7 @@ import Blanc.Composition.BuilderRequestJointGConservation
 import Blanc.Composition.BuilderRequestJointGExitAuth
 import Blanc.Composition.BuilderRequestJointGFate
 import Blanc.Composition.BuilderRequestJointGPayments
+import Blanc.Composition.BuilderRequestJointGPaymentsAnchor
 import Blanc.Composition.BuilderRequestJointGPaymentsBlock
 import Blanc.Composition.BuilderRequestJointGPaymentsTrack
 import Blanc.Composition.BuilderRequestJointGPosition

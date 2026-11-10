@@ -139,7 +139,7 @@ theorem slot_lt' {a b : Nat} {A B : GloasStepData (P := P) cfg ccfg bls}
 
 /-- **Liveness only ends along the run** (for a payment of a slot not after step `a`'s). -/
 theorem live_chain (hspe : 0 < P.SLOTS_PER_EPOCH) {s : Nat} {w : Gloas.BuilderPendingWithdrawal}
-    (hw : U64.zero < w.amount) {a : Nat} {A : GloasStepData (P := P) cfg ccfg bls}
+    {a : Nat} {A : GloasStepData (P := P) cfg ccfg bls}
     (hA : run.steps[a]? = some (.gloas A)) (hs : s ≤ A.block.message.slot.toNat + P.SLOTS_PER_EPOCH) :
     ∀ d (B : GloasStepData (P := P) cfg ccfg bls), run.steps[a + d]? = some (.gloas B) →
       LiveAt s w B.postB → LiveAt s w A.postB
@@ -150,17 +150,17 @@ theorem live_chain (hspe : 0 < P.SLOTS_PER_EPOCH) {s : Nat} {w : Gloas.BuilderPe
     obtain ⟨B', hB', hpre⟩ := gloas_succ run hC hB
     cases hB'
     have hlt := slot_lt run hA d B hB
-    have := B.live_back hspe hw (by omega) hl
+    have := B.live_back hspe (by omega) hl
     rw [hpre] at this
-    exact live_chain hspe hw hA hs d C hC this
+    exact live_chain hspe hA hs d C hC this
 
 theorem live_chain' (hspe : 0 < P.SLOTS_PER_EPOCH) {s : Nat} {w : Gloas.BuilderPendingWithdrawal}
-    (hw : U64.zero < w.amount) {a b : Nat} {A B : GloasStepData (P := P) cfg ccfg bls}
+    {a b : Nat} {A B : GloasStepData (P := P) cfg ccfg bls}
     (hA : run.steps[a]? = some (.gloas A)) (hB : run.steps[b]? = some (.gloas B)) (hab : a ≤ b)
     (hs : s ≤ A.block.message.slot.toNat + P.SLOTS_PER_EPOCH) (hl : LiveAt s w B.postB) :
     LiveAt s w A.postB := by
   obtain ⟨d, rfl⟩ : ∃ d, b = a + d := ⟨b - a, by omega⟩
-  exact live_chain run hspe hw hA hs d B hB hl
+  exact live_chain run hspe hA hs d B hB hl
 
 /-- The run ends at the last step's post-state, a Gloas state after a Gloas step. -/
 theorem final_of {a : Nat} {A : GloasStepData (P := P) cfg ccfg bls}
@@ -211,8 +211,7 @@ theorem pred_step (stepD : run.steps[j]? = some (.gloas D)) {i : Nat}
   exact ⟨C, hC, hpre⟩
 
 /-- Live at a later step's pre-state: live after every step from the creating one on. -/
-theorem before_live (hspe : 0 < P.SLOTS_PER_EPOCH) (hw : U64.zero < D.payW.amount)
-    (stepD : run.steps[j]? = some (.gloas D)) {i : Nat}
+theorem before_live (hspe : 0 < P.SLOTS_PER_EPOCH) (stepD : run.steps[j]? = some (.gloas D)) {i : Nat}
     {B : GloasStepData (P := P) cfg ccfg bls} (hB : run.steps[i]? = some (.gloas B)) (hji : j < i)
     (hl : LiveAt D.paySlot D.payW B.preB) :
     ∀ i' (B' : GloasStepData (P := P) cfg ccfg bls), run.steps[i']? = some (.gloas B') → j ≤ i' →
@@ -220,17 +219,16 @@ theorem before_live (hspe : 0 < P.SLOTS_PER_EPOCH) (hw : U64.zero < D.payW.amoun
   intro i' B' hB' hj' hi'
   obtain ⟨C, hC, hpre⟩ := pred_step stepD hB hji
   rw [hpre] at hl
-  exact live_chain' run hspe hw hB' hC (by omega) (paySlot_le stepD hB' hj') hl
+  exact live_chain' run hspe hB' hC (by omega) (paySlot_le stepD hB' hj') hl
 
-theorem postB_to_postSlots (hspe : 0 < P.SLOTS_PER_EPOCH) (hw : U64.zero < D.payW.amount) (stepD : run.steps[j]? = some (.gloas D))
+theorem postB_to_postSlots (hspe : 0 < P.SLOTS_PER_EPOCH) (stepD : run.steps[j]? = some (.gloas D))
     {i : Nat} {B : GloasStepData (P := P) cfg ccfg bls} (hB : run.steps[i]? = some (.gloas B))
     (hji : j < i) (hl : LiveAt D.paySlot D.payW B.postB) : LiveAt D.paySlot D.payW B.postSlots :=
-  (block_track hspe hw B.processBlock (by have := paySlot_lt stepD hB hji; omega)).1 hl
+  (block_track hspe B.processBlock (by have := paySlot_lt stepD hB hji; omega)).1 hl
 
-theorem postSlots_to_preB (hspe : 0 < P.SLOTS_PER_EPOCH) (hw : U64.zero < D.payW.amount)
-    {B : GloasStepData (P := P) cfg ccfg bls} (hl : LiveAt D.paySlot D.payW B.postSlots) :
+theorem postSlots_to_preB (hspe : 0 < P.SLOTS_PER_EPOCH) {B : GloasStepData (P := P) cfg ccfg bls} (hl : LiveAt D.paySlot D.payW B.postSlots) :
     LiveAt D.paySlot D.payW B.preB :=
-  slotLoop_live_back hspe hw _ _ _ (processSlots_slotLoop B.slots).2 hl
+  slotLoop_live_back hspe _ _ _ (processSlots_slotLoop B.slots).2 hl
 
 /-- The index of the step at which a non-appending-by-the-old-parent destination ends the
 payment. -/
@@ -245,8 +243,7 @@ def PaymentFate.flipIdx? {s₀ sf : GJointState P} {run : GJointRun cfg ccfg bls
 
 /-- **Each such destination ends the payment at its step, and only there**: not live after that
 step, live after every earlier step from the creating one. -/
-theorem flip_index (hspe : 0 < P.SLOTS_PER_EPOCH) (hw : U64.zero < D.payW.amount)
-    (stepD : run.steps[j]? = some (.gloas D)) {f : PaymentFate run j} (hf : f.holdsFor D) {i : Nat}
+theorem flip_index (hspe : 0 < P.SLOTS_PER_EPOCH) (stepD : run.steps[j]? = some (.gloas D)) {f : PaymentFate run j} (hf : f.holdsFor D) {i : Nat}
     (hi : f.flipIdx? = some i) :
     j ≤ i ∧ (∃ B, run.steps[i]? = some (.gloas B) ∧ ¬ LiveAt D.paySlot D.payW B.postB) ∧
       ∀ i' (B' : GloasStepData (P := P) cfg ccfg bls), run.steps[i']? = some (.gloas B') → j ≤ i' →
@@ -258,8 +255,8 @@ theorem flip_index (hspe : 0 < P.SLOTS_PER_EPOCH) (hw : U64.zero < D.payW.amount
         i' < i → LiveAt D.paySlot D.payW B'.postB := by
     intro b B hB hji hr
     refine ⟨hji.le, ⟨B, hB, fun hl => not_liveAt_of_none (B.rotQ_end hr)
-      (postB_to_postSlots hspe hw stepD hB hji hl)⟩, before_live hspe hw stepD hB hji ?_⟩
-    exact rotEval_live hspe hw _ _ hr
+      (postB_to_postSlots hspe stepD hB hji hl)⟩, before_live hspe stepD hB hji ?_⟩
+    exact rotEval_live hspe _ _ hr
   cases f with
   | quorum i₀ =>
     cases hi
@@ -276,17 +273,17 @@ theorem flip_index (hspe : 0 < P.SLOTS_PER_EPOCH) (hw : U64.zero < D.payW.amount
     rw [show j + 1 - 1 = j by omega, stepD] at hC; cases hC
     have hps : D.paySlot = B.postSlots.latest_block_header.slot.toNat + P.SLOTS_PER_EPOCH := by
       rw [B.postSlots_lbh, hpre, D.postB_slot.2, paySlot_eq]
-    refine ⟨by omega, ⟨B, hB, (settle_excl hspe hw B.processBlock
+    refine ⟨by omega, ⟨B, hB, (settle_excl hspe B.processBlock
       (by have := paySlot_lt stepD hB (by omega); omega) hfull hps hl).2⟩,
-      before_live hspe hw stepD hB (by omega) (postSlots_to_preB hspe hw hl)⟩
+      before_live hspe stepD hB (by omega) (postSlots_to_preB hspe hl)⟩
   | clearedBySlash i₀ =>
     cases hi
     obtain ⟨hji, ⟨B, hB, hc⟩, -⟩ := hf
     refine ⟨hji, ⟨B, hB, opsClear_end B.processBlock hc⟩, ?_⟩
     rcases Nat.eq_or_lt_of_le hji with rfl | hlt
     · intro i' _ _ h1 h2; omega
-    · exact before_live hspe hw stepD hB hlt (postSlots_to_preB hspe hw
-        (opsClear_live hspe hw (by have := paySlot_lt stepD hB hlt; omega) hc))
+    · exact before_live hspe stepD hB hlt (postSlots_to_preB hspe
+        (opsClear_live hspe (by have := paySlot_lt stepD hB hlt; omega) hc))
   | directAppend _ => cases hi
   | pendingAtEnd => cases hi
 
@@ -303,7 +300,6 @@ variable {s₀ sf : GJointState P} {run : GJointRun cfg ccfg bls s₀ sf} {j : N
 theorem fate_exists (hspe : 0 < P.SLOTS_PER_EPOCH) (hv : U64.zero < D.bid.value)
     (stepD : run.steps[j]? = some (.gloas D)) : ∃ f : PaymentFate run j, f.holdsFor D := by
   classical
-  have hw : U64.zero < D.payW.amount := hv
   by_cases hd : DirectAppendAt run j D
   · exact ⟨.directAppend (j + 1), rfl, hd⟩
   by_cases hall : ∀ i (B : GloasStepData (P := P) cfg ccfg bls), run.steps[i]? = some (.gloas B) →
@@ -339,7 +335,7 @@ theorem fate_exists (hspe : 0 < P.SLOTS_PER_EPOCH) (hv : U64.zero < D.bid.value)
       by_contra hc
       exact hmin (i - 1) (by omega) ⟨C, hC, by omega, hc⟩
     rw [← hpre] at hlC
-    rcases B.flip_cases hspe hw (paySlot_lt stepD hB hlt) hlC hn with h | h | ⟨hf, hps, hl⟩ | h
+    rcases B.flip_cases hspe (paySlot_lt stepD hB hlt) hlC hn with h | h | ⟨hf, hps, hl⟩ | h
     · exact ⟨.quorum i, hlt, B, hB, h⟩
     · exact ⟨.droppedSubQuorum i, hlt, ⟨B, hB, h⟩, hd⟩
     · have hps' : D.paySlot = C.block.message.slot.toNat + P.SLOTS_PER_EPOCH := by
@@ -356,8 +352,7 @@ theorem rot_vs_live {B : GloasStepData (P := P) cfg ccfg bls} {b : Bool}
   not_liveAt_of_none (B.rotQ_end hr) hl
 
 /-- Two destinations ending the payment at the same step are the same. -/
-theorem same_index (hspe : 0 < P.SLOTS_PER_EPOCH) (hw : U64.zero < D.payW.amount)
-    (stepD : run.steps[j]? = some (.gloas D)) {f g : PaymentFate run j} {i : Nat}
+theorem same_index (hspe : 0 < P.SLOTS_PER_EPOCH) (stepD : run.steps[j]? = some (.gloas D)) {f g : PaymentFate run j} {i : Nat}
     (hfi : f.flipIdx? = some i) (hgi : g.flipIdx? = some i) (hf : f.holdsFor D) (hg : g.holdsFor D) :
     f = g := by
   have hne : ∀ {B : GloasStepData (P := P) cfg ccfg bls}, run.steps[i]? = some (.gloas B) → j < i →
@@ -369,7 +364,7 @@ theorem same_index (hspe : 0 < P.SLOTS_PER_EPOCH) (hw : U64.zero < D.payW.amount
       OpsClear (gloasCtx ccfg bls) D.paySlot D.payW B'.postSlots B'.block.message → False := by
     intro b B B' hB hB' hlt hr hc
     rw [hB] at hB'; cases hB'
-    exact rot_vs_live hr (opsClear_live hspe hw (hne hB hlt) hc)
+    exact rot_vs_live hr (opsClear_live hspe (hne hB hlt) hc)
   have rs : ∀ {b : Bool} {B B' : GloasStepData (P := P) cfg ccfg bls}, run.steps[i]? = some (.gloas B) →
       run.steps[i]? = some (.gloas B') → B.RotQ D.paySlot D.payW b →
       LiveAt D.paySlot D.payW B'.postSlots → False := by
@@ -386,7 +381,7 @@ theorem same_index (hspe : 0 < P.SLOTS_PER_EPOCH) (hw : U64.zero < D.payW.amount
     rw [hi, show j + 1 - 1 = j by omega, stepD] at hC; cases hC
     have hps : D.paySlot = B.postSlots.latest_block_header.slot.toNat + P.SLOTS_PER_EPOCH := by
       rw [B.postSlots_lbh, hpre, D.postB_slot.2, paySlot_eq]
-    exact (settle_excl hspe hw B.processBlock (hne hB (by omega)) hfull hps hl).1 hc
+    exact (settle_excl hspe B.processBlock (hne hB (by omega)) hfull hps hl).1 hc
   cases f <;> cases g <;> simp only [PaymentFate.flipIdx?, Option.some.injEq, reduceCtorEq] at hfi hgi
   all_goals subst hfi; subst hgi
   all_goals first
@@ -413,14 +408,13 @@ theorem same_index (hspe : 0 < P.SLOTS_PER_EPOCH) (hw : U64.zero < D.payW.amount
            exact sc hi hB hB' hfull hl hc)
 
 /-- The direct append ends the payment by the next step. -/
-theorem direct_dead (hspe : 0 < P.SLOTS_PER_EPOCH) (hw : U64.zero < D.payW.amount) (stepD : run.steps[j]? = some (.gloas D))
+theorem direct_dead (hspe : 0 < P.SLOTS_PER_EPOCH) (stepD : run.steps[j]? = some (.gloas D))
     {D' : GloasStepData (P := P) cfg ccfg bls} (hD' : run.steps[j + 1]? = some (.gloas D'))
     (hnone : payIdx D.paySlot D'.postSlots = none) : ¬ LiveAt D.paySlot D.payW D'.postB :=
-  fun hl => not_liveAt_of_none hnone (postB_to_postSlots hspe hw stepD hD' (by omega) hl)
+  fun hl => not_liveAt_of_none hnone (postB_to_postSlots hspe stepD hD' (by omega) hl)
 
 /-- Liveness at the run's end reaches back to every step from the creating one. -/
-theorem final_live (hspe : 0 < P.SLOTS_PER_EPOCH) (hw : U64.zero < D.payW.amount)
-    (stepD : run.steps[j]? = some (.gloas D)) {b : Gloas.BeaconState P} {e : BlockChain}
+theorem final_live (hspe : 0 < P.SLOTS_PER_EPOCH) (stepD : run.steps[j]? = some (.gloas D)) {b : Gloas.BeaconState P} {e : BlockChain}
     {p : ParentPayload P} (hsf : sf = .gloas b e p) (hl : LiveAt D.paySlot D.payW b) {i : Nat}
     {B : GloasStepData (P := P) cfg ccfg bls} (hB : run.steps[i]? = some (.gloas B)) (hji : j ≤ i) :
     LiveAt D.paySlot D.payW B.postB := by
@@ -429,21 +423,20 @@ theorem final_live (hspe : 0 < P.SLOTS_PER_EPOCH) (hw : U64.zero < D.payW.amount
   simp only [GJointState.gloas.injEq] at hsf'
   rw [hsf'.1] at hl
   have := (List.getElem?_eq_some_iff.mp hB).1
-  exact live_chain' run hspe hw hB hBn (by omega) (paySlot_le stepD hB hji) hl
+  exact live_chain' run hspe hB hBn (by omega) (paySlot_le stepD hB hji) hl
 
 /-- The direct append or the end state against a destination that ends the payment at a step. -/
 theorem none_vs_some (hspe : 0 < P.SLOTS_PER_EPOCH)
-    (hq : 2 * P.SLOTS_PER_EPOCH ≤ P.EFFECTIVE_BALANCE_INCREMENT) (hw : U64.zero < D.payW.amount)
-    (stepD : run.steps[j]? = some (.gloas D))
+    (hq : 2 * P.SLOTS_PER_EPOCH ≤ P.EFFECTIVE_BALANCE_INCREMENT) (stepD : run.steps[j]? = some (.gloas D))
     (hinv : ∀ D' : GloasStepData (P := P) cfg ccfg bls, run.steps[j + 1]? = some (.gloas D') →
       NoLiveWeightOnLatestBid D'.preB ∧ FutureEmpty D'.preB)
     {f g : PaymentFate run j} (hgi : g.flipIdx? = none) (hg : g.holdsFor D) {i : Nat}
     (hfi : f.flipIdx? = some i) (hf : f.holdsFor D) : False := by
-  obtain ⟨hji, ⟨B, hB, hn⟩, hm⟩ := flip_index hspe hw stepD hf hfi
+  obtain ⟨hji, ⟨B, hB, hn⟩, hm⟩ := flip_index hspe stepD hf hfi
   cases g <;> simp only [PaymentFate.flipIdx?, reduceCtorEq] at hgi
   · -- direct append
     obtain ⟨-, D', hD', hfull, hnone⟩ := hg
-    have hdead := direct_dead hspe hw stepD hD' hnone
+    have hdead := direct_dead hspe stepD hD' hnone
     cases f <;> simp only [PaymentFate.flipIdx?, Option.some.injEq, reduceCtorEq] at hfi
     · subst hfi
       obtain ⟨hlt, B₁, hB₁, hr⟩ := hf
@@ -464,10 +457,9 @@ theorem none_vs_some (hspe : 0 < P.SLOTS_PER_EPOCH)
     · exact hf.2.2 ⟨D', hD', hfull, hnone⟩
   · -- the end state
     obtain ⟨b, e, p, hsf, hl⟩ := hg
-    exact hn (final_live hspe hw stepD hsf hl hB hji)
+    exact hn (final_live hspe stepD hsf hl hB hji)
 
-theorem none_none (hspe : 0 < P.SLOTS_PER_EPOCH) (hw : U64.zero < D.payW.amount)
-    (stepD : run.steps[j]? = some (.gloas D)) {f g : PaymentFate run j}
+theorem none_none (hspe : 0 < P.SLOTS_PER_EPOCH) (stepD : run.steps[j]? = some (.gloas D)) {f g : PaymentFate run j}
     (hfi : f.flipIdx? = none) (hgi : g.flipIdx? = none) (hf : f.holdsFor D) (hg : g.holdsFor D) :
     f = g := by
   have dp : ∀ {j' : Nat}, (PaymentFate.directAppend j' : PaymentFate run j).holdsFor D →
@@ -475,7 +467,7 @@ theorem none_none (hspe : 0 < P.SLOTS_PER_EPOCH) (hw : U64.zero < D.payW.amount)
     intro j' hd hp
     obtain ⟨-, D', hD', -, hnone⟩ := hd
     obtain ⟨b, e, p, hsf, hl⟩ := hp
-    exact direct_dead hspe hw stepD hD' hnone (final_live hspe hw stepD hsf hl hD' (by omega))
+    exact direct_dead hspe stepD hD' hnone (final_live hspe stepD hsf hl hD' (by omega))
   cases f <;> cases g <;> simp only [PaymentFate.flipIdx?, reduceCtorEq] at hfi hgi
   · obtain ⟨rfl, -⟩ := hf; obtain ⟨rfl, -⟩ := hg; rfl
   · exact (dp hf hg).elim
@@ -484,30 +476,29 @@ theorem none_none (hspe : 0 < P.SLOTS_PER_EPOCH) (hw : U64.zero < D.payW.amount)
 
 /-- **Exclusivity.** -/
 theorem fate_unique (hspe : 0 < P.SLOTS_PER_EPOCH)
-    (hq : 2 * P.SLOTS_PER_EPOCH ≤ P.EFFECTIVE_BALANCE_INCREMENT) (hv : U64.zero < D.bid.value)
+    (hq : 2 * P.SLOTS_PER_EPOCH ≤ P.EFFECTIVE_BALANCE_INCREMENT)
     (stepD : run.steps[j]? = some (.gloas D))
     (hinv : ∀ D' : GloasStepData (P := P) cfg ccfg bls, run.steps[j + 1]? = some (.gloas D') →
       NoLiveWeightOnLatestBid D'.preB ∧ FutureEmpty D'.preB)
     {f g : PaymentFate run j} (hf : f.holdsFor D) (hg : g.holdsFor D) : f = g := by
-  have hw : U64.zero < D.payW.amount := hv
   cases hfi : f.flipIdx? with
   | some i =>
     cases hgi : g.flipIdx? with
     | some i' =>
-      obtain ⟨hj1, ⟨B, hB, hn⟩, hm⟩ := flip_index hspe hw stepD hf hfi
-      obtain ⟨hj2, ⟨B', hB', hn'⟩, hm'⟩ := flip_index hspe hw stepD hg hgi
+      obtain ⟨hj1, ⟨B, hB, hn⟩, hm⟩ := flip_index hspe stepD hf hfi
+      obtain ⟨hj2, ⟨B', hB', hn'⟩, hm'⟩ := flip_index hspe stepD hg hgi
       have hii : i = i' := by
         rcases lt_trichotomy i i' with h | h | h
         · exact absurd (hm' i B hB hj1 h) hn
         · exact h
         · exact absurd (hm i' B' hB' hj2 h) hn'
       subst hii
-      exact same_index hspe hw stepD hfi hgi hf hg
-    | none => exact (none_vs_some hspe hq hw stepD hinv hgi hg hfi hf).elim
+      exact same_index hspe stepD hfi hgi hf hg
+    | none => exact (none_vs_some hspe hq stepD hinv hgi hg hfi hf).elim
   | none =>
     cases hgi : g.flipIdx? with
-    | some i' => exact (none_vs_some hspe hq hw stepD hinv hfi hf hgi hg).elim
-    | none => exact none_none hspe hw stepD hfi hgi hf hg
+    | some i' => exact (none_vs_some hspe hq stepD hinv hfi hf hgi hg).elim
+    | none => exact none_none hspe stepD hfi hgi hf hg
 
 /-- **B5(iii), run form: exactly one destination.** -/
 theorem payment_fate_run (hspe : 0 < P.SLOTS_PER_EPOCH)
@@ -520,7 +511,7 @@ theorem payment_fate_run (hspe : 0 < P.SLOTS_PER_EPOCH)
   refine ⟨f, ⟨D, stepD, hf⟩, fun g hg => ?_⟩
   obtain ⟨D', hD', hg⟩ := hg
   rw [stepD] at hD'; cases hD'
-  exact fate_unique hspe hq hv stepD hinv hg hf
+  exact fate_unique hspe hq stepD hinv hg hf
 
 end Main
 
@@ -565,12 +556,12 @@ theorem payment_fate (v : ValidJointG cfg ccfg bls checkpoint anchor final) {j :
 `builder_pending_withdrawals` at most once along the run. -/
 theorem payment_at_most_one_append (v : ValidJointG cfg ccfg bls checkpoint anchor final) {j : Nat}
     {D : GloasStepData (P := P) cfg ccfg bls} (stepD : v.run.steps[j]? = some (.gloas D))
-    (bid : U64.zero < D.bid.value ∧ D.bid.builder_index ≠ Gloas.BUILDER_INDEX_SELF_BUILD) :
+    (_bid : U64.zero < D.bid.value ∧ D.bid.builder_index ≠ Gloas.BUILDER_INDEX_SELF_BUILD) :
     paymentAppends v.run j D ≤ 1 := by
   classical
   have hspe : 0 < P.SLOTS_PER_EPOCH := by have := v.slotsPerEpoch; omega
   have uq : ∀ {f g : PaymentFate v.run j}, f.holdsFor D → g.holdsFor D → f = g :=
-    fun hf hg => fate_unique hspe v.quorumPositive bid.1 stepD (fun _ hD' => v.latest_inv hD') hf hg
+    fun hf hg => fate_unique hspe v.quorumPositive stepD (fun _ hD' => v.latest_inv hD') hf hg
   -- at one step, at most one appending destination
   have le1 : ∀ i, paymentAppendsAt v.run j D i ≤ 1 := by
     intro i

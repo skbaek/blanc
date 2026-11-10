@@ -230,10 +230,14 @@ theorem payIdx_shift (hspe : 0 < P.SLOTS_PER_EPOCH) (t : Nat) (st : Gloas.Beacon
 def cell (s : Nat) (st : Gloas.BeaconState P) : Option Gloas.BuilderPendingPayment :=
   (payIdx s st).bind fun k => st.builder_pending_payments.toArray[k]?
 
-/-- **The payment of a bid at slot `s` recording withdrawal `w` is live at `st`**: the entry at
-its window index carries `w`. -/
+/-- An entry is the tracked payment's: non-empty, carrying the withdrawal `w`. -/
+def Ours (w : Gloas.BuilderPendingWithdrawal) (p : Gloas.BuilderPendingPayment) : Prop :=
+  p ≠ Gloas.BuilderPendingPayment.empty ∧ p.withdrawal = w
+
+/-- **The payment of virtual slot `s` recording withdrawal `w` is live at `st`**: the entry at its
+window index is non-empty and carries `w`. -/
 def LiveAt (s : Nat) (w : Gloas.BuilderPendingWithdrawal) (st : Gloas.BeaconState P) : Prop :=
-  ∃ p, cell s st = some p ∧ p.withdrawal = w
+  ∃ p, cell s st = some p ∧ Ours w p
 
 theorem not_liveAt_of_none {s : Nat} {w : Gloas.BuilderPendingWithdrawal} {st : Gloas.BeaconState P}
     (h : payIdx s st = none) : ¬ LiveAt s w st := by
@@ -241,12 +245,11 @@ theorem not_liveAt_of_none {s : Nat} {w : Gloas.BuilderPendingWithdrawal} {st : 
   simp [cell, h] at hp
 
 theorem not_liveAt_of_empty {s : Nat} {w : Gloas.BuilderPendingWithdrawal} {st : Gloas.BeaconState P}
-    (hw : U64.zero < w.amount) (h : cell s st = some Gloas.BuilderPendingPayment.empty) :
+    (h : cell s st = some Gloas.BuilderPendingPayment.empty) :
     ¬ LiveAt s w st := by
-  rintro ⟨p, hp, hpw⟩
+  rintro ⟨p, hp, hne, -⟩
   rw [h] at hp; cases hp
-  rw [← hpw] at hw
-  exact absurd hw (by decide)
+  exact hne rfl
 
 theorem payIdx_none_of_le {s : Nat} {st : Gloas.BeaconState P}
     (h : s / P.SLOTS_PER_EPOCH + 1 ≤ curEpoch st) : payIdx s st = none := by
@@ -271,7 +274,7 @@ def RotEval (ctx : Ctx) (E : Gloas.BeaconState P → Gloas.BeaconState P → Pro
 `s`'s epoch out of the window, the entry at its index is live, and its weight reaches the quorum
 of the pre-rotation state (`b = true`) or does not (`b = false`). -/
 def QEv (s : Nat) (w : Gloas.BuilderPendingWithdrawal) (b : Bool) (x a : Gloas.BeaconState P) : Prop :=
-  s / P.SLOTS_PER_EPOCH = curEpoch x ∧ ∃ p q, cell s x = some p ∧ p.withdrawal = w ∧
+  s / P.SLOTS_PER_EPOCH = curEpoch x ∧ ∃ p q, cell s x = some p ∧ Ours w p ∧
     Gloas.getBuilderPaymentQuorumThreshold a = .ok q ∧ decide (q ≤ p.weight) = b
 
 /-- One slot iteration keeps the tracked entry, empties it (a bid in the next epoch, whose
@@ -331,21 +334,21 @@ theorem slotTick_track (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat}
 
 /-- Liveness only ends along the slot loop. -/
 theorem slotTick_live_back (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat}
-    {w : Gloas.BuilderPendingWithdrawal} (hw : U64.zero < w.amount) {st st' : Gloas.BeaconState P}
+    {w : Gloas.BuilderPendingWithdrawal} {st st' : Gloas.BeaconState P}
     (h : slotTick ctx st = .ok st') (hl : LiveAt s w st') : LiveAt s w st := by
   rcases slotTick_track (s := s) hspe h with e | e | ⟨e, -⟩
   · obtain ⟨p, hp, hpw⟩ := hl; exact ⟨p, e ▸ hp, hpw⟩
-  · exact absurd hl (not_liveAt_of_empty hw e.2)
+  · exact absurd hl (not_liveAt_of_empty e.2)
   · exact absurd hl (not_liveAt_of_none e)
 
 theorem slotLoop_live_back (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat}
-    {w : Gloas.BuilderPendingWithdrawal} (hw : U64.zero < w.amount) :
+    {w : Gloas.BuilderPendingWithdrawal} :
     ∀ (n : Nat) (st st' : Gloas.BeaconState P), slotLoop ctx n st = .ok st' →
       LiveAt s w st' → LiveAt s w st
   | 0, st, st', h, hl => by cases h; exact hl
   | n + 1, st, st', h, hl => by
     obtain ⟨x, hx, h⟩ := bind_eq_ok_iff.mp h
-    exact slotTick_live_back hspe hw hx (slotLoop_live_back hspe hw n x st' h hl)
+    exact slotTick_live_back hspe hx (slotLoop_live_back hspe n x st' h hl)
 
 theorem curEpoch_mono {a b : Gloas.BeaconState P} (h : a.slot.toNat ≤ b.slot.toNat) :
     curEpoch a ≤ curEpoch b := Nat.div_le_div_right h
@@ -387,13 +390,13 @@ theorem slotLoop_track (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat}
           by simpa using hqw⟩))
 
 theorem rotEval_live (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat}
-    {w : Gloas.BuilderPendingWithdrawal} (hw : U64.zero < w.amount) {b : Bool} :
+    {w : Gloas.BuilderPendingWithdrawal} {b : Bool} :
     ∀ (n : Nat) (st : Gloas.BeaconState P), RotEval ctx (QEv s w b) n st → LiveAt s w st
   | 0, _, h => h.elim
   | n + 1, st, h => by
     rcases h with ⟨_, _, _, _, _, _, _, -, p, q, hp, hpw, -⟩ | ⟨x, hx, h⟩
     · exact ⟨p, hp, hpw⟩
-    · exact slotTick_live_back hspe hw hx (rotEval_live hspe hw n x h)
+    · exact slotTick_live_back hspe hx (rotEval_live hspe n x h)
 
 theorem rotEval_cur_le {ctx : Ctx} {s : Nat} {w : Gloas.BuilderPendingWithdrawal} {b : Bool} :
     ∀ (n : Nat) (st : Gloas.BeaconState P), RotEval ctx (QEv s w b) n st →
