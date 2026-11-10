@@ -35,9 +35,14 @@ appended once, by the direct append, which reads the bid and not the entry: that
   crossing step (`ValidJointG.crossing_bid_appended_at_most_once`), and, at a Gloas anchor, the run's appends of
   the entries pending there.
 
+* Run-level forms, for any run prefix (no `ValidJointG`): `GJointRun.queue_suffix_pushes` and
+  `slot_pushes_le_one` (the appends of a run have pairwise distinct slots, given G3-07, G3-08 and `FutureEmpty`
+  at each Gloas step's pre-state).
 * `pushes_before_latest`: every append up to and including a Gloas step is attributed to a slot before that
   step's bid's. So at every Gloas state after a Gloas step, the latest bid's payment has not been appended by the
   run (the invariant a Gloas-anchor premise of the form "the latest bid is not already queued" needs).
+  `push_dead_after`: a payment the run appended is not live at any later Gloas state, so no queued entry and
+  live payments entry are of the same slot.
 -/
 
 namespace Blanc.Lift.BuilderRequest
@@ -244,6 +249,53 @@ theorem _root_.Blanc.GloasStepData.push_dead (B : GloasStepData (P := P) cfg ccf
   · exact (settle_excl hspe B.processBlock hne hfull hslot hl').2 hl
   · exact not_liveAt_of_none hnone hl'
 
+/-! ## The queue along a run -/
+
+/-- **Along any run, the queue holds nothing but the start's entries and the run's appends**: the end state's
+`builder_pending_withdrawals` is a suffix of the start's followed by the withdrawals of `run.pushes` (the N7
+bounds are read at the crossing, `CrossingData.queue_empty`). -/
+theorem _root_.Blanc.GJointRun.queue_suffix_pushes {s₀ : GJointState P}
+    (quorumPositive : 2 * P.SLOTS_PER_EPOCH ≤ P.EFFECTIVE_BALANCE_INCREMENT)
+    (slotsPerEpoch : 2 ≤ P.SLOTS_PER_EPOCH) :
+    ∀ {s : GJointState P} (run : GJointRun cfg ccfg bls s₀ s),
+      (∀ st ∈ run.states, st.validatorCount ≤ 2 ^ 40) → (∀ st ∈ run.states, st.builderCount ≤ 2 ^ 40) →
+      s.builderQueue <:+ s₀.builderQueue ++ run.pushes.map (·.w) := by
+  have hspe : 0 < P.SLOTS_PER_EPOCH := by omega
+  intro s run
+  induction run with
+  | nil =>
+    intro _ _
+    simp only [GJointRun.pushes, GJointRun.steps, List.flatMap_nil, List.map_nil, List.append_nil]
+    exact List.suffix_refl _
+  | @snoc s run C hC ih =>
+    intro hv hb
+    have mem : ∀ st ∈ run.states, st ∈ (run.snoc C hC).states := fun st hst => by
+      simp only [GJointRun.states, GJointRun.steps_snoc, List.map_append, List.mem_cons, List.mem_append] at hst ⊢
+      rcases hst with h | h
+      · exact Or.inl h
+      · exact Or.inr (Or.inl h)
+    have hpost : C.postState ∈ (run.snoc C hC).states := GJointRun.end_mem_states _
+    have ih' := ih (fun st h => hv st (mem st h)) (fun st h => hb st (mem st h))
+    have hp : (run.snoc C hC).pushes = run.pushes ++ C.pushes := by
+      simp only [GJointRun.pushes, GJointRun.steps_snoc, List.flatMap_append, List.flatMap_cons,
+        List.flatMap_nil, List.append_nil]
+    rw [hp, List.map_append, ← List.append_assoc]
+    cases C with
+    | pre D => exact List.nil_suffix
+    | crossing C =>
+      show C.postB.builder_pending_withdrawals.toArray.toList <:+ _
+      rw [(C.queue_empty quorumPositive slotsPerEpoch (hv _ hpost) (hb _ hpost)).2.2]
+      exact List.nil_suffix
+    | gloas D =>
+      subst hC
+      obtain ⟨d, -, -, hd⟩ := D.pushes_exhaustive hspe
+      obtain ⟨t, ht⟩ := ih'
+      show D.postB.builder_pending_withdrawals.toArray.toList <:+ _
+      rw [hd]
+      refine (List.drop_suffix _ _).trans ⟨t, ?_⟩
+      rw [← List.append_assoc]
+      exact congrArg (· ++ D.pushes.map (·.w)) ht
+
 namespace ValidJointG
 
 variable {checkpoint : BlockChain} {anchor final : GJointState P}
@@ -285,21 +337,22 @@ theorem bid_appended_at_most_once (v : ValidJointG cfg ccfg bls checkpoint ancho
     simpa only [Option.some.injEq, Prod.mk.injEq, eq_comm] using kf
   exact pushes_filter_le_one hq key
 
-/-- **At most one append per slot.** For every slot `s`, at most one element the run appends to
-`builder_pending_withdrawals` is attributed to the payment of slot `s`, whatever placed that payment: a Gloas
-step's bid (`bid_appended_at_most_once`), the first Gloas block's bid at the crossing, or an entry already
-pending at a Gloas anchor. Proved from the appends alone, without the destination labels: a later rotation append
-needs the entry live, and no payment a step appended is live after it (`GloasStepData.push_dead`); a later
-settlement or direct append is of its own parent's slot, after every earlier append's; and within one step a
-rotation append excludes the settlement (the slot left the window) and the direct append (`no_quorum_latest`: no
-quorum on the latest bid's entry, the quorum being positive). -/
-theorem slot_appended_at_most_once (v : ValidJointG cfg ccfg bls checkpoint anchor final) (s : Nat) :
-    (v.run.pushes.filter (fun e => decide (e.slot = s))).length ≤ 1 := by
-  have hspe : 0 < P.SLOTS_PER_EPOCH := by have := v.slotsPerEpoch; omega
-  have hq := v.quorumPositive
+end ValidJointG
+
+/-- **At most one append per slot, along any run** whose Gloas steps start from states with G3-07, G3-08 and
+`FutureEmpty` (`hinv`; on a valid joint chain, `ValidJointG.gInv_pre`). Proved from the appends alone, without the
+destination labels: a later rotation append needs the entry live, and no payment a step appended is live after it
+(`GloasStepData.push_dead`); a later settlement or direct append is of its own parent's slot, after every earlier
+append's; and within one step a rotation append excludes the settlement (the slot left the window) and the direct
+append (`no_quorum_latest`: no quorum on the latest bid's entry, the quorum being positive). -/
+theorem slot_pushes_le_one (hq : 2 * P.SLOTS_PER_EPOCH ≤ P.EFFECTIVE_BALANCE_INCREMENT)
+    (hspe : 0 < P.SLOTS_PER_EPOCH) {s₀ sf : GJointState P} (run : GJointRun cfg ccfg bls s₀ sf)
+    (hinv : ∀ {i : Nat} {B : GloasStepData (P := P) cfg ccfg bls}, run.steps[i]? = some (.gloas B) →
+      NoLiveWeightOnLatestBid B.preB ∧ LatestBidCoherence B.preB ∧ FutureEmpty B.preB) (s : Nat) :
+    (run.pushes.filter (fun e => decide (e.slot = s))).length ≤ 1 := by
   -- an append of a later step
   have cross : ∀ {i i' : Nat} {B B' : GloasStepData (P := P) cfg ccfg bls} {x y : Push},
-      v.run.steps[i]? = some (.gloas B) → v.run.steps[i']? = some (.gloas B') → x ∈ B.pushes → y ∈ B'.pushes →
+      run.steps[i]? = some (.gloas B) → run.steps[i']? = some (.gloas B') → x ∈ B.pushes → y ∈ B'.pushes →
       i < i' → x.slot = y.slot → False := by
     intro i i' B B' x y hB hB' hx hy hlt hxy
     obtain ⟨C, hC, hpre⟩ := pred_step hB hB' hlt
@@ -311,12 +364,12 @@ theorem slot_appended_at_most_once (v : ValidJointG cfg ccfg bls checkpoint anch
     · have hl := rotEval_live hspe _ _ (rotEval_imp (fun _ _ h => h.1) _ _ hr)
       rw [hpre, ← hxy] at hl
       exact B.push_dead hq hspe hx
-        (live_chain' v.run hspe hB hC (by omega) (by rw [paySlot_eq] at hxs; omega) hl)
+        (live_chain' run hspe hB hC (by omega) (by rw [paySlot_eq] at hxs; omega) hl)
     · exact parent hslot
     · exact parent hslot
   -- a rotation append and the parent append of one step
   have within : ∀ {i : Nat} {B : GloasStepData (P := P) cfg ccfg bls} {x y : Push},
-      v.run.steps[i]? = some (.gloas B) → x ∈ B.pushes → y ∈ B.pushes → x.path = .quorum → y.path ≠ .quorum →
+      run.steps[i]? = some (.gloas B) → x ∈ B.pushes → y ∈ B.pushes → x.path = .quorum → y.path ≠ .quorum →
       x.slot = y.slot → False := by
     intro i B x y hB hx hy hpx hpy hxy
     have hr : B.RotQ x.slot x.w true := by
@@ -328,7 +381,7 @@ theorem slot_appended_at_most_once (v : ValidJointG cfg ccfg bls checkpoint anch
     · exact hpy hp
     · rw [← hxy] at hl
       exact not_liveAt_of_none (B.rotQ_end hr) hl
-    · obtain ⟨-, -, -, -, -, g7, g8, -, fe⟩ := v.gInv_pre hB
+    · obtain ⟨g7, g8, fe⟩ := hinv hB
       refine no_quorum_latest hq hspe _ _ ⟨g7, fe, ?_⟩ hr
       rw [hxy, hslot, B.postSlots_lbh, g8.1]
   -- two parent appends of one step
@@ -358,6 +411,21 @@ theorem slot_appended_at_most_once (v : ValidJointG cfg ccfg bls checkpoint anch
       · rw [one (parentPushes_length _ _) (par hx hpx) (par hy hpy)]
   · exact (cross hB' hB hy hx h hxy.symm).elim
 
+namespace ValidJointG
+
+variable {checkpoint : BlockChain} {anchor final : GJointState P}
+
+/-- **At most one append per slot.** For every slot `s`, at most one element the run appends to
+`builder_pending_withdrawals` is attributed to the payment of slot `s`, whatever placed that payment: a Gloas
+step's bid (`bid_appended_at_most_once`), the first Gloas block's bid at the crossing, or an entry already
+pending at a Gloas anchor (`slot_pushes_le_one`, with the G3a invariants of `gInv_pre`). -/
+theorem slot_appended_at_most_once (v : ValidJointG cfg ccfg bls checkpoint anchor final) (s : Nat) :
+    (v.run.pushes.filter (fun e => decide (e.slot = s))).length ≤ 1 :=
+  slot_pushes_le_one v.quorumPositive (by have := v.slotsPerEpoch; omega) v.run
+    (fun hB => by
+      obtain ⟨-, -, -, -, -, g7, g8, -, fe⟩ := v.gInv_pre hB
+      exact ⟨g7, g8, fe⟩) s
+
 /-- **The first Gloas block's bid is appended at most once.** The crossing step's block carries a bid too; at
 most one element the run appends is attributed to its payment. -/
 theorem crossing_bid_appended_at_most_once (v : ValidJointG cfg ccfg bls checkpoint anchor final) {j : Nat}
@@ -370,46 +438,8 @@ theorem crossing_bid_appended_at_most_once (v : ValidJointG cfg ccfg bls checkpo
 `builder_pending_withdrawals` is a suffix of the anchor's followed by the withdrawals of `run.pushes`: each step
 appends exactly its `pushes` (`GloasStepData.pushes_exhaustive`) and removes entries from the front only. -/
 theorem queue_suffix_pushes (v : ValidJointG cfg ccfg bls checkpoint anchor final) :
-    final.builderQueue <:+ anchor.builderQueue ++ v.run.pushes.map (·.w) := by
-  have hspe : 0 < P.SLOTS_PER_EPOCH := by have := v.slotsPerEpoch; omega
-  suffices key : ∀ {s : GJointState P} (run : GJointRun cfg ccfg bls anchor s),
-      (∀ st ∈ run.states, st.validatorCount ≤ 2 ^ 40) → (∀ st ∈ run.states, st.builderCount ≤ 2 ^ 40) →
-      s.builderQueue <:+ anchor.builderQueue ++ run.pushes.map (·.w) from
-    key v.run v.validatorsBound v.buildersBound
-  intro s run
-  induction run with
-  | nil =>
-    intro _ _
-    simp only [GJointRun.pushes, GJointRun.steps, List.flatMap_nil, List.map_nil, List.append_nil]
-    exact List.suffix_refl _
-  | @snoc s run C hC ih =>
-    intro hv hb
-    have mem : ∀ st ∈ run.states, st ∈ (run.snoc C hC).states := fun st hst => by
-      simp only [GJointRun.states, GJointRun.steps_snoc, List.map_append, List.mem_cons, List.mem_append] at hst ⊢
-      rcases hst with h | h
-      · exact Or.inl h
-      · exact Or.inr (Or.inl h)
-    have hpost : C.postState ∈ (run.snoc C hC).states := GJointRun.end_mem_states _
-    have ih' := ih (fun st h => hv st (mem st h)) (fun st h => hb st (mem st h))
-    have hp : (run.snoc C hC).pushes = run.pushes ++ C.pushes := by
-      simp only [GJointRun.pushes, GJointRun.steps_snoc, List.flatMap_append, List.flatMap_cons,
-        List.flatMap_nil, List.append_nil]
-    rw [hp, List.map_append, ← List.append_assoc]
-    cases C with
-    | pre D => exact List.nil_suffix
-    | crossing C =>
-      show C.postB.builder_pending_withdrawals.toArray.toList <:+ _
-      rw [(C.queue_empty v.quorumPositive v.slotsPerEpoch (hv _ hpost) (hb _ hpost)).2.2]
-      exact List.nil_suffix
-    | gloas D =>
-      subst hC
-      obtain ⟨d, -, -, hd⟩ := D.pushes_exhaustive hspe
-      obtain ⟨t, ht⟩ := ih'
-      show D.postB.builder_pending_withdrawals.toArray.toList <:+ _
-      rw [hd]
-      refine (List.drop_suffix _ _).trans ⟨t, ?_⟩
-      rw [← List.append_assoc]
-      exact congrArg (· ++ D.pushes.map (·.w)) ht
+    final.builderQueue <:+ anchor.builderQueue ++ v.run.pushes.map (·.w) :=
+  v.run.queue_suffix_pushes v.quorumPositive v.slotsPerEpoch v.validatorsBound v.buildersBound
 
 /-- **From a pre-Gloas (Fulu) anchor, every queued builder withdrawal is one of the run's appends.** Gloas
 begins at the fork with an empty queue, so the final `builder_pending_withdrawals` is a suffix of the withdrawals
@@ -421,6 +451,18 @@ theorem fulu_queue_suffix_pushes {s₀ : JointState P}
   v.queue_suffix_pushes
 
 end ValidJointG
+
+/-! ## An appended payment stays dead -/
+
+/-- **A payment a step appended is not live after any later step either**: liveness only ends along the run, so
+no append of a payment is followed by another rotation or settlement append of it. -/
+theorem push_dead_after (hq : 2 * P.SLOTS_PER_EPOCH ≤ P.EFFECTIVE_BALANCE_INCREMENT)
+    (hspe : 0 < P.SLOTS_PER_EPOCH) {s₀ sf : GJointState P} {run : GJointRun cfg ccfg bls s₀ sf} {i i' : Nat}
+    {B B' : GloasStepData (P := P) cfg ccfg bls} (hB : run.steps[i]? = some (.gloas B))
+    (hB' : run.steps[i']? = some (.gloas B')) (hle : i ≤ i') {x : Push} (hx : x ∈ B.pushes)
+    {w : Gloas.BuilderPendingWithdrawal} : ¬ LiveAt x.slot w B'.postB := fun hl =>
+  B.push_dead hq hspe hx
+    (live_chain' run hspe hB hB' hle (by have := B.push_slot_lt hx; rw [paySlot_eq] at this; omega) hl)
 
 /-! ## The latest bid's payment has not been appended -/
 
