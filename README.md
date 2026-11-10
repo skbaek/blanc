@@ -71,8 +71,10 @@ evidence, run `lake cache clean`, and rebuild. Setting
 `LAKE_ARTIFACT_CACHE=false` for that rebuild disables local artifact-cache
 restore without changing the repository configuration.
 
-Cache garbage collection is a coordinated maintenance operation. From a Creme
-goal that holds the exclusive host semaphore, preview and then execute it with:
+Cache garbage collection is a coordinated maintenance operation: Lake does not
+honor the collector's lock, so it runs while no other Lake process uses the
+cache (under the optional Creme workflow, under the exclusive host semaphore).
+Preview and then execute it with:
 
 ```
 scripts/gc-lake-artifact-cache.py
@@ -91,8 +93,6 @@ Authoring tools (simp migration, discharge trace, census tools) and a tactic tab
 [the tools page](docs/TOOLS.md).
 
 ## Optional enhanced agent workflow
-
-Agents start at [`AGENTS.md`](AGENTS.md), a task-to-file map.
 
 Blanc is standalone: its pinned Jaune dependency is fetched by Lake, and Creme
 is not a build dependency. For the optional shared Jaune/Blanc agent workflow,
@@ -354,7 +354,7 @@ the conventions; they are not current corpus counts or performance claims.
 Several elaboration-cost bombs have been measured in this repository,
 including definitional-equality bombs and term-size growth in forward walks.
 The conventions below are the working rules for avoiding them. They apply to
-all Blanc proof work, whatever the contract and whatever agent or editor is
+all Blanc proof work, whatever the contract and whatever editor or tool is
 driving it.
 
 Before commissioning a new whole-tree offender census, start from the

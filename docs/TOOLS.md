@@ -2,8 +2,10 @@
 
 The tools below are used while writing or sweeping proofs; none is a blocking gate on its own (the gates that run some of
 them are named in each entry and catalogued in `scripts/GATES.md`). Costs are the facts the sources and the gate
-catalogue state; measure on your host before relying on them. Lift producer: `docs/LIFT_WORKFLOW.md`. Recipe lookup,
-`blanc_suggest` and the registry: `AGENTS.md`.
+catalogue state; measure on your host before relying on them. Lift producer: `docs/LIFT_WORKFLOW.md`. Recipe lookup and
+the registry: README, "Proof recipe lookup". `blanc_suggest` is available in a file that imports
+`Blanc.ProofRecipeTactic`, an authoring leaf that is deliberately unreachable from `Blanc.lean`; the import is for
+authoring and is removed before the change is committed.
 
 ## Tools
 
@@ -69,8 +71,7 @@ own span carries its pinned diagnostic. Use it when writing a new self-test inst
 ### Other documents that were hard to find
 
 `docs/DISCHARGE_TRACE.md` (above), `docs/ELAB_MIGRATION_COMPARISON.md` (the read-only elaboration-migration receipt
-generator), `docs/DIRECT_CALL_INVERSION_DISCOVERY_TASKS.md` (behavioural controls on the E2 registry entries),
-`docs/PROXY_PAIR_OSSIFIABLE_ARTIFACTS.md` (the OssifiableProxy artifact chain).
+generator), `docs/PROXY_PAIR_OSSIFIABLE_ARTIFACTS.md` (the OssifiableProxy artifact chain).
 
 ## Tactics
 

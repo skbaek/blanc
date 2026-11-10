@@ -77,7 +77,9 @@ lines when next changed or relied on, not by a wholesale rewrite.
   the short names below resolve to the Jaune declarations. Blanc keeps its
   own theory about them (for example the `Blanc.Exec.*` occurrence,
   source-cursor and replay lemmas), which is where the branches below
-  point; a new EVM-generic execution fact belongs in Jaune, and
+  point; a new EVM-generic execution fact belongs in Jaune (Jaune's `API.md`
+  maps its supported surface; section 6 lists the lemma families for
+  downstream proof libraries), and
   `scripts/check-extraction-ownership.sh` fails if Blanc redeclares a
   relocated declaration. Blanc's own list
   prefix/split algebra (`Split`, `Pref`, `Frel`) lives in
@@ -6592,8 +6594,8 @@ default for all Blanc work, not per-goal advice, and it exists because the
 point of each new contract is to leave the common library stronger than it
 found it, not merely to add the contract.
 
-1. **Search before writing.** Follow the branches above, run
-   `lean_local_search`, and run `blanc_suggest` at the goal. A `blanc_suggest`
+1. **Search before writing.** Follow the branches above, search the
+   declarations themselves, and run `blanc_suggest` at the goal. A `blanc_suggest`
    no-match is not evidence that no shared declaration exists; the registry
    branches and declaration search are the authority on existence.
 2. **Found in a shared module: use it.** When a close variant exists but is

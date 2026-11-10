@@ -2,10 +2,10 @@
 
 Authoritative catalogue of **Blanc's** verification gates: what exists, what
 each one takes, what it proves, and which to reach for when. This file is the
-single source of truth for Blanc gate usage — plans, agent instructions, and
-reports should link here rather than restate it.
+single source of truth for Blanc gate usage — other documents should link here
+rather than restate it.
 
-Audience is anyone driving these gates, human or agent, regardless of tool.
+Audience is anyone driving these gates, regardless of tool.
 
 **All commands are run from the root of the Blanc checkout under test — the
 goal's worktree during goal work, `~/blanc` otherwise.**
@@ -17,7 +17,7 @@ depends on Jaune through an ordinary pinned Lake dependency, so a Jaune change
 that Blanc consumes is verified by running *these* gates after the pin moves —
 the selection table below says when.
 
-## If you are an agent, start here
+## Which gate to run first
 
 Choose the gate by what you changed, cheapest falsifier first:
 
@@ -1068,13 +1068,12 @@ and produced thousands of phantom classification changes against an untouched
 baseline. Both runs were in fact green.
 
 A REFUSED verdict mid-arc is a **scheduling defect to fix, not a transient to
-retry around** — it means two agents were competing for this host. Before
-running a timing-authoritative gate — or a mutation campaign, which the
-cross-session class mapping runs under the same hard hold — a session must
-already hold the cross-session hard semaphore through
-`python3 -m creme semaphore`; see `~/creme/docs/guides/execution.md` for the
-protocol. The gate lock is the last line of defense, not the coordination
-mechanism.
+retry around** — it means two agents were competing for this host. A
+timing-authoritative gate is host-exclusive work, and so is a mutation
+campaign: where host-level admission exists (Creme's semaphore, under the
+optional Creme workflow), both run under its exclusive reservation; the next
+section says what the gates request for themselves. The gate lock is the last
+line of defense, not the coordination mechanism.
 
 ### Elaborating gates ask the host before they elaborate
 
@@ -1189,11 +1188,9 @@ servers are the normal steady state. One that has opened no file sits near
 legitimate run and train everyone to reach for `--force`, which would hollow the
 gate out entirely.
 
-In practice, before a timing run, reclaim idle servers with
-sibling Creme's `python3 -m creme reclaim --dry-run`, then rerun without
-`--dry-run` only after reviewing the preview. If Creme reports `UNAVAILABLE`,
-leave the servers alone and defer the timing run; never substitute a
-platform-specific command or a bare kill. A `--force` run may not be rebased.
+In practice a timing run needs every server that holds a large environment
+closed first; the optional Creme workflow provides a `reclaim` command for
+that. A `--force` run may not be rebased.
 
 ## Evidence economy (standing)
 

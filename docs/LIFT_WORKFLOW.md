@@ -4,7 +4,8 @@ How the runtime bytes of an already-deployed contract become a kernel-checked `S
 stated over, and what to touch when you add one. Everything here was read from `scripts/lift/lift.py`,
 `scripts/lift/certificates.json` and the checked-in generated modules; where the producer's code and this page
 disagree, the code wins. The proof kits that come after the checker are indexed in `docs/COMMON_API.md` section C9, and
-tools and tactics in `docs/TOOLS.md`.
+tools and tactics in `docs/TOOLS.md`. The recipe registry (`scripts/proof-recipes.toml`) covers few lifted-program
+goals: `blanc_suggest` prints nothing for a general `SFunc.RunExact`, `SProg.RunExact` or `SFunc.RunP` goal.
 
 ## The trust boundary
 
@@ -147,10 +148,10 @@ or a `Code.lean`; change the row or the producer and regenerate.
    self-counts are read by `scripts/check-doc-counts.sh`), the claim map `docs/DEPLOYED_BYTECODE_CLAIM_MAP.md`
    (artifact row, headline theorems; checked by `scripts/check-deployed-claim-map.sh`), the headline pins in
    `scripts/ClaimCheck.lean` (gate `scripts/check-claims.sh`). The README's lift bullet, the claim map and the site are
-   published wording: ask the user's master before changing them.
+   published wording: a change to them is a change to a public claim, not a routine edit.
 7. Run: `scripts/check-lift-certificates.sh`, the family's `cert_check` builds, `scripts/check-layering.sh`,
    `scripts/check-doc-counts.sh`, `scripts/check-deployed-claim-map.sh`, then the full set from `scripts/GATES.md`.
-   A new declaration nothing uses is a leaf: delete it or justify it (`AGENTS.md`).
+   A new declaration nothing uses is a leaf: delete it or justify it (`scripts/GATES.md`, "Leaf audit").
 
 ## Tests of the producer itself
 

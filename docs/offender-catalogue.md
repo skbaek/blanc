@@ -213,11 +213,10 @@ licenses Blanc `scripts/check-elab.sh --full`; it does not license `--rebase`.
 Use Jaune's current authoritative sequential mode. Preserve raw unratcheted
 reports outside any path a gate overwrites.
 
-Timing output is host-exclusive work: acquire the hard host semaphore before
-the measurement begins, run no other task-owned work concurrently, and bracket
-the command immediately with host telemetry. Reclaim idle owned Lean servers
-as the current host protocol directs. Release the hard hold as soon as the
-timing command ends. Static inventory and report processing require no hold.
+Timing output is host-exclusive work: the measurement runs on an otherwise
+idle host, with no other build or timing run and no Lean language server
+holding a large environment, and host load is recorded immediately before and
+after the command. Static inventory and report processing need no exclusivity.
 
 Treat the cold first row as suspect and remeasure it warm before classifying a
 regression. Reproduce borderline and top rows, or commission a second complete
