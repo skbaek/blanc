@@ -22,6 +22,9 @@ Gloas begins at the fork, and the witness is not an assumption: it is built from
 * `ValidJointG.crossing_bid_append_is_bid`: an append at the first Gloas block's bid's slot is that bid's
   withdrawal (the element identity `crossing_bid_appended_at_most_once` lacked): block slots strictly increase
   from the crossing on (`gblock_slot_lt`), so the bid of that slot is the crossing's.
+* **`ValidJointG.reach_witness_message`**: the same witness, with `WitnessMessagesInjective`: two of its bids
+  with one message are one signed bid. A step's bid is of its block's slot and block slots strictly increase
+  (`stepBid_slot_inj`), so one message means one step's block; no fact about BLS signatures is used.
 
 `BidSigned` at a later state reads the signing domain there; that the Gloas transition keeps `fork` and
 `genesis_validators_root` is `domainKept` (`BuilderRequestJointGAnchorReachDomain`).
@@ -208,6 +211,33 @@ theorem gblock_slot_lt {a b : Nat} {A B : GJointRunStep (P := P) cfg ccfg bls}
     have := slot_lt' run hC hB hlt'
     omega
 
+/-- **Two signed bids of the run with one slot are one signed bid.** A Gloas block's bid is of the block's slot
+(`block_newBid`) and block slots strictly increase from the first Gloas block on (`gblock_slot_lt`), so both
+are the bid of one step's block. -/
+theorem stepBid_slot_inj (hbls : bls = true) {n n' : Nat} {β β' : Gloas.SignedExecutionPayloadBid}
+    (h : StepBid run.steps n β) (h' : StepBid run.steps n' β') (hs : β.message.slot = β'.message.slot) :
+    β = β' := by
+  subst hbls
+  obtain ⟨j, -, C, blk, hC, hblk, rfl⟩ := h
+  obtain ⟨j', -, C', blk', hC', hblk', rfl⟩ := h'
+  obtain ⟨m, pb, -, -, -, -, hp⟩ := gblock_post hblk
+  obtain ⟨m', pb', -, -, -, -, hp'⟩ := gblock_post hblk'
+  have heq : blk.message.slot.toNat = blk'.message.slot.toNat := by
+    rw [← (block_newBid (domainKept _) rfl hp).2.1, ← (block_newBid (domainKept _) rfl hp').2.1, hs]
+  have hjj : j = j' := by
+    rcases Nat.lt_trichotomy j j' with h | h | h
+    · have := gblock_slot_lt run hC hblk hC' hblk' h
+      omega
+    · exact h
+    · have := gblock_slot_lt run hC' hblk' hC hblk h
+      omega
+  subst hjj
+  rw [hC] at hC'
+  cases hC'
+  rw [hblk] at hblk'
+  cases hblk'
+  rfl
+
 end Slots
 
 /-! ## Over a valid joint chain from a Fulu anchor -/
@@ -303,6 +333,36 @@ theorem crossing_bid_append_is_bid
     simp only [GJointRunStep.block, GBlock.gloas.injEq] at hblk
     subst hblk
     exact hw
+
+/-- **A witness of the chain's own bids separates messages.** At a Gloas state of a valid joint chain from a
+Fulu anchor, a bid witness whose every bid is the signed bid of an earlier step's block (`StepBid`, the first
+clause of `reach_witness`) has `WitnessMessagesInjective`: two witness bids with one message are one signed bid,
+because one message is one slot and one slot is one step's block (`stepBid_slot_inj`). -/
+theorem witnessMessagesInjective_of_stepBid
+    (v : ValidJointG cfg ccfg true checkpoint (.pre s₀) final) {i : Nat} {b : Gloas.BeaconState P}
+    (W : GloasBidWitness b) (hW : ∀ r β, W.bid r = some β → StepBid v.run.steps i β) :
+    WitnessMessagesInjective W :=
+  fun r r' β β' hr hr' hm => stepBid_slot_inj v.run rfl (hW r β hr) (hW r' β' hr') (by rw [hm])
+
+/-- **C4 with one message, one signed bid.** `reach_witness`, with the witness also `WitnessMessagesInjective`:
+at every Gloas state reached from a Fulu anchor the witness is the chain's own bids, and two of them with one
+message are one signed bid. So on a real chain `anchor_message_charged_once`'s premise holds of this witness,
+with no assumption on BLS signatures. -/
+theorem reach_witness_message
+    (v : ValidJointG cfg ccfg true checkpoint (.pre s₀) final) {i : Nat} {b : Gloas.BeaconState P}
+    {ex : BlockChain} {pa : ParentPayload P} (hi : v.run.states[i]? = some (.gloas b ex pa)) :
+    ∃ W : GloasBidWitness b,
+      (∀ r β, W.bid r = some β → StepBid v.run.steps i β) ∧
+      (∀ k β, W.bid (.payment k) = some β →
+        payIdx (β.message.slot.toNat + P.SLOTS_PER_EPOCH) b = some k ∧
+          LiveAt (β.message.slot.toNat + P.SLOTS_PER_EPOCH) (bidWithdrawal β.message) b) ∧
+      (∀ k β, W.bid (.withdrawal k) = some β → ∃ e, StepPush v.run.steps i e ∧
+        e.slot = β.message.slot.toNat + P.SLOTS_PER_EPOCH ∧ e.w = bidWithdrawal β.message ∧
+        b.builder_pending_withdrawals.toArray[k]? = some e.w) ∧
+      (∀ β, W.bid .latest = some β → β.message = b.latest_execution_payload_bid) ∧
+      WitnessMessagesInjective W := by
+  obtain ⟨W, h1, h2, h3, h4⟩ := v.reach_witness hi
+  exact ⟨W, h1, h2, h3, h4, v.witnessMessagesInjective_of_stepBid W h1⟩
 
 end ValidJointG
 
