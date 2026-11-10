@@ -690,6 +690,8 @@ COMPOSITION = {
     "Composition.BuilderRequestJointGChargeOnce": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGAnchorQueued": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGAnchorQueuedControl": ('builder-request', 'withdrawal-request'),
+    "Composition.BuilderRequestJointGAnchorReachStep": ('builder-request', 'withdrawal-request'),
+    "Composition.BuilderRequestJointGAnchorReach": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGValue": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGOnboarding": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGOnboardingWitnesses": ('builder-request',),

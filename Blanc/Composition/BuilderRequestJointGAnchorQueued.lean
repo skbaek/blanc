@@ -1,4 +1,4 @@
-import Blanc.Composition.BuilderRequestJointGAppends
+import Blanc.Composition.BuilderRequestJointGPush
 
 /-!
 # B5(iii), the anchor half: charged at most once, counting what the anchor already queued
@@ -183,28 +183,6 @@ end Charged
 
 /-! ## The transition does not look at the queue -/
 
-/-- **`process_slots` only appends to `builder_pending_withdrawals`**: the queue before the step's slots is a prefix
-of the queue after them. -/
-theorem _root_.Blanc.GloasStepData.postSlots_queue_extends (D : GloasStepData (P := P) cfg ccfg bls) :
-    ∃ l, D.postSlots.builder_pending_withdrawals.toArray.toList =
-      D.preB.builder_pending_withdrawals.toArray.toList ++ l :=
-  processSlots_ind (ctx := gloasCtx ccfg bls)
-    (fun m => ∃ l, m.builder_pending_withdrawals.toArray.toList =
-      D.preB.builder_pending_withdrawals.toArray.toList ++ l)
-    (fun st st1 st2 _ hI f1 _ hc => by
-      obtain ⟨l, hl⟩ := hI
-      rcases hc with ⟨rfl, -⟩ | ⟨-, he⟩
-      · refine ⟨l, ?_⟩
-        show st2.builder_pending_withdrawals.toArray.toList = _
-        rw [f1.2.2.1, hl]
-      · obtain ⟨x, y, fx, hy, fy⟩ := processEpoch_phases he
-        obtain ⟨-, q, -, hw, -⟩ := processBuilderPendingPayments_frame hy
-        refine ⟨l ++ List.map (fun p => p.withdrawal) (List.filter (fun p => decide (q ≤ p.weight))
-          (x.builder_pending_payments.toArray.extract 0 P.SLOTS_PER_EPOCH).toList), ?_⟩
-        show st2.builder_pending_withdrawals.toArray.toList = _
-        rw [fy.2.2.1, hw, fx.2.2.1, f1.2.2.1, hl, List.append_assoc])
-    D.slots ⟨[], (List.append_nil _).symm⟩
-
 /-- **The direct append does not look at the queue.** At any Gloas step whose parent settles FULL with its slot out
 of the window and whose pre-state's latest bid pays, if position `k` of the pre-state's `builder_pending_withdrawals`
 already holds the latest bid's withdrawal, then after the step's `process_parent_execution_payload` the list holds
@@ -228,7 +206,9 @@ theorem _root_.Blanc.GloasStepData.direct_append_duplicates (D : GloasStepData (
   have hL := D.postSlots_bid
   have hs1 := parent_direct_appends hspe h1 hfull hnone (by rw [hL]; exact hv)
   rw [hL] at hs1
-  obtain ⟨l, hl⟩ := D.postSlots_queue_extends
+  obtain ⟨l, hl⟩ : ∃ l, D.postSlots.builder_pending_withdrawals.toArray.toList =
+      D.preB.builder_pending_withdrawals.toArray.toList ++ l :=
+    ⟨_, slotLoop_pushes _ _ _ (processSlots_slotLoop D.slots).2⟩
   have hlt := (List.getElem?_eq_some_iff.mp hk).1
   have hlist : s1.builder_pending_withdrawals.toArray.toList =
       D.postSlots.builder_pending_withdrawals.toArray.toList ++
