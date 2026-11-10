@@ -327,8 +327,9 @@ def StepMirror : Prop :=
 ledger `tq₀` and fresh request indices, the ledger is computed, its final queue is the final
 state's queue, and every deposit request `dr` of step `j`'s block meets exactly one fate:
 
-* **applied**: exactly one applied entry carries its tag, at a step `j' ≥ j`; that entry is
-  `requestPending dr slot` (same key, credentials, amount and signature, the block's slot) and
+* **applied**: exactly one applied entry carries its tag, at a step `j' > j`; that entry is
+  `requestPending dr slot` (same key, credentials, amount and signature, the block's slot), applied
+  at a later step (a block's appends follow its slots' passes), and
   `apply_pending_deposit` at the state it read has exactly one outcome: a new validator,
   created only when Jaune's real BLS verifies the deposit signature, with balance the amount; a
   top-up of the validator holding the key, whose balance rises by the amount; or no credit, the
@@ -352,7 +353,7 @@ def D9Fate : Prop :=
         run.steps[j]? = some D → (stepDepositRequests D)[k]? = some dr →
         let d := requestPending dr D.block.2.message.slot
         let ctx := jointCtx ccfg true
-        ((∃ (j' : Nat) (a : AppliedAt P), (j', a) ∈ ap ∧ a.2.tag = some dr.index.toNat ∧ j ≤ j' ∧
+        ((∃ (j' : Nat) (a : AppliedAt P), (j', a) ∈ ap ∧ a.2.tag = some dr.index.toNat ∧ j < j' ∧
             (∀ (j'' : Nat) (a' : AppliedAt P), (j'', a') ∈ ap → a'.2.tag = some dr.index.toNat →
               j'' = j' ∧ a' = a) ∧
             a.2.deposit = d ∧
