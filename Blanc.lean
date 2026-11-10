@@ -29,8 +29,11 @@ import Blanc.Composition.BuilderRequestJointG
 import Blanc.Composition.BuilderRequestJointGBalance
 import Blanc.Composition.BuilderRequestJointGConservation
 import Blanc.Composition.BuilderRequestJointGExitAuth
+import Blanc.Composition.BuilderRequestJointGExitUnique
 import Blanc.Composition.BuilderRequestJointGFate
 import Blanc.Composition.BuilderRequestJointGLedger
+import Blanc.Composition.BuilderRequestJointGOnboarding
+import Blanc.Composition.BuilderRequestJointGOnboardingWitnesses
 import Blanc.Composition.BuilderRequestJointGPayments
 import Blanc.Composition.BuilderRequestJointGPaymentsAnchor
 import Blanc.Composition.BuilderRequestJointGPaymentsAnchorCore
