@@ -28,6 +28,7 @@ import Blanc.Composition.BuilderRequestCodesKept
 import Blanc.Composition.BuilderRequestJointG
 import Blanc.Composition.BuilderRequestJointGAppends
 import Blanc.Composition.BuilderRequestJointGBalance
+import Blanc.Composition.BuilderRequestJointGChargeOnce
 import Blanc.Composition.BuilderRequestJointGConservation
 import Blanc.Composition.BuilderRequestJointGExitAuth
 import Blanc.Composition.BuilderRequestJointGExitUnique
@@ -42,6 +43,7 @@ import Blanc.Composition.BuilderRequestJointGPaymentsBlock
 import Blanc.Composition.BuilderRequestJointGPaymentsTrack
 import Blanc.Composition.BuilderRequestJointGPosition
 import Blanc.Composition.BuilderRequestJointGProvenance
+import Blanc.Composition.BuilderRequestJointGPush
 import Blanc.Composition.BuilderRequestJointGRegistration
 import Blanc.Composition.BuilderRequestJointGValue
 import Blanc.Composition.BuilderRequestPublicBounds
