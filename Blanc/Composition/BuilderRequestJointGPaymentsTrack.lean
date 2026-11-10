@@ -205,15 +205,28 @@ theorem processSlots_slot_eq {ctx : Ctx} {st st' : Gloas.BeaconState P} {T : U64
 
 /-! ## A payment entry, tracked by its slot -/
 
-/-- The window index of the payment entry of a bid at slot `s` (`settle_builder_payment`'s
-`payment_index`, CL:1795-1801): `SLOTS_PER_EPOCH + s % SLOTS_PER_EPOCH` while `s` is in the current
-epoch, `s % SLOTS_PER_EPOCH` while it is in the previous epoch, and none once it is older. -/
+/-- The window index of the payment entry of virtual slot `s`. A bid at slot `t` is tracked at the
+virtual slot `t + SLOTS_PER_EPOCH` (`payIdx_shift`: then this is `settle_builder_payment`'s
+`payment_index`, CL:1795-1801): `SLOTS_PER_EPOCH + t % SLOTS_PER_EPOCH` while `t` is in the current
+epoch, `t % SLOTS_PER_EPOCH` while it is in the previous epoch, none once it is older. The shift by one
+epoch also names every entry of an anchor state, including a first-half entry at epoch `0`. -/
 def payIdx (s : Nat) (st : Gloas.BeaconState P) : Option Nat :=
-  if s / P.SLOTS_PER_EPOCH = curEpoch st then some (P.SLOTS_PER_EPOCH + s % P.SLOTS_PER_EPOCH)
-  else if s / P.SLOTS_PER_EPOCH + 1 = curEpoch st then some (s % P.SLOTS_PER_EPOCH)
+  if s / P.SLOTS_PER_EPOCH = curEpoch st + 1 then some (P.SLOTS_PER_EPOCH + s % P.SLOTS_PER_EPOCH)
+  else if s / P.SLOTS_PER_EPOCH = curEpoch st then some (s % P.SLOTS_PER_EPOCH)
   else none
 
-/-- The payment entry at the window index of slot `s`. -/
+/-- `payIdx` at the virtual slot `t + SLOTS_PER_EPOCH` of a real slot `t`: the spec's window index of
+`t` (`settle_builder_payment`'s `payment_index`). -/
+theorem payIdx_shift (hspe : 0 < P.SLOTS_PER_EPOCH) (t : Nat) (st : Gloas.BeaconState P) :
+    payIdx (t + P.SLOTS_PER_EPOCH) st =
+      if t / P.SLOTS_PER_EPOCH = curEpoch st then some (P.SLOTS_PER_EPOCH + t % P.SLOTS_PER_EPOCH)
+      else if t / P.SLOTS_PER_EPOCH + 1 = curEpoch st then some (t % P.SLOTS_PER_EPOCH)
+      else none := by
+  unfold payIdx
+  rw [Nat.add_div_right _ hspe, Nat.add_mod_right]
+  simp only [Nat.add_right_cancel_iff]
+
+/-- The payment entry at the window index of virtual slot `s`. -/
 def cell (s : Nat) (st : Gloas.BeaconState P) : Option Gloas.BuilderPendingPayment :=
   (payIdx s st).bind fun k => st.builder_pending_payments.toArray[k]?
 
@@ -236,7 +249,7 @@ theorem not_liveAt_of_empty {s : Nat} {w : Gloas.BuilderPendingWithdrawal} {st :
   exact absurd hw (by decide)
 
 theorem payIdx_none_of_le {s : Nat} {st : Gloas.BeaconState P}
-    (h : s / P.SLOTS_PER_EPOCH + 2 ≤ curEpoch st) : payIdx s st = none := by
+    (h : s / P.SLOTS_PER_EPOCH + 1 ≤ curEpoch st) : payIdx s st = none := by
   unfold payIdx
   rw [ite_eq_right (by omega), ite_eq_right (by omega)]
 
@@ -258,7 +271,7 @@ def RotEval (ctx : Ctx) (E : Gloas.BeaconState P → Gloas.BeaconState P → Pro
 `s`'s epoch out of the window, the entry at its index is live, and its weight reaches the quorum
 of the pre-rotation state (`b = true`) or does not (`b = false`). -/
 def QEv (s : Nat) (w : Gloas.BuilderPendingWithdrawal) (b : Bool) (x a : Gloas.BeaconState P) : Prop :=
-  s / P.SLOTS_PER_EPOCH + 1 = curEpoch x ∧ ∃ p q, cell s x = some p ∧ p.withdrawal = w ∧
+  s / P.SLOTS_PER_EPOCH = curEpoch x ∧ ∃ p q, cell s x = some p ∧ p.withdrawal = w ∧
     Gloas.getBuilderPaymentQuorumThreshold a = .ok q ∧ decide (q ≤ p.weight) = b
 
 /-- One slot iteration keeps the tracked entry, empties it (a bid in the next epoch, whose
@@ -269,7 +282,7 @@ theorem slotTick_track (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat}
     cell s st' = cell s st ∨
       (payIdx s st = none ∧ cell s st' = some Gloas.BuilderPendingPayment.empty) ∨
       (payIdx s st' = none ∧ (payIdx s st = none ∨
-        (s / P.SLOTS_PER_EPOCH + 1 = curEpoch st ∧ EvalAt ctx (fun _ a => ∃ b,
+        (s / P.SLOTS_PER_EPOCH = curEpoch st ∧ EvalAt ctx (fun _ a => ∃ b,
           Gloas.processBuilderPendingPayments ctx.cfg a = .ok b) st))) := by
   obtain ⟨st1, next, h1, hn, f1, hnext, hc⟩ := slotTick_cases h
   rcases hc with ⟨hne, rfl⟩ | ⟨h0, a, b, st2, ha, hb, hsuf, rfl⟩
@@ -295,17 +308,17 @@ theorem slotTick_track (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat}
       unfold curEpoch; simp only []; rw [hnext]; rw [hnext] at h0
       exact Nat.succ_div_of_mod_eq_zero h0
     have hm := Nat.mod_lt s hspe
-    by_cases e0 : s / P.SLOTS_PER_EPOCH = curEpoch st
+    by_cases e0 : s / P.SLOTS_PER_EPOCH = curEpoch st + 1
     · left
       unfold cell payIdx
       rw [hcur, ite_eq_right (by omega), ite_eq_left (by omega), ite_eq_left e0]
       simp only [Option.bind_some]
       rw [hp2, shifted_lo hsz hm, hpa]
-    · by_cases e1 : s / P.SLOTS_PER_EPOCH + 1 = curEpoch st
+    · by_cases e1 : s / P.SLOTS_PER_EPOCH = curEpoch st
       · right; right
         refine ⟨by unfold payIdx; rw [hcur, ite_eq_right (by omega), ite_eq_right (by omega)], Or.inr ⟨e1,
           st1, next, a, h1, hn, h0, ha, b, hb⟩⟩
-      · by_cases e2 : s / P.SLOTS_PER_EPOCH = curEpoch st + 1
+      · by_cases e2 : s / P.SLOTS_PER_EPOCH = curEpoch st + 2
         · right; left
           refine ⟨by unfold payIdx; rw [ite_eq_right e0, ite_eq_right e1], ?_⟩
           unfold cell payIdx
@@ -384,7 +397,7 @@ theorem rotEval_live (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat}
 
 theorem rotEval_cur_le {ctx : Ctx} {s : Nat} {w : Gloas.BuilderPendingWithdrawal} {b : Bool} :
     ∀ (n : Nat) (st : Gloas.BeaconState P), RotEval ctx (QEv s w b) n st →
-      curEpoch st ≤ s / P.SLOTS_PER_EPOCH + 1
+      curEpoch st ≤ s / P.SLOTS_PER_EPOCH
   | 0, _, h => h.elim
   | n + 1, st, h => by
     rcases h with ⟨_, _, _, _, _, _, _, e, -⟩ | ⟨x, hx, h⟩

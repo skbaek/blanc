@@ -26,12 +26,12 @@ variable {P : Preset}
 /-- `apply_parent_execution_payload`'s payment step, with the index it settles: the window index of
 the parent's slot (`payIdx`), or, when that slot is out of the window, the direct append of a
 paying `L` or nothing. -/
-theorem applyParentPrefix_idx {ctx : Ctx} {s a : Gloas.BeaconState P} {r : Gloas.ExecutionRequests}
+theorem applyParentPrefix_idx (hspe0 : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s a : Gloas.BeaconState P} {r : Gloas.ExecutionRequests}
     (h : Gloas.applyParentPrefix ctx s r = .ok a) :
     ∃ x, InvFrame x a ∧
-      ((∃ idx : U64, payIdx s.latest_block_header.slot.toNat s = some idx.toNat ∧
+      ((∃ idx : U64, payIdx (s.latest_block_header.slot.toNat + P.SLOTS_PER_EPOCH) s = some idx.toNat ∧
           Gloas.settleBuilderPayment s idx = .ok x) ∨
-        (payIdx s.latest_block_header.slot.toNat s = none ∧
+        (payIdx (s.latest_block_header.slot.toNat + P.SLOTS_PER_EPOCH) s = none ∧
           ((U64.zero < s.latest_execution_payload_bid.value ∧ x = directAppend s) ∨ x = s))) := by
   unfold Gloas.applyParentPrefix at h
   obtain ⟨pe, hpe, h⟩ := bind_eq_ok_iff.mp h
@@ -60,7 +60,7 @@ theorem applyParentPrefix_idx {ctx : Ctx} {s a : Gloas.BeaconState P} {r : Gloas
         (invFrame.trans (StepRel.forIn_array_rel invFrame id (fun _ _ => by gvcg; exact ok_pure (processWithdrawalRequest_invFrame _ _ _ _ ‹_›)) _ _ hl2)
           (StepRel.forIn_array_rel invFrame id (fun _ _ => by gvcg; exact ok_pure (processConsolidationRequest_invFrame _ _ _ _ ‹_›)) _ _ hl3))
     · rw [U64.toNat_add? hidx, U64.toNat_mod? hm, hsN]
-      unfold payIdx
+      rw [payIdx_shift hspe0]
       rw [ite_eq_left (by rw [← hpeN, hc', hcN])]
   · rename_i hc
     obtain ⟨prev, hprev, h⟩ := bind_eq_ok_iff.mp h
@@ -83,12 +83,12 @@ theorem applyParentPrefix_idx {ctx : Ctx} {s a : Gloas.BeaconState P} {r : Gloas
         have hc0 : cur.toNat ≠ 0 := fun h0 => hne (by rw [hp', hpv.1 h0, h0])
         have h1 := hpv.2 hc0
         rw [← hp'] at h1
-        unfold payIdx
+        rw [payIdx_shift hspe0]
         rw [ite_eq_right (by omega), ite_eq_left (by omega)]
     · rename_i hp
       have hd := direct_epochs hpeN hcN hpv hc hp
-      have hnone : payIdx s.latest_block_header.slot.toNat s = none := by
-        unfold payIdx; rw [ite_eq_right (by omega), ite_eq_right (by omega)]
+      have hnone : payIdx (s.latest_block_header.slot.toNat + P.SLOTS_PER_EPOCH) s = none := by
+        rw [payIdx_shift hspe0, ite_eq_right (by omega), ite_eq_right (by omega)]
       split at h
       · rename_i hv
         refine ⟨_, ?_, Or.inr ⟨hnone, Or.inl ⟨hv, rfl⟩⟩⟩
@@ -143,12 +143,12 @@ theorem payIdx_inj {a b k : Nat} {st : Gloas.BeaconState P} (ha : payIdx a st = 
 
 /-- **The parent settlement** keeps the tracked entry, or empties it at the parent slot's window
 index (`payIdx` of `latest_block_header.slot`) of a FULL parent. -/
-theorem parent_cell {ctx : Ctx} {s : Nat} {m s1 : Gloas.BeaconState P} {blk : Gloas.BeaconBlock P}
+theorem parent_cell (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat} {m s1 : Gloas.BeaconState P} {blk : Gloas.BeaconBlock P}
     (h : Gloas.processParentExecutionPayload ctx m blk = .ok s1) :
     s1.slot = m.slot ∧
       (cell s s1 = cell s m ∨
         (parentFull m blk = true ∧ payIdx s m ≠ none ∧
-          payIdx s m = payIdx m.latest_block_header.slot.toNat m ∧
+          payIdx s m = payIdx (m.latest_block_header.slot.toNat + P.SLOTS_PER_EPOCH) m ∧
           cell s s1 = some Gloas.BuilderPendingPayment.empty)) := by
   rcases processParentExecutionPayload_cases h with ⟨rfl, _⟩ | ⟨hf, a, d, e, ha, hd, he, hs⟩
   · exact ⟨rfl, Or.inl rfl⟩
@@ -166,7 +166,7 @@ theorem parent_cell {ctx : Ctx} {s : Nat} {m s1 : Gloas.BeaconState P} {blk : Gl
         show _ = _
         rw [(exitReq_cases hm).1]; exact hI) _ _ _ he rfl
   have hs' := (applyParentSuffix_post hs).2.1
-  obtain ⟨x, fx, hx⟩ := applyParentPrefix_idx ha
+  obtain ⟨x, fx, hx⟩ := applyParentPrefix_idx hspe ha
   have e1 : s1.builder_pending_payments = x.builder_pending_payments := by
     rw [hs', hed, hda, fx.2.1]
   have hsl : payIdx s s1 = payIdx s m := payIdx_congr fr.2.2.2.2.2
@@ -186,9 +186,9 @@ theorem parent_cell {ctx : Ctx} {s : Nat} {m s1 : Gloas.BeaconState P} {blk : Gl
   · left; unfold cell; rw [hsl, e1]
 
 /-- A FULL parent whose slot is in the window has its entry emptied. -/
-theorem parent_settles {ctx : Ctx} {m s1 : Gloas.BeaconState P} {blk : Gloas.BeaconBlock P}
+theorem parent_settles (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {m s1 : Gloas.BeaconState P} {blk : Gloas.BeaconBlock P}
     (h : Gloas.processParentExecutionPayload ctx m blk = .ok s1) (hfull : parentFull m blk = true)
-    {k : Nat} (hk : payIdx m.latest_block_header.slot.toNat m = some k) :
+    {k : Nat} (hk : payIdx (m.latest_block_header.slot.toNat + P.SLOTS_PER_EPOCH) m = some k) :
     s1.builder_pending_payments.toArray[k]? = some Gloas.BuilderPendingPayment.empty := by
   rcases processParentExecutionPayload_cases h with ⟨_, hne⟩ | ⟨_, a, d, e, ha, hd, he, hs⟩
   · exact absurd (by simpa [parentFull] using hfull) hne
@@ -203,7 +203,7 @@ theorem parent_settles {ctx : Ctx} {m s1 : Gloas.BeaconState P} {blk : Gloas.Bea
         show _ = _
         rw [(exitReq_cases hm).1]; exact hI) _ _ _ he rfl
   have hs' := (applyParentSuffix_post hs).2.1
-  obtain ⟨x, fx, hx⟩ := applyParentPrefix_idx ha
+  obtain ⟨x, fx, hx⟩ := applyParentPrefix_idx hspe ha
   have e1 : s1.builder_pending_payments = x.builder_pending_payments := by
     rw [hs', hed, hda, fx.2.1]
   rcases hx with ⟨idx, hidx, hset⟩ | ⟨hn, -⟩
@@ -215,12 +215,12 @@ theorem parent_settles {ctx : Ctx} {m s1 : Gloas.BeaconState P} {blk : Gloas.Bea
 /-- Between the parent settlement and the operations (header, withdrawals, the block's bid,
 RANDAO, eth1 data), the entry of an earlier slot is untouched: the bid writes only its own slot's
 entry. -/
-theorem mid_cell {ctx : Ctx} {s : Nat} {s1 s2 s3 s4 s5 s6 : Gloas.BeaconState P}
+theorem mid_cell (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat} {s1 s2 s3 s4 s5 s6 : Gloas.BeaconState P}
     {blk : Gloas.BeaconBlock P}
     (h2 : Gloas.processBlockHeader s1 blk = .ok s2) (h3 : Gloas.processWithdrawals s2 = .ok s3)
     (h4 : Gloas.processExecutionPayloadBid ctx s3 blk.body.signed_execution_payload_bid = .ok s4)
     (h5 : Gloas.processRandao ctx s4 blk.body = .ok s5) (h6 : Gloas.processEth1Data s5 blk.body = .ok s6)
-    (hs : s ≠ blk.slot.toNat) : cell s s6 = cell s s1 ∧ s6.slot = s1.slot := by
+    (hs : s ≠ blk.slot.toNat + P.SLOTS_PER_EPOCH) : cell s s6 = cell s s1 ∧ s6.slot = s1.slot := by
   obtain ⟨hbs, -, hm2⟩ := processBlockHeader_post h2
   have w3 := processWithdrawals_wFrame _ _ h3
   have b4 := processExecutionPayloadBid_post h4
@@ -240,9 +240,9 @@ theorem mid_cell {ctx : Ctx} {s : Nat} {s1 s2 s3 s4 s5 s6 : Gloas.BeaconState P}
       | some k =>
         have hkK : k ≠ P.SLOTS_PER_EPOCH + s3.slot.toNat % P.SLOTS_PER_EPOCH := by
           rintro rfl
-          have hK : payIdx s3.slot.toNat s3 =
+          have hK : payIdx (s3.slot.toNat + P.SLOTS_PER_EPOCH) s3 =
               some (P.SLOTS_PER_EPOCH + s3.slot.toNat % P.SLOTS_PER_EPOCH) := by
-            unfold payIdx curEpoch; rw [ite_eq_left rfl]
+            rw [payIdx_shift hspe]; unfold curEpoch; rw [ite_eq_left rfl]
           exact hs ((payIdx_inj hk hK).trans (by rw [sl3, hbs]))
         unfold cell; rw [hp4, hk]; simp only [Option.bind_some]; exact hoth k hkK
     · exact cell_congr hs4 (hnp hv)
@@ -252,14 +252,14 @@ theorem mid_cell {ctx : Ctx} {s : Nat} {s1 s2 s3 s4 s5 s6 : Gloas.BeaconState P}
   rw [f6.2.2.2.2.2.2.1, f5.2.2.2.2.2.2.1, hs4, sl3]
 
 /-- **The block's own paying bid makes its payment live.** -/
-theorem bid_live {ctx : Ctx} {s3 s4 : Gloas.BeaconState P} {sb : Gloas.SignedExecutionPayloadBid}
+theorem bid_live (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s3 s4 : Gloas.BeaconState P} {sb : Gloas.SignedExecutionPayloadBid}
     (h4 : Gloas.processExecutionPayloadBid ctx s3 sb = .ok s4) (hv : U64.zero < sb.message.value) :
-    LiveAt sb.message.slot.toNat (bidWithdrawal sb.message) s4 := by
+    LiveAt (sb.message.slot.toNat + P.SLOTS_PER_EPOCH) (bidWithdrawal sb.message) s4 := by
   obtain ⟨-, hsl, -, -, -, -, -, hs4, -, -, -, hpp⟩ := processExecutionPayloadBid_post h4
   obtain ⟨pi, hk, -⟩ := hpp hv
-  have hidx : payIdx sb.message.slot.toNat s4 =
+  have hidx : payIdx (sb.message.slot.toNat + P.SLOTS_PER_EPOCH) s4 =
       some (P.SLOTS_PER_EPOCH + s3.slot.toNat % P.SLOTS_PER_EPOCH) := by
-    unfold payIdx curEpoch; rw [hs4, hsl, ite_eq_left rfl]
+    rw [payIdx_shift hspe]; unfold curEpoch; rw [hs4, hsl, ite_eq_left rfl]
   exact ⟨_, by rw [cell_of_payIdx hidx, hk], rfl⟩
 
 /-- The operations only keep, empty, or re-weigh an entry. -/
@@ -301,15 +301,15 @@ theorem sync_cell {ctx : Ctx} {s : Nat} {s7 m' : Gloas.BeaconState P} {sa : Sync
 /-- **The block, for a payment of an earlier slot.** Liveness only ends; and when it ends, either
 the parent settlement emptied the entry (the parent's slot is the payment's), or the operations
 cleared it. -/
-theorem block_track {ctx : Ctx} {s : Nat} {w : Gloas.BuilderPendingWithdrawal} (hw : U64.zero < w.amount)
+theorem block_track (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat} {w : Gloas.BuilderPendingWithdrawal} (hw : U64.zero < w.amount)
     {m m' : Gloas.BeaconState P} {blk : Gloas.BeaconBlock P} (h : Gloas.processBlock ctx m blk = .ok m')
-    (hs : s ≠ blk.slot.toNat) :
+    (hs : s ≠ blk.slot.toNat + P.SLOTS_PER_EPOCH) :
     (LiveAt s w m' → LiveAt s w m) ∧
       (LiveAt s w m → ¬ LiveAt s w m' →
-        (parentFull m blk = true ∧ s = m.latest_block_header.slot.toNat) ∨ OpsClear ctx s w m blk) := by
+        (parentFull m blk = true ∧ s = m.latest_block_header.slot.toNat + P.SLOTS_PER_EPOCH) ∨ OpsClear ctx s w m blk) := by
   obtain ⟨s1, s2, s3, s4, s5, s6, s7, h1, h2, h3, h4, h5, h6, h7, h8⟩ := processBlock_phases h
-  obtain ⟨-, hc1⟩ := parent_cell (s := s) h1
-  obtain ⟨c6, -⟩ := mid_cell h2 h3 h4 h5 h6 hs
+  obtain ⟨-, hc1⟩ := parent_cell hspe (s := s) h1
+  obtain ⟨c6, -⟩ := mid_cell hspe h2 h3 h4 h5 h6 hs
   have c8 := sync_cell (s := s) h8
   have back1 : LiveAt s w s1 → LiveAt s w m := by
     rcases hc1 with e | ⟨-, -, -, e⟩
@@ -426,26 +426,27 @@ theorem _root_.Blanc.GloasStepData.postB_bid (D : GloasStepData (P := P) cfg ccf
 /-- **A later step, for a payment of an earlier slot: liveness only ends.** -/
 theorem _root_.Blanc.GloasStepData.live_back (D : GloasStepData (P := P) cfg ccfg bls)
     (hspe : 0 < P.SLOTS_PER_EPOCH) {s : Nat} {w : Gloas.BuilderPendingWithdrawal}
-    (hw : U64.zero < w.amount) (hs : s < D.block.message.slot.toNat) (hl : LiveAt s w D.postB) :
+    (hw : U64.zero < w.amount) (hs : s < D.block.message.slot.toNat + P.SLOTS_PER_EPOCH)
+    (hl : LiveAt s w D.postB) :
     LiveAt s w D.preB := by
   obtain ⟨-, hloop⟩ := processSlots_slotLoop D.slots
   exact slotLoop_live_back hspe hw _ _ _ hloop
-    ((block_track hw D.processBlock (by omega)).1 hl)
+    ((block_track hspe hw D.processBlock (by omega)).1 hl)
 
 /-- **Where a later step ends a live payment**: a rotation inside its `process_slots` (with
 either verdict), the FULL settlement of the payment's own slot, or the operations. -/
 theorem _root_.Blanc.GloasStepData.flip_cases (D : GloasStepData (P := P) cfg ccfg bls)
     (hspe : 0 < P.SLOTS_PER_EPOCH) {s : Nat} {w : Gloas.BuilderPendingWithdrawal}
-    (hw : U64.zero < w.amount) (hs : s < D.block.message.slot.toNat)
+    (hw : U64.zero < w.amount) (hs : s < D.block.message.slot.toNat + P.SLOTS_PER_EPOCH)
     (hl : LiveAt s w D.preB) (hn : ¬ LiveAt s w D.postB) :
     D.RotQ s w true ∨ D.RotQ s w false ∨
-      (parentFull D.postSlots D.block.message = true ∧ s = D.postSlots.latest_block_header.slot.toNat ∧
+      (parentFull D.postSlots D.block.message = true ∧ s = D.postSlots.latest_block_header.slot.toNat + P.SLOTS_PER_EPOCH ∧
         LiveAt s w D.postSlots) ∨
       OpsClear (gloasCtx ccfg bls) s w D.postSlots D.block.message := by
   obtain ⟨-, hloop⟩ := processSlots_slotLoop D.slots
   rcases slotLoop_track hspe _ _ _ hloop hl with e | e | e
   · have hl' : LiveAt s w D.postSlots := liveAt_of_cell e.symm hl
-    rcases (block_track hw D.processBlock (by omega)).2 hl' hn with ⟨hf, he⟩ | hc
+    rcases (block_track hspe hw D.processBlock (by omega)).2 hl' hn with ⟨hf, he⟩ | hc
     · exact Or.inr (Or.inr (Or.inl ⟨hf, he, hl'⟩))
     · exact Or.inr (Or.inr (Or.inr hc))
   · exact Or.inl e
@@ -459,12 +460,12 @@ theorem _root_.Blanc.GloasStepData.rotQ_end (D : GloasStepData (P := P) cfg ccfg
   exact rotEval_end_none _ _ _ h hloop
 
 /-- The cleared entry was live after `process_slots`. -/
-theorem opsClear_live {ctx : Ctx} {s : Nat} {w : Gloas.BuilderPendingWithdrawal}
+theorem opsClear_live (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat} {w : Gloas.BuilderPendingWithdrawal}
     (hw : U64.zero < w.amount) {m : Gloas.BeaconState P} {blk : Gloas.BeaconBlock P}
-    (hs : s ≠ blk.slot.toNat) (h : OpsClear ctx s w m blk) : LiveAt s w m := by
+    (hs : s ≠ blk.slot.toNat + P.SLOTS_PER_EPOCH) (h : OpsClear ctx s w m blk) : LiveAt s w m := by
   obtain ⟨s1, s2, s3, s4, s5, s6, s7, h1, h2, h3, h4, h5, h6, h7, hl, -⟩ := h
-  obtain ⟨-, hc1⟩ := parent_cell (s := s) h1
-  obtain ⟨c6, -⟩ := mid_cell h2 h3 h4 h5 h6 hs
+  obtain ⟨-, hc1⟩ := parent_cell hspe (s := s) h1
+  obtain ⟨c6, -⟩ := mid_cell hspe h2 h3 h4 h5 h6 hs
   have hl1 := liveAt_of_cell c6 hl
   rcases hc1 with e | ⟨-, -, -, e⟩
   · exact liveAt_of_cell e hl1
@@ -487,10 +488,10 @@ theorem opsClear_end {ctx : Ctx} {s : Nat} {w : Gloas.BuilderPendingWithdrawal}
 
 /-- The FULL settlement of the payment's own slot excludes a later clearing in the block, and ends
 the payment. -/
-theorem settle_excl {ctx : Ctx} {s : Nat} {w : Gloas.BuilderPendingWithdrawal}
+theorem settle_excl (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat} {w : Gloas.BuilderPendingWithdrawal}
     (hw : U64.zero < w.amount) {m m' : Gloas.BeaconState P} {blk : Gloas.BeaconBlock P}
-    (hb : Gloas.processBlock ctx m blk = .ok m') (hs : s ≠ blk.slot.toNat)
-    (hf : parentFull m blk = true) (hps : s = m.latest_block_header.slot.toNat) (hl : LiveAt s w m) :
+    (hb : Gloas.processBlock ctx m blk = .ok m') (hs : s ≠ blk.slot.toNat + P.SLOTS_PER_EPOCH)
+    (hf : parentFull m blk = true) (hps : s = m.latest_block_header.slot.toNat + P.SLOTS_PER_EPOCH) (hl : LiveAt s w m) :
     ¬ OpsClear ctx s w m blk ∧ ¬ LiveAt s w m' := by
   obtain ⟨p, hp, -⟩ := hl
   obtain ⟨k, hk⟩ : ∃ k, payIdx s m = some k := by
@@ -498,12 +499,12 @@ theorem settle_excl {ctx : Ctx} {s : Nat} {w : Gloas.BuilderPendingWithdrawal}
     | none => simp [cell, h] at hp
     | some k => exact ⟨k, rfl⟩
   obtain ⟨t1, t2, t3, t4, t5, t6, t7, g1, g2, g3, g4, g5, g6, g7, g8⟩ := processBlock_phases hb
-  have he := parent_settles g1 hf (hps ▸ hk)
-  obtain ⟨sl1, -⟩ := parent_cell (s := s) g1
+  have he := parent_settles hspe g1 hf (hps ▸ hk)
+  obtain ⟨sl1, -⟩ := parent_cell hspe (s := s) g1
   have hc1 : cell s t1 = some Gloas.BuilderPendingPayment.empty := by
     rw [cell_of_payIdx (by rw [payIdx_congr sl1]; exact hk), he]
   have hn1 : ¬ LiveAt s w t1 := not_liveAt_of_empty hw hc1
-  obtain ⟨c6, -⟩ := mid_cell g2 g3 g4 g5 g6 hs
+  obtain ⟨c6, -⟩ := mid_cell hspe g2 g3 g4 g5 g6 hs
   have hn6 : ¬ LiveAt s w t6 := fun hl => hn1 (liveAt_of_cell c6 hl)
   refine ⟨fun hc => ?_, fun hl => hn6 (ops_live_back hw g7 (liveAt_of_cell (sync_cell g8) hl))⟩
   obtain ⟨s1, s2, s3, s4, s5, s6, s7, h1, h2, h3, h4, h5, h6, -, hl6, -⟩ := hc
@@ -521,7 +522,8 @@ end Step
 
 /-- The slot-loop invariant: G3-07 and FutureEmpty, with the latest bid at slot `s`. -/
 def LatestAt (s : Nat) (st : Gloas.BeaconState P) : Prop :=
-  NoLiveWeightOnLatestBid st ∧ FutureEmpty st ∧ st.latest_execution_payload_bid.slot.toNat = s
+  NoLiveWeightOnLatestBid st ∧ FutureEmpty st ∧
+    st.latest_execution_payload_bid.slot.toNat + P.SLOTS_PER_EPOCH = s
 
 theorem slotTick_latestAt (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat}
     {st st' : Gloas.BeaconState P} (h : slotTick ctx st = .ok st') (hI : LatestAt s st) :
@@ -537,7 +539,7 @@ theorem slotTick_latestAt (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat}
       simp only [ha, hb, hsuf, bind, Except.bind]
   obtain ⟨g7, fe⟩ := slotIter_noLiveWeight hspe ⟨hI.1, hI.2.1⟩ f1 hnext hc'
   exact ⟨g7, fe, by
-    show st2.latest_execution_payload_bid.slot.toNat = s
+    show st2.latest_execution_payload_bid.slot.toNat + P.SLOTS_PER_EPOCH = s
     rw [(slotIter_core f1 hc').2.1]; exact hI.2.2⟩
 
 /-- **While the bid is the latest bid, no rotation finds its entry at the quorum**: the entry of the
@@ -549,7 +551,7 @@ theorem no_quorum_latest (hq : 2 * P.SLOTS_PER_EPOCH ≤ P.EFFECTIVE_BALANCE_INC
   | n + 1, st, hI, h => by
     rcases h with ⟨st1, next, a, -, -, -, -, -, p, q, hp, -, hq', hd⟩ | ⟨x, hx, h⟩
     · have hbi : bidIndex st = payIdx s st := by
-        unfold bidIndex payIdx; simp only []; rw [hI.2.2]
+        rw [← hI.2.2, payIdx_shift hspe]; rfl
       cases hk : payIdx s st with
       | none => simp [cell, hk] at hp
       | some k =>
