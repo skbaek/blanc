@@ -162,6 +162,27 @@ open Jaune JauneConsensus ExecutionTrace Blanc JauneConsensus.Facts.Gloas JauneC
 
 variable {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
 
+/-! ## The withdrawals stage of a kept block -/
+
+/-- **A kept block's withdrawals stage.** In a kept step, the body's request pass starts from the fold
+`processWithdrawalsState` of the block's withdrawals over the state the transactions ended on (`b.run.txEnv`), and
+ends on the step's post-state. -/
+theorem _root_.Blanc.KeptStep.requestPass_of_withdrawals {b : KeptBlock} {post : BlockChain}
+    (h : KeptStep cfg b post) :
+    ∃ out, RequestPass (b.run.txEnv.withState (processWithdrawalsState b.run.txEnv.state b.block.wds))
+      (withdrawalsPass b.benv.stat.rules b.run.txEnv b.run.txOut b.block.wds).2 post.state out b.run.requests := by
+  obtain ⟨st, out, pass, final, -⟩ := h.body.stages
+  have hon : b.benv.stat.rules.header.withdrawalsRoot = true := by
+    change b.fork.ruleSet.header.withdrawalsRoot = true
+    rcases h.kept with hc | hc
+    · exact hc.cases (motive := fun f => f.ruleSet.header.withdrawalsRoot = true) rfl rfl rfl rfl
+    · rw [hc]; rfl
+  have hw : (withdrawalsPass b.benv.stat.rules b.run.txEnv b.run.txOut b.block.wds).1 =
+      processWithdrawalsState b.run.txEnv.state b.block.wds := by
+    simp only [withdrawalsPass, Jaune.processWithdrawals, hon, ↓reduceIte]
+  rw [hw, ← final h.kept.rules.noRewards] at pass
+  exact ⟨out, pass⟩
+
 /-! ## B5(iv) over a valid joint chain -/
 
 namespace ValidJointG
@@ -214,8 +235,12 @@ theorem carry (v : ValidJointG cfg ccfg bls checkpoint anchor final) (frame : Ex
 * carried by the first payload built upon after step `j`: every step strictly between `j` and some `i > j` builds
   upon nothing, and step `i` settles FULL over a delivered envelope whose payload carries exactly `ws`, builds upon
   exactly that payload's block (block `preBlocks.length + payloadIndex i` of the joint history), whose execution
-  withdrawals are `ws` converted (`Withdrawal.toExecution`), crediting each address `a` exactly
-  `Σ_{w ∈ ws, w.address = a} w.amount · 10^9` (modulo `2^256`, exact: the 7002 per-address lemma); or
+  withdrawals are `ws` converted (`Withdrawal.toExecution`). That block is the kept step of step `i`'s execution
+  chain (`KeptStep cfg b D'.postExec`), and on it the credit is the actual one: its body's request pass starts from
+  `processWithdrawalsState b.run.txEnv.state b.block.wds`, the withdrawals folded over the state its transactions
+  ended on, and ends on step `i`'s execution post-state; there each address `a` holds its post-transaction balance
+  plus `Σ_{w ∈ ws, w.address = a} w.amount · 10^9` (modulo `2^256`, exact: the 7002 per-address lemma, which also
+  holds from any pre-state); or
 * still outstanding: no step after `j` builds upon anything, and they are the final state's
   `payload_expected_withdrawals`.
 
@@ -234,6 +259,13 @@ theorem withdrawal_ledger (v : ValidJointG cfg ccfg bls checkpoint anchor final)
         v.blocks[v.preBlocks.length + v.run.payloadIndex i]? = some b ∧
         env.message.payload.withdrawals.toArray.toList = ws ∧
         b.block.wds = ws.map JauneConsensus.Withdrawal.toExecution ∧
+        KeptStep cfg b D'.postExec ∧
+        (∃ out, RequestPass (b.run.txEnv.withState (processWithdrawalsState b.run.txEnv.state b.block.wds))
+          (withdrawalsPass b.benv.stat.rules b.run.txEnv b.run.txOut b.block.wds).2 D'.postExec.state out
+          b.run.requests) ∧
+        (∀ a : Adr, ((processWithdrawalsState b.run.txEnv.state b.block.wds).bal a).toNat =
+          ((b.run.txEnv.state.bal a).toNat + ((ws.filter fun w => decide (w.address = a)).map
+            fun w => w.amount.toNat * 10 ^ 9).sum) % 2 ^ 256) ∧
         ∀ (pre : State) (a : Adr), ((processWithdrawalsState pre b.block.wds).bal a).toNat =
           ((pre.bal a).toNat + ((ws.filter fun w => decide (w.address = a)).map
             fun w => w.amount.toNat * 10 ^ 9).sum) % 2 ^ 256) ∨
@@ -279,12 +311,19 @@ theorem withdrawal_ledger (v : ValidJointG cfg ccfg bls checkpoint anchor final)
     have hwds : b.block.wds = ws.map JauneConsensus.Withdrawal.toExecution := by
       rw [hblk, ← hpay]
       simp only [payloadToBlockG, Gloas.ExecutionPayload.executionWithdrawals, hreq]
-    refine ⟨i, D', env, req, post, b, hji, hD', hs, hk, fun k h1 h2 => ?_, v.blocks_getElem?_full hD' hk,
-      hpay, hwds, fun pre a => ?_⟩
-    · obtain ⟨Dk, hDk, -, hkk⟩ := hcarry k (by omega) (by omega) (fun m h1' h2' => hmin m h1' (by omega))
-      exact ⟨Dk, hDk, hkk h1⟩
-    · rw [hwds]
+    have hstep : KeptStep cfg b D'.postExec := by
+      have hh := D'.keptHistory
+      rw [hk, show [b] = ([] : List KeptBlock) ++ [b] from rfl] at hh
+      exact (KeptHistory.snoc_inv hh).2
+    have hbal : ∀ (pre : State) (a : Adr), ((processWithdrawalsState pre b.block.wds).bal a).toNat =
+        ((pre.bal a).toNat + ((ws.filter fun w => decide (w.address = a)).map
+          fun w => w.amount.toNat * 10 ^ 9).sum) % 2 ^ 256 := fun pre a => by
+      rw [hwds]
       exact processWithdrawalsState_toExecution_bal ws pre a
+    refine ⟨i, D', env, req, post, b, hji, hD', hs, hk, fun k h1 h2 => ?_, v.blocks_getElem?_full hD' hk,
+      hpay, hwds, hstep, hstep.requestPass_of_withdrawals, hbal _, hbal⟩
+    obtain ⟨Dk, hDk, -, hkk⟩ := hcarry k (by omega) (by omega) (fun m h1' h2' => hmin m h1' (by omega))
+    exact ⟨Dk, hDk, hkk h1⟩
   · right
     have hnf : ∀ k, j < k → ¬ v.FullAt k := fun k h1 hk => hex ⟨k, h1, hk⟩
     obtain ⟨Dl, hDl, hwl, -⟩ := hcarry (v.run.steps.length - 1) (by omega) (by omega)
