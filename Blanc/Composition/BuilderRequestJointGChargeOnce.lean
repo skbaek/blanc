@@ -32,8 +32,7 @@ appended once, by the direct append, which reads the bid and not the entry: that
 * **`ValidJointG.slot_appended_at_most_once`**: the same count for every slot, proved from the appends alone
   (liveness of the entry, no destination labels): at most one element of `run.pushes` is attributed to the payment
   of any one slot. It covers what `payment_fate` does not state: the first Gloas block's bid, placed by the
-  crossing step (`ValidJointG.crossing_bid_appended_at_most_once`), and, at a Gloas anchor, the run's appends of
-  the entries pending there.
+  crossing step (`ValidJointG.crossing_bid_appended_at_most_once`).
 
 * Run-level forms, for any run prefix (no `ValidJointG`): `GJointRun.queue_suffix_pushes` and
   `slot_pushes_le_one` (the appends of a run have pairwise distinct slots, given G3-07, G3-08 and `FutureEmpty`
@@ -451,39 +450,5 @@ theorem fulu_queue_suffix_pushes {s₀ : JointState P}
   v.queue_suffix_pushes
 
 end ValidJointG
-
-/-! ## An appended payment stays dead -/
-
-/-- **A payment a step appended is not live after any later step either**: liveness only ends along the run, so
-no append of a payment is followed by another rotation or settlement append of it. -/
-theorem push_dead_after (hq : 2 * P.SLOTS_PER_EPOCH ≤ P.EFFECTIVE_BALANCE_INCREMENT)
-    (hspe : 0 < P.SLOTS_PER_EPOCH) {s₀ sf : GJointState P} {run : GJointRun cfg ccfg bls s₀ sf} {i i' : Nat}
-    {B B' : GloasStepData (P := P) cfg ccfg bls} (hB : run.steps[i]? = some (.gloas B))
-    (hB' : run.steps[i']? = some (.gloas B')) (hle : i ≤ i') {x : Push} (hx : x ∈ B.pushes)
-    {w : Gloas.BuilderPendingWithdrawal} : ¬ LiveAt x.slot w B'.postB := fun hl =>
-  B.push_dead hq hspe hx
-    (live_chain' run hspe hB hB' hle (by have := B.push_slot_lt hx; rw [paySlot_eq] at this; omega) hl)
-
-/-! ## The latest bid's payment has not been appended -/
-
-/-- **Every append up to and including a Gloas step is attributed to a slot before that step's bid's.** Step
-`i` is a Gloas step; `e` is an append of a step `i' ≤ i`. Then `e`'s slot is before the payment slot of step
-`i`'s bid, which is the latest bid of the step's post-state: the run has not appended the latest bid's
-payment. -/
-theorem pushes_before_latest {s₀ sf : GJointState P} {run : GJointRun cfg ccfg bls s₀ sf} {i i' : Nat}
-    {D' : GloasStepData (P := P) cfg ccfg bls} {C : GJointRunStep (P := P) cfg ccfg bls}
-    (hD' : run.steps[i]? = some (.gloas D')) (hC : run.steps[i']? = some C) (hle : i' ≤ i) {e : Push}
-    (he : e ∈ C.pushes) :
-    e.slot < D'.postB.latest_execution_payload_bid.slot.toNat + P.SLOTS_PER_EPOCH := by
-  rw [D'.postB_bid]
-  show e.slot < D'.paySlot
-  cases C with
-  | pre _ => cases he
-  | crossing _ => cases he
-  | gloas B =>
-    have h1 := B.push_slot_lt he
-    have h2 := paySlot_le hC hD' hle
-    rw [← paySlot_eq] at h2
-    omega
 
 end Blanc.Lift.BuilderRequest
