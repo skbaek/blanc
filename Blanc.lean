@@ -39,6 +39,7 @@ import Blanc.Composition.BuilderRequestJointGPaymentsTrack
 import Blanc.Composition.BuilderRequestJointGPosition
 import Blanc.Composition.BuilderRequestJointGProvenance
 import Blanc.Composition.BuilderRequestJointGRegistration
+import Blanc.Composition.BuilderRequestJointGValue
 import Blanc.Composition.BuilderRequestPublicBounds
 import Blanc.Composition.BuilderRequestPublicFindings
 import Blanc.Composition.BuilderRequestPublicGuarantees
