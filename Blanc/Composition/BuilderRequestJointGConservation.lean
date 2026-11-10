@@ -251,9 +251,13 @@ variable {checkpoint : BlockChain} {anchor final : GJointState P}
 /-- **B7 separation at a Gloas step of a valid joint chain.** Every state of the deposit and exit traces (read at
 the step's post-slots state) keeps the validators, validator balances, `pending_deposits` and both builder queues of
 the first deposit-trace state, whose builders are the post-slots state's; the post-slots state keeps the pre-state's
-builders; the parent settlement leaves the builders of the end of the exit trace, the header keeps them, and
+builders (`process_slots`, its epochs and `process_pending_deposits` included); and `process_block` at the
+post-slots state, phase by phase (`s1` … `s7`, ending at the post-state): the parent settlement leaves the builders
+of the end of the exit trace; `process_block_header` writes only the latest block header (so keeps the builders);
 `process_withdrawals` keeps every builder's pubkey and `withdrawable_epoch` and the registry's length, writing
-builder balances only, up to the post-state's builders. -/
+builder balances only; and `process_execution_payload_bid`, `process_randao`, `process_eth1_data`,
+`process_operations` (voluntary exits, BLS changes, slashings, attestations, …) and `process_sync_aggregate` each
+keep the builders. -/
 theorem builder_separation (_v : ValidJointG cfg ccfg bls checkpoint anchor final) {j : Nat}
     {D : GloasStepData (P := P) cfg ccfg bls} (_stepD : _v.run.steps[j]? = some (.gloas D)) :
     (∃ (trD trE : List (Gloas.BeaconState P)) (s0 : Gloas.BeaconState P),
@@ -263,15 +267,36 @@ theorem builder_separation (_v : ValidJointG cfg ccfg bls checkpoint anchor fina
       (∀ (k : Nat) (m : Gloas.BeaconState P), trD[k]? = some m → BuilderRequestFrame s0 m) ∧
       (∀ (k : Nat) (m : Gloas.BeaconState P), trE[k]? = some m → BuilderRequestFrame s0 m)) ∧
     D.postSlots.builders = D.preB.builders ∧
-    ∃ (trD trE : List (Gloas.BeaconState P)) (s0 s1 s2 s3 : Gloas.BeaconState P),
+    ∃ (trD trE : List (Gloas.BeaconState P)) (s0 s1 s2 s3 s4 s5 s6 s7 : Gloas.BeaconState P),
       builderDepositTrace ccfg bls D.postSlots D.block = .ok trD ∧
       builderExitTrace ccfg bls D.postSlots D.block = .ok trE ∧
       trD[0]? = some s0 ∧ s0.builders = D.postSlots.builders ∧
       Gloas.processParentExecutionPayload (gloasCtx ccfg bls) D.postSlots D.block.message = .ok s1 ∧
-      s1.builders = (traceLast D.postSlots trE).builders ∧ s2.builders = s1.builders ∧
+      s1.builders = (traceLast D.postSlots trE).builders ∧
+      Gloas.processBlockHeader s1 D.block.message = .ok s2 ∧
+      s2 = { s1 with latest_block_header := s2.latest_block_header } ∧ s2.builders = s1.builders ∧
       Gloas.processWithdrawals s2 = .ok s3 ∧ BuildersPkWe s2 s3 ∧ Inv.WFrame s2 s3 ∧
-      D.postB.builders = s3.builders :=
-  ⟨D.view.builderRequests_frame, D.view.builderWriters⟩
+      Gloas.processExecutionPayloadBid (gloasCtx ccfg bls) s3
+        D.block.message.body.signed_execution_payload_bid = .ok s4 ∧ s4.builders = s3.builders ∧
+      Gloas.processRandao (gloasCtx ccfg bls) s4 D.block.message.body = .ok s5 ∧ s5.builders = s4.builders ∧
+      Gloas.processEth1Data s5 D.block.message.body = .ok s6 ∧ s6.builders = s5.builders ∧
+      Gloas.processOperations (gloasCtx ccfg bls) s6 D.block.message.body D.postSlots.latest_block_header.slot =
+        .ok s7 ∧ s7.builders = s6.builders ∧
+      Gloas.processSyncAggregate (gloasCtx ccfg bls) s7 D.block.message.body.sync_aggregate = .ok D.postB ∧
+      D.postB.builders = s7.builders := by
+  refine ⟨D.view.builderRequests_frame, D.view.builderWriters.1, ?_⟩
+  have hpb : Gloas.processBlock (gloasCtx ccfg bls) D.postSlots D.block.message = .ok D.postB :=
+    D.view.processBlock
+  obtain ⟨trD, trE, s1', -, -, hD, hE, h1', hs1, -⟩ := processBlock_builderPhases hpb
+  obtain ⟨s1, s2, s3, s4, s5, s6, s7, h1, h2, h3, h4, h5, h6, h7, h8⟩ := Inv.processBlock_phases hpb
+  cases Except.ok.inj (h1'.symm.trans h1)
+  obtain ⟨s0, h0, -⟩ := builderDepositTrace_scan hD
+  have hm2 := (Inv.processBlockHeader_post h2).2.2
+  exact ⟨trD, trE, s0, s1', s2, s3, s4, s5, s6, s7, hD, hE, h0, builderDepositTrace_head_builders hD h0, h1, hs1,
+    h2, hm2, by rw [hm2], h3, processWithdrawals_pkWe _ _ h3, Inv.processWithdrawals_wFrame _ _ h3, h4,
+    (Inv.processExecutionPayloadBid_post h4).2.2.2.2.1, h5, (Inv.processRandao_invFrame _ _ _ _ h5).1, h6,
+    (Inv.processEth1Data_invFrame _ _ _ h6).1, h7, (Inv.processOperations_core _ _ _ _ _ h7).1, h8,
+    (Inv.processSyncAggregate_invFrame _ _ _ _ h8).1⟩
 
 /-! ## Conservation per step -/
 

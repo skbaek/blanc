@@ -685,6 +685,7 @@ COMPOSITION = {
     "Composition.BuilderRequestJointGPayments": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGPaymentsAnchorCore": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGPaymentsAnchor": ('builder-request', 'withdrawal-request'),
+    "Composition.BuilderRequestJointGAppends": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGValue": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGOnboarding": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGOnboardingWitnesses": ('builder-request',),

@@ -32,7 +32,8 @@ theorem applyParentPrefix_idx (hspe0 : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s a :
       ((∃ idx : U64, payIdx (s.latest_block_header.slot.toNat + P.SLOTS_PER_EPOCH) s = some idx.toNat ∧
           Gloas.settleBuilderPayment s idx = .ok x) ∨
         (payIdx (s.latest_block_header.slot.toNat + P.SLOTS_PER_EPOCH) s = none ∧
-          ((U64.zero < s.latest_execution_payload_bid.value ∧ x = directAppend s) ∨ x = s))) := by
+          ((U64.zero < s.latest_execution_payload_bid.value ∧ x = directAppend s) ∨
+            (¬ U64.zero < s.latest_execution_payload_bid.value ∧ x = s)))) := by
   unfold Gloas.applyParentPrefix at h
   obtain ⟨pe, hpe, h⟩ := bind_eq_ok_iff.mp h
   obtain ⟨_, _, h⟩ := bind_eq_ok_iff.mp h
@@ -99,7 +100,8 @@ theorem applyParentPrefix_idx (hspe0 : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s a :
         exact invFrame.trans (StepRel.forIn_array_rel invFrame id (fun _ _ => ok_pure ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩) _ _ hl1)
           (invFrame.trans (StepRel.forIn_array_rel invFrame id (fun _ _ => by gvcg; exact ok_pure (processWithdrawalRequest_invFrame _ _ _ _ ‹_›)) _ _ hl2)
             (StepRel.forIn_array_rel invFrame id (fun _ _ => by gvcg; exact ok_pure (processConsolidationRequest_invFrame _ _ _ _ ‹_›)) _ _ hl3))
-      · refine ⟨s, ?_, Or.inr ⟨hnone, Or.inr rfl⟩⟩
+      · rename_i hv0
+        refine ⟨s, ?_, Or.inr ⟨hnone, Or.inr ⟨hv0, rfl⟩⟩⟩
         obtain ⟨l1, hl1, h⟩ := bind_eq_ok_iff.mp h
         obtain ⟨l2, hl2, h⟩ := bind_eq_ok_iff.mp h
         obtain ⟨l3, hl3, h⟩ := bind_eq_ok_iff.mp h
@@ -170,7 +172,7 @@ theorem parent_cell (hspe : 0 < P.SLOTS_PER_EPOCH) {ctx : Ctx} {s : Nat} {m s1 :
   have e1 : s1.builder_pending_payments = x.builder_pending_payments := by
     rw [hs', hed, hda, fx.2.1]
   have hsl : payIdx s s1 = payIdx s m := payIdx_congr fr.2.2.2.2.2
-  rcases hx with ⟨idx, hidx, hset⟩ | ⟨-, (⟨-, rfl⟩ | rfl)⟩
+  rcases hx with ⟨idx, hidx, hset⟩ | ⟨-, (⟨-, rfl⟩ | ⟨-, rfl⟩)⟩
   · obtain ⟨-, p, -, -, -, hemp, hoth⟩ := settleBuilderPayment_frame hset
     cases hk : payIdx s m with
     | none => left; unfold cell; rw [hsl, hk]; rfl

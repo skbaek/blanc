@@ -15,8 +15,8 @@ Goal `eip8282-gloas-cross-layer-v1`, frozen statements rev 3.1 (Plans `recon/sta
 * `ValidJointG.builder_balance_equation` (B5(i)): Jaune's per-step `GStepView.builder_balance_equation` at
   every Gloas step of the run, its invariant premises discharged by `GInv` and the N7 bounds.
 * `ValidJointG.carried_withdrawals_equal` (B5(iv)): the payload a FULL step settles carries, as lists, the
-  `payload_expected_withdrawals` of the state its delivering step ended in (an earlier run step's post-block
-  state, or the anchor's); `ValidJointG.withdrawals_early_return` lifts the per-step early return.
+  `payload_expected_withdrawals` of the step's pre-state; `ValidJointG.withdrawals_early_return` lifts the per-step
+  early return.
 -/
 
 namespace Blanc.Lift.BuilderRequest
@@ -300,10 +300,10 @@ theorem envChecked_post (C : GJointRunStep (P := P) cfg ccfg bls) : EnvChecked c
   | crossing C => exact envChecked_of_deliverOpt C.deliver
   | gloas D => exact envChecked_of_deliverOpt D.deliver
 
-/-- **B5(iv): carried withdrawals.** A FULL step settles the payload its pre-state holds as delivered, and that
-payload's withdrawals equal, as lists, the `payload_expected_withdrawals` of the step's pre-state: the post-block
-state of the block the payload belongs to (the delivering run step's post-state, or the anchor), against which
-the envelope was checked. -/
+/-- **B5(iv): carried withdrawals.** A FULL step settles the payload its pre-state holds as delivered
+(`D.preParent = .delivered env req post`), and that payload's withdrawals equal, as lists, the
+`payload_expected_withdrawals` of the step's pre-state `D.preB`. The statement does not name the step that
+delivered the payload. -/
 theorem carried_withdrawals_equal (v : ValidJointG cfg ccfg bls checkpoint anchor final) {j : Nat}
     {D : GloasStepData (P := P) cfg ccfg bls} (stepD : v.run.steps[j]? = some (.gloas D))
     {env : Gloas.SignedExecutionPayloadEnvelope P} {req : Gloas.NewPayloadRequest P} {post : BlockChain}
