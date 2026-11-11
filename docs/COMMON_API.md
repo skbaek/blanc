@@ -1622,6 +1622,12 @@ For the final message or transaction state, use
 
 For accounts that may have been created after root entry, use
 [`Blanc/ExecutionDeletionProvenance.lean`](../Blanc/ExecutionDeletionProvenance.lean).
+For arbitrary rules, use `Exec.retained_atd_origin_any` on the actual committing
+execution: any committed-post deletion was initial or came from a retained
+SELFDESTRUCT at that address. `Exec.not_mem_atd_of_retained_terminal_safe_any`
+needs the same commitment, initial deletion absence and terminal exclusion at
+every retained node. Neither needs installed code or creation-set exclusion;
+neither proves transaction code survival, receipt attribution or parsing.
 `Exec.retained_atd_origin_noStateGas` traces any endpoint deletion to the
 initial deletion set or to a SELFDESTRUCT node in the same execution's
 complete-settlement-retained chronology.
@@ -5164,6 +5170,10 @@ Nothing in it names a contract; the only fork premise is `CoveredFork`.
 - `BlockForward.commitHeader` and `BlockForward.commitHeader_ok` fill the parent,
   body commitments, successor number/timestamp, and excess-blob-gas fields before
   applying the shared header validator.
+- `BlockForward.initBenv_commitHeader_body_eq` keeps the same execution
+  environment when the committed body's state and output change, for the same
+  fork, chain, rules, parent and header template. It has no additional premise;
+  it proves no body execution, header validity or chain transition.
 - `BlockForward.stateTransitionChecks_ok_of_eq` and
   `stateTransitionUsing_forward`: the configured transition
   `stateTransitionUsing cfg pre block = .ok ⟨appendBlock pre.blocks block, st, pre.chainId⟩`
