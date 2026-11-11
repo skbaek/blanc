@@ -4,6 +4,11 @@ namespace Blanc.Lift
 
 open Jaune
 
+/-- The external-instruction restriction: only `STATICCALL`. -/
+def Xinst.isStaticcall : Xinst → Bool
+  | .staticcall => true
+  | _ => false
+
 /-- Restriction at the active cursor and every suspended internal return. -/
 def Cursor.ExecsSatisfy (allowed : Xinst → Bool) (cursor : Cursor) : Prop :=
   cursor.f.execsSatisfy allowed = true ∧
@@ -256,5 +261,25 @@ theorem call_or_staticcall_of_parentPrefix_noStateGas {code : ByteArray} {c : Ce
   obtain ⟨cursor, reachable, ok⟩ := cursor_of_parentPrefix_noStateGas hc hpc hcode hfork hprefix
   exact ok.exec_call_or_staticcall (Cursor.callOnly_of_reach callOnly reachable) hat
 
+
+/-- Every same-frame prefix of an actual checked STATICCALL-only certificate
+has its original checked cursor, on every rule set and eventual outcome. -/
+theorem cursor_of_parentPrefix_staticcall {code : ByteArray} {c : Cert}
+    (checked : Cert.check code c = true)
+    (only : ∀ f ∈ c.prog, f.execsSatisfy Xinst.isStaticcall = true)
+    {root node : Exec.Deriv} (pc : root.pc = 0) (installed : root.sevm.code = code)
+    (chain : Exec.Deriv.ParentPrefix root node) :
+    ∃ κ, Relation.ReflTransGen (SStep c) (Cursor.start c) κ ∧ CursorOK code c node κ := by
+  apply cursor_of_parentPrefix_of_next_stack checked pc installed chain
+  intro κ reachable i tail next
+  have restriction : (SFunc.next i tail).execsSatisfy Xinst.isStaticcall = true := by
+    rw [← next]
+    exact (κ.execsSatisfy_of_reachable only reachable).1
+  have steps : ∀ x, Xinst.isStaticcall x = true → StepCapability root.sevm (.exec x) := by
+    intro x admitted
+    cases x <;> simp only [Xinst.isStaticcall, Bool.false_eq_true] at admitted
+    exact staticcall_capability root.sevm
+  intro pre post input output
+  exact (capability_of_next steps restriction).stack
 
 end Blanc.Lift
