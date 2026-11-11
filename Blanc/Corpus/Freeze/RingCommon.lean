@@ -43,6 +43,16 @@ def ObservedPreTip (checkpoint : BlockChain) : Prop :=
     t.header.hash = 0x28fb2c1d988435955e569451c6ad772f7fb5e61cddd7463c7b60e933ed5ff237 ∧
     t.header.stateRoot = 0xab350e0fe349aef68947ede26295f8946c34ce3af5e3ec76f4b26ddeef29c0e3
 
+/-- Word-fit bound for kept blocks' 8,191-second beacon-roots ring window (model-fidelity premise: Jaune's
+`validateHeader` enforces strictly increasing timestamps without capping them below `2 ^ 256`). -/
+def HistoryTimestampsFit (blocks : List KeptBlock) : Prop :=
+  ∀ b ∈ blocks, b.block.header.timestamp + 8191 < 2 ^ 256
+
+/-- Word-fit bound for kept blocks' 8,191-block history-storage ring window (model-fidelity premise: Jaune's
+`validateHeader` enforces consecutive block numbers without capping them below `2 ^ 256`). -/
+def HistoryNumbersFit (blocks : List KeptBlock) : Prop :=
+  ∀ b ∈ blocks, b.block.header.number + 8191 < 2 ^ 256
+
 /-- The timestamp of the payload a joint step carries, as the execution environment reads it
 (`initBenvStat`: `time := header.timestamp.toB256`; `payloadHeader`: `timestamp := payload.timestamp.toNat`). -/
 def stepTime {P : JauneConsensus.Preset} {cfg : ChainConfig} {ccfg : JauneConsensus.Config} {bls : Bool}

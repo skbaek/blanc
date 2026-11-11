@@ -94,16 +94,21 @@ def readGas (pre : Devm) (a : Adr) (t : B256) : Nat :=
 /-! ## The observation record (R-S4) -/
 
 /-- **R-S4's root**: what an observed pre-Prague checkpoint must hold for the R statements. Each field is a public
-JSON-RPC read at block 22,431,083; Lean does not authenticate them against the state root. Both reads already
-appear in registered records: `beaconAtP` of `WithdrawalDeploymentObservation` and `systemEmpty` of
-`ConsolidationCheckpointObservation`. -/
-structure CheckpointObservation (checkpoint : BlockChain) : Prop where
-  /-- The checkpoint's last header: number 22,431,083 (the last Cancun block), hash 0x28fb…f237. -/
+JSON-RPC read at block 22,431,083; Lean does not authenticate them against the state root. All underlying reads already
+appear in registered records (`checkpointTip` and `beaconAtP` of `WithdrawalDeploymentObservation`, `systemEmpty` of
+`ConsolidationCheckpointObservation`); packaging them as `BeaconRootsCheckpointObservation` is submitted for user
+adoption as registered provenance (§5/§9). -/
+structure BeaconRootsCheckpointObservation (checkpoint : BlockChain) : Prop where
+  /-- The checkpoint's last header (`ObservedPreTip`): number `22431083` (the last Cancun block),
+  timestamp `1746612299`, hash `0x28fb2c1d988435955e569451c6ad772f7fb5e61cddd7463c7b60e933ed5ff237`,
+  stateRoot `0xab350e0fe349aef68947ede26295f8946c34ce3af5e3ec76f4b26ddeef29c0e3`. -/
   tip : ObservedPreTip checkpoint
   /-- `eth_getCode(0x000F…Beac02)`: the canonical 97 bytes. -/
   code : checkpoint.state.getCode addr = beaconRootsCode
   /-- `eth_getCode(0xff…fe)` is empty. -/
   systemEmpty : checkpoint.state.getCode systemAddress = ByteArray.empty
+
+abbrev CheckpointObservation := BeaconRootsCheckpointObservation
 
 /-! ## R-S1: the protocol's own call cannot fail -/
 
@@ -221,7 +226,7 @@ def R_S4 : Prop :=
     -- a kept mainnet history from the checkpoint
     (_history : KeptHistory mainnetChainConfig checkpoint blocks final)
     -- the observation record
-    (_obs : CheckpointObservation checkpoint)
+    (_obs : BeaconRootsCheckpointObservation checkpoint)
     -- no SYSTEM_ADDRESS sender, authority or creation in any block
     (_clean : HistoryClean blocks),
     StorageIsHistory checkpoint final blocks
@@ -275,8 +280,9 @@ def R_S7 : Prop :=
 /-! ## R-S8: a buffered root stays readable for a stated window -/
 
 /-- **R-S8, generic time.** A positive timestamp written by a block of a kept history reads back its root at the end
-of the history, if every later block's timestamp is below it plus 8191. Timestamps strictly increase
-(`validateHeader`), so no later block in that window can overwrite its index. -/
+of the history, if every later block's timestamp is below it plus 8191 and the window fits below `2 ^ 256`
+(model-fidelity word-fit condition; compare `HistoryTimestampsFit`). Timestamps strictly increase (`validateHeader`),
+so no later block in that window can overwrite its index. -/
 def R_S8_time : Prop :=
   ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
     -- the kept history
@@ -296,15 +302,22 @@ def R_S8_time : Prop :=
         blocks[j].block.header.timestamp < blocks[i].block.header.timestamp + 8191) →
       read (storOf stop.state addr) (blockWrite blocks[i]).1 = some (blockWrite blocks[i]).2
 
-/-- **R-S8 generic-time control.** A closed kept history meeting every R-S8 premise, with a block exactly 8191
-seconds after a positive write, in which the read of that write fails. -/
+/-- **R-S8 generic-time control.** A closed kept history meeting every R-S8 premise (including `HistoryTimestampsFit`
+so no timestamp wraps modulo `2 ^ 256`), with a later block at timestamp `t + 8191` after a positive write at `t`,
+in which the ring slot's timestamp tag at `timeKey t` was overwritten by `(t + 8191) ≠ t` and the read of `t` at the
+end of the history therefore fails (`none` / reverts). -/
 def R_S8_time_control : Prop :=
   ∃ (cfg : ChainConfig) (start stop : BlockChain) (blocks : List KeptBlock),
     KeptHistory cfg start blocks stop ∧ (∀ b ∈ blocks, CoveredFork b.fork) ∧
     start.state.getCode addr = beaconRootsCode ∧ start.state.getCode systemAddress = ByteArray.empty ∧
-    HistoryClean blocks ∧
-    ∃ (i j : Nat) (hi : i < blocks.length) (hj : j < blocks.length), i < j ∧ (blockWrite blocks[i]).1 ≠ 0 ∧
+    HistoryClean blocks ∧ HistoryTimestampsFit blocks ∧
+    ∃ (i j : Nat) (hi : i < blocks.length) (hj : j < blocks.length),
+      i < j ∧ (blockWrite blocks[i]).1 ≠ 0 ∧
+      blocks[i].block.header.timestamp + 8191 ≤ 2 ^ 256 ∧
       blocks[j].block.header.timestamp = blocks[i].block.header.timestamp + 8191 ∧
+      timeKey (blockWrite blocks[j]).1 = timeKey (blockWrite blocks[i]).1 ∧
+      storOf stop.state addr (timeKey (blockWrite blocks[i]).1) = (blockWrite blocks[j]).1 ∧
+      (blockWrite blocks[j]).1 ≠ (blockWrite blocks[i]).1 ∧
       read (storOf stop.state addr) (blockWrite blocks[i]).1 = none
 
 /-- **R-S8, slot grid.** On a joint run, with the slot duration a whole number of seconds not divisible by 8191 (12 s
@@ -346,11 +359,65 @@ def filledHeaderRoot {P : Preset} {f : CFork} (s : BeaconState P f) : B256 :=
   Ssz.hashTreeRoot (if s.latest_block_header.state_root = 0 then
     { s.latest_block_header with state_root := Ssz.hashTreeRoot s } else s.latest_block_header)
 
-/-- **R-S9.** On the joint chain, after each step the contract holds the step's payload timestamp and its beacon
-block's `parent_root` (through `NewPayloadRequest.ofBlock`), so a read at that timestamp returns it; and that
-`parent_root` is the root of the previous block on this anchored history, or of the anchor's latest header at the
-first step (filled by the first `process_slot` when the step processes one; a crossing step from an Electra anchor
-already at the Fulu fork slot, `atSlot`, processes none). Chain-relative: no canonicality is claimed. -/
+/-- How the first joint step's `parent_root` relates to `anchor.beacon` across every fork pair `jointStep` admits:
+* same-fork (`.electra`/`.electra` or `.fulu`/`.fulu`): `process_slots` runs from `anchor.beacon` (`anchor.slot <
+  stepSlot`), giving `filledHeaderRoot anchor.beacon` whenever a single slot is processed or filling an unfilled header
+  does not collide with `process_slot`'s `0 : B256` sentinel (`Ssz.hashTreeRoot anchor.beacon ≠ 0`);
+* Electra → Fulu crossing (`anchor.slot ≤ forkSlot ≤ stepSlot`):
+  - `anchor.slot < forkSlot`: pre-upgrade `process_slots` fills from `anchor.beacon`, giving `filledHeaderRoot
+    anchor.beacon` under the corresponding single-slot (`forkSlot = anchor.slot + 1 ∧ stepSlot = forkSlot`) or
+    non-zero-digest guard;
+  - `anchor.slot = forkSlot = stepSlot`: neither `process_slots` runs (`atSlot`), so `parent_root =
+    Ssz.hashTreeRoot anchor.beacon.latest_block_header` unconditionally;
+  - `anchor.slot = forkSlot < stepSlot`: pre-upgrade `process_slots` is skipped, `upgradeToFulu` upgrades `anchor.beacon`
+    to `upgraded : BeaconState P .fulu`, and post-upgrade `process_slots` fills from `upgraded`, giving
+    `filledHeaderRoot upgraded` whenever `stepSlot = forkSlot + 1` or `upgraded`'s unfilled header does not hash to `0`.
+
+Why the `Ssz.hashTreeRoot … ≠ 0` guard appears across ≥ 2 `process_slot` iterations: Phase 0's `process_slot`
+(`JauneConsensus/Transition.lean:34`) tests `state.latest_block_header.state_root == 0` on every slot; if iteration 0
+fills an unfilled `state_root` with a zero SHA-256 SSZ digest, iteration 1 re-enters that sentinel branch and
+overwrites `state_root` with the next slot's state root (Goal §2 claims no SHA-256 preimage resistance beyond stated
+premises). -/
+def FirstStepAnchorRoot {P : Preset} (ccfg : Config) (anchor : JointState P)
+    (firstBlock : AnySignedBlock P) (root : B256) : Prop :=
+  let stepSlotNat := firstBlock.2.message.slot.toNat
+  let forkSlotNat := fuluForkSlot (P := P) ccfg
+  match anchor, firstBlock with
+  | ⟨.electra, beacon, _⟩, ⟨.electra, _⟩ =>
+    beacon.slot.toNat < stepSlotNat ∧ stepSlotNat < forkSlotNat ∧
+      ((stepSlotNat = beacon.slot.toNat + 1 ∨
+          (beacon.latest_block_header.state_root = 0 → Ssz.hashTreeRoot beacon ≠ 0)) →
+        root = filledHeaderRoot beacon)
+  | ⟨.fulu, beacon, _⟩, ⟨.fulu, _⟩ =>
+    beacon.slot.toNat < stepSlotNat ∧
+      ((stepSlotNat = beacon.slot.toNat + 1 ∨
+          (beacon.latest_block_header.state_root = 0 → Ssz.hashTreeRoot beacon ≠ 0)) →
+        root = filledHeaderRoot beacon)
+  | ⟨.electra, beacon, _⟩, ⟨.fulu, _⟩ =>
+    (beacon.slot.toNat < forkSlotNat ∧ forkSlotNat ≤ stepSlotNat ∧
+      (((forkSlotNat = beacon.slot.toNat + 1 ∧ stepSlotNat = forkSlotNat) ∨
+          (beacon.latest_block_header.state_root = 0 → Ssz.hashTreeRoot beacon ≠ 0)) →
+        root = filledHeaderRoot beacon)) ∨
+    (beacon.slot.toNat = forkSlotNat ∧ stepSlotNat = forkSlotNat ∧
+      root = Ssz.hashTreeRoot beacon.latest_block_header) ∨
+    (beacon.slot.toNat = forkSlotNat ∧ forkSlotNat < stepSlotNat ∧
+      ∃ upgraded, upgradeToFulu ccfg beacon = .ok upgraded ∧
+        ((stepSlotNat = forkSlotNat + 1 ∨
+            (upgraded.latest_block_header.state_root = 0 → Ssz.hashTreeRoot upgraded ≠ 0)) →
+          root = filledHeaderRoot upgraded))
+  | _, _ => False
+
+/-- **R-S9.** On the joint chain:
+* **(a)** after each step, the contract holds the step's payload timestamp and its beacon block's `parent_root`
+  (through `NewPayloadRequest.ofBlock`), and a read at a positive timestamp returns `some parent_root`;
+* **(b)** at the first step, `parent_root` equals `Ssz.hashTreeRoot st.latest_block_header` for the `jointBlockInput`
+  state `st` unconditionally, and satisfies `FirstStepAnchorRoot` across same-fork and all three Electra → Fulu
+  crossing cases without excluding any valid anchor;
+* **(c)** between consecutive steps `k` and `k + 1`, `parent_root` equals `Ssz.hashTreeRoot st.latest_block_header`
+  for `jointBlockInput` from `steps[k].post` unconditionally, and equals `Ssz.hashTreeRoot steps[k].block.2.message`
+  whenever `stepSlot steps[k+1] = stepSlot steps[k] + 1` or `steps[k].block.2.message.state_root ≠ 0` (excluding only
+  a multi-slot Phase 0 `0 : B256` sentinel collision).
+Chain-relative: no canonicality is claimed. -/
 def R_S9 : Prop :=
   ∀ {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain}
     {anchor final : JointState P}
@@ -361,25 +428,42 @@ def R_S9 : Prop :=
       storOf st.post.exec.state addr (rootKey (stepTime st)) = st.block.2.message.parent_root ∧
       (stepTime st ≠ 0 → read (storOf st.post.exec.state addr) (stepTime st) = some st.block.2.message.parent_root)) ∧
     (∀ h : 0 < v.run.steps.length,
-      (v.run.steps[0]'h).block.2.message.parent_root =
-        if anchor.beacon.slot.toNat < stepSlot (v.run.steps[0]'h) then filledHeaderRoot anchor.beacon
-        else Ssz.hashTreeRoot anchor.beacon.latest_block_header) ∧
+      let first := v.run.steps[0]'h
+      (∃ st : BeaconState P first.block.1, jointBlockInput ccfg bls anchor first.block = .ok st ∧
+        first.block.2.message.parent_root = Ssz.hashTreeRoot st.latest_block_header) ∧
+      FirstStepAnchorRoot ccfg anchor first.block first.block.2.message.parent_root) ∧
     (∀ k (hk : k + 1 < v.run.steps.length),
-      v.run.steps[k + 1].block.2.message.parent_root = Ssz.hashTreeRoot v.run.steps[k].block.2.message)
+      let prev := v.run.steps[k]'(Nat.lt_of_succ_lt hk)
+      let curr := v.run.steps[k + 1]'hk
+      (∃ st : BeaconState P curr.block.1, jointBlockInput ccfg bls prev.post curr.block = .ok st ∧
+        curr.block.2.message.parent_root = Ssz.hashTreeRoot st.latest_block_header) ∧
+      ((stepSlot curr = stepSlot prev + 1 ∨ prev.block.2.message.state_root ≠ 0) →
+        curr.block.2.message.parent_root = Ssz.hashTreeRoot prev.block.2.message))
 
-/-- **R-S9 control.** The stored root is whatever the conversion passes: for any request with its parent root
-replaced by `r`, the converted block's own call stores `r`. So R-S9's equation rests on `ofBlock` passing
-`parent_root`. -/
+/-- **R-S9 control.** Mutating the converted request's `parentBeaconBlockRoot` to `mutatedRoot ≠ block.parent_root`
+makes the execution block's protocol call store `mutatedRoot` and therefore falsifies R-S9's parent-root equality
+(`storOf … ≠ block.parent_root`, and for positive timestamps `read … ≠ some block.parent_root`). So R-S9's equation
+rests on `NewPayloadRequest.ofBlock` passing `block.parent_root`. -/
 def R_S9_control : Prop :=
-  ∀ {P : Preset} (req : NewPayloadRequest P) (r : B256) (fork : Jaune.Fork) (parent : BlockChain)
+  ∀ {P : Preset} {f : CFork} (block : BeaconBlock P f) (req : NewPayloadRequest P) (mutatedRoot : B256)
+    (fork : Jaune.Fork) (parent : BlockChain)
+    -- the engine request built for the beacon block
+    (_ofBlock : NewPayloadRequest.ofBlock block = .ok req)
+    -- the mutated root differs from the beacon block's parent_root
+    (_ne : mutatedRoot ≠ block.parent_root)
     -- a covered fork
     (_fork : CoveredFork fork)
     -- the canonical code at the parent
     (_code : parent.state.getCode addr = beaconRootsCode),
+    let mutatedReq := { req with parentBeaconBlockRoot := mutatedRoot }
+    let hdr := (payloadToBlock mutatedReq).header
     ∃ st bal,
-      beaconRootsCall fork.ruleSet
-          (initBenv fork parent (payloadToBlock { req with parentBeaconBlockRoot := r }).header) = .ok (st, bal) ∧
-        storOf st addr (rootKey (payloadToBlock { req with parentBeaconBlockRoot := r }).header.timestamp.toB256) = r
+      beaconRootsCall fork.ruleSet (initBenv fork parent hdr) = .ok (st, bal) ∧
+      storOf st addr (rootKey hdr.timestamp.toB256) = mutatedRoot ∧
+      storOf st addr (rootKey hdr.timestamp.toB256) ≠ block.parent_root ∧
+      (hdr.timestamp.toB256 ≠ 0 →
+        read (storOf st addr) hdr.timestamp.toB256 = some mutatedRoot ∧
+        read (storOf st addr) hdr.timestamp.toB256 ≠ some block.parent_root)
 
 /-! ## R-S10: the next fork does not break the protocol's call -/
 

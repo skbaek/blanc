@@ -95,16 +95,21 @@ def prevHeader (start : BlockChain) (blocks : List KeptBlock) (i : Nat) : Option
 /-! ## The observation record (H-S4) -/
 
 /-- **H-S4's root**: what an observed pre-Prague checkpoint must hold for the H statements. Each field is a public
-JSON-RPC read at block 22,431,083; Lean does not authenticate them. Both reads already appear in registered records:
-`historyAtP` of `WithdrawalDeploymentObservation` and `systemEmpty` of `ConsolidationCheckpointObservation`. The
-contract's storage there is not read: no H statement consumes it. -/
-structure CheckpointObservation (checkpoint : BlockChain) : Prop where
-  /-- The checkpoint's last header: number 22,431,083 (the last Cancun block), hash 0x28fb…f237. -/
+JSON-RPC read at block 22,431,083; Lean does not authenticate them against the state root. All underlying reads already
+appear in registered records (`checkpointTip` and `historyAtP` of `WithdrawalDeploymentObservation`, `systemEmpty` of
+`ConsolidationCheckpointObservation`); packaging them as `HistoryStorageCheckpointObservation` is submitted for user
+adoption as registered provenance (§5/§9). The contract's storage there is not read: no H statement consumes it. -/
+structure HistoryStorageCheckpointObservation (checkpoint : BlockChain) : Prop where
+  /-- The checkpoint's last header (`ObservedPreTip`): number `22431083` (the last Cancun block),
+  timestamp `1746612299`, hash `0x28fb2c1d988435955e569451c6ad772f7fb5e61cddd7463c7b60e933ed5ff237`,
+  stateRoot `0xab350e0fe349aef68947ede26295f8946c34ce3af5e3ec76f4b26ddeef29c0e3`. -/
   tip : ObservedPreTip checkpoint
   /-- `eth_getCode(0x0000F908…2935)`: the canonical 83 bytes. -/
   code : checkpoint.state.getCode addr = historyStorageCode
   /-- `eth_getCode(0xff…fe)` is empty. -/
   systemEmpty : checkpoint.state.getCode systemAddress = ByteArray.empty
+
+abbrev CheckpointObservation := HistoryStorageCheckpointObservation
 
 /-! ## H-S1: the protocol's own call cannot fail -/
 
@@ -219,7 +224,7 @@ def H_S4 : Prop :=
     -- a kept mainnet history from the checkpoint
     (_history : KeptHistory mainnetChainConfig checkpoint blocks final)
     -- the observation record
-    (_obs : CheckpointObservation checkpoint)
+    (_obs : HistoryStorageCheckpointObservation checkpoint)
     -- no SYSTEM_ADDRESS sender, authority or creation in any block
     (_clean : HistoryClean blocks),
     StorageIsHistory checkpoint final blocks
@@ -272,9 +277,10 @@ def H_S7 : Prop :=
 
 /-! ## H-S8: a written hash stays readable for its window -/
 
-/-- **H-S8.** For the hash block `i`'s protocol call wrote (of block `n = number_i - 1`): during every later block of
-number at most `n + 8191` (inclusive of block `i`), a read of `n` returns it; from block `n + 8192` on the query
-reverts, whatever is stored; and an in-window read of a slot no call wrote returns that slot's contents. -/
+/-- **H-S8.** For the hash block `i`'s protocol call wrote (of block `n = number_i - 1`), under the model-fidelity
+word-fit bound `number_i + 8191 < 2 ^ 256` (compare `HistoryNumbersFit`): during every later block of number at most
+`n + 8191` (inclusive of block `i`), a read of `n` returns it; from block `n + 8192` on the query reverts, whatever
+is stored; and an in-window read of a slot no call wrote returns that slot's contents. -/
 def H_S8 : Prop :=
   (∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
     -- the kept history
@@ -298,17 +304,24 @@ def H_S8 : Prop :=
         read s m.toB256 (blocks[i].block.header.number - 1).toB256 = none)) ∧
   ∀ (s : B256 → B256) (N q : B256), InWindow N q → read s N q = some (s (q % ring))
 
-/-- **H-S8 control (retention).** A closed kept history keeping every H-S8 premise except the empty code at
-SYSTEM_ADDRESS, where a writer is installed, in which an in-window read of a written hash returns a different value. -/
+/-- **H-S8 control (retention).** A closed kept history keeping every H-S8 premise (including `HistoryNumbersFit`
+so block numbers in the window do not wrap modulo `2 ^ 256`) except empty code at `SYSTEM_ADDRESS`, where a
+privileged writer is installed instead, in which an in-window read of a protocol-written block number returns
+`some wrongValue` with `wrongValue ≠ parentHash` (a genuine retention corruption, not an out-of-window `none`). -/
 def H_S8_control : Prop :=
   ∃ (cfg : ChainConfig) (start stop : BlockChain) (blocks : List KeptBlock) (v : B256),
     KeptHistory cfg start blocks stop ∧ (∀ b ∈ blocks, CoveredFork b.fork) ∧
     start.state.getCode addr = historyStorageCode ∧ HistoryClean blocks ∧
+    HistoryNumbersFit blocks ∧
     start.state.getCode systemAddress = writerCode v ∧
-    ∃ (i j : Nat) (hi : i < blocks.length) (hj : j < blocks.length), i ≤ j ∧
+    ∃ (i j : Nat) (hi : i < blocks.length) (hj : j < blocks.length) (wrongValue : B256),
+      blocks[i].block.header.number + 8191 < 2 ^ 256 ∧
+      i ≤ j ∧
       blocks[j].block.header.number ≤ blocks[i].block.header.number - 1 + 8191 ∧
+      InWindow blocks[j].block.header.number.toB256 (blocks[i].block.header.number - 1).toB256 ∧
       read (storOf blocks[j].run.preState addr) blocks[j].block.header.number.toB256
-        (blocks[i].block.header.number - 1).toB256 ≠ some blocks[i].block.header.parentHash
+        (blocks[i].block.header.number - 1).toB256 = some wrongValue ∧
+      wrongValue ≠ blocks[i].block.header.parentHash
 
 /-! ## H-S9: what the chain reads is the history's block hash -/
 
@@ -335,16 +348,31 @@ def H_S9 : Prop :=
           read (storOf blocks[j].run.preState addr) blocks[j].block.header.number.toB256 hdr.number.toB256 =
             some hdr.hash
 
-/-- **H-S9 control (the parent-hash input).** The protocol call stores whatever word it is passed: with any input
-`w`, it writes `w`. So H-S9's equation rests on the call passing the parent tip's hash. -/
+/-- **H-S9 control (chain form: the parent-hash input).** When a block builds on a parent chain with tip `t`
+(`expectedHash = t.header.hash`, `header.number = t.header.number + 1`), mutating the parent-hash input passed to the
+history-storage call to `mutatedHash ≠ t.header.hash` writes `mutatedHash` into `key header.number` so both the stored
+word and the in-window read of `t.header.number` differ from `t.header.hash`, falsifying H-S9's block-hash equality. -/
 def H_S9_control : Prop :=
-  ∀ (benv : Benv) (w : B256)
+  ∀ (parent : BlockChain) (t : Block) (fork : Jaune.Fork) (header : Header) (bal : BalBuilder) (mutatedHash : B256)
+    -- the parent chain's tip block (whose hash H-S9 expects to read back)
+    (_tip : parent.blocks.getLast? = some t)
+    -- consecutive block number, within the word-fit bound
+    (_num : header.number = t.header.number + 1)
+    (_fit : header.number + 8191 < 2 ^ 256)
     -- a covered fork
-    (_fork : CoveredFork benv.stat.fork)
-    -- the canonical code at the address
-    (_installed : benv.state.getCode addr = historyStorageCode),
-    ∃ out, processUncheckedSystemTransaction benv addr w.toBytes =
-      .ok (benv.state.setStorVal addr (key benv.stat.number.toB256) w, out)
+    (_fork : CoveredFork fork)
+    -- the canonical code at the parent
+    (_installed : parent.state.getCode addr = historyStorageCode)
+    -- the mutated input differs from the parent tip's hash
+    (_ne : mutatedHash ≠ t.header.hash),
+    let benv := initBenv fork parent header
+    let mutatedBenv : Benv := { benv with stat := { benv.stat with blockHashes := [mutatedHash] } }
+    ∃ st bal',
+      historyStorageCall mutatedBenv.stat.rules mutatedBenv bal = .ok (st, bal') ∧
+      storOf st addr (key header.number.toB256) = mutatedHash ∧
+      storOf st addr (key header.number.toB256) ≠ t.header.hash ∧
+      read (storOf st addr) header.number.toB256 t.header.number.toB256 = some mutatedHash ∧
+      read (storOf st addr) header.number.toB256 t.header.number.toB256 ≠ some t.header.hash
 
 /-- **H-S9, joint form.** On the joint chain, after each step the contract holds, at the slot of the step's payload
 number, the execution block hash the beacon state recorded for the previous payload
@@ -358,6 +386,28 @@ def H_S9_joint : Prop :=
     ∀ st ∈ v.run.steps,
       storOf st.post.exec.state addr (key (stepNumber st).toB256) =
         st.pre.beacon.latest_execution_payload_header.block_hash
+
+/-- **H-S9 control (joint form: the consensus-recorded payload hash).** When the parent-hash input passed to the
+converted payload block's history-storage call is mutated to `mutatedHash ≠ beacon.latest_execution_payload_header.block_hash`,
+the call stores `mutatedHash` at `key block_number` and the stored word differs from the beacon state's recorded
+previous payload hash, falsifying `H_S9_joint`'s equality. -/
+def H_S9_joint_control : Prop :=
+  ∀ {P : Preset} {f : CFork} (beacon : BeaconState P f) (req : NewPayloadRequest P) (fork : Jaune.Fork)
+    (parent : BlockChain) (bal : BalBuilder) (mutatedHash : B256)
+    -- a covered fork
+    (_fork : CoveredFork fork)
+    -- the canonical code at the parent
+    (_installed : parent.state.getCode addr = historyStorageCode)
+    -- the mutated input differs from the beacon state's recorded previous payload block_hash
+    (_ne : mutatedHash ≠ beacon.latest_execution_payload_header.block_hash),
+    let hdr := (payloadToBlock req).header
+    let benv := initBenv fork parent hdr
+    let mutatedBenv : Benv := { benv with stat := { benv.stat with blockHashes := [mutatedHash] } }
+    ∃ st bal',
+      historyStorageCall mutatedBenv.stat.rules mutatedBenv bal = .ok (st, bal') ∧
+      storOf st addr (key req.executionPayload.block_number.toNat.toB256) = mutatedHash ∧
+      storOf st addr (key req.executionPayload.block_number.toNat.toB256) ≠
+        beacon.latest_execution_payload_header.block_hash
 
 /-! ## H-S10: the next fork does not break the protocol's call -/
 
