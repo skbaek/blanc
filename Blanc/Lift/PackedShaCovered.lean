@@ -39,7 +39,7 @@ theorem copy_sha_covered {img : Bytes} {n s d : Nat} {w1 w2 x1 x3 x4 : B256} {X0
     (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ b.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hG : G + 246 < 2 ^ 256) :
     ∃ b' M' img', ShaCallPost b b' (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes ∧
       Mem.Wf M' ∧ Mem.Reads M' img' ∧ M'.size = n ∧
