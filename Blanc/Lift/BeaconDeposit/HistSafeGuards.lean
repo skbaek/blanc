@@ -28,16 +28,19 @@ is `0` and `amount > 2^64 - 1` is `0`; convert with `B256.toNat_div`/`toNat_mod`
 successful halting leaf); invert `to_little_endian_64` once as a lemma about entry 25 for any
 caller (the converse of `to_little_endian_64_run`: from a run of `t_14ba_c25` returning, the
 returned state is `pB :: rest` over `leImg`; its eight `MSTORE8` bounds checks have `INVALID`
-failing arms).  The `SLOAD` is `Ninst.Run`'s `afterSloadH` successor (determinism of the step:
-compare with `Ninst.runCompiled_sload_selected`). -/
-theorem safe_guardsH_any_data {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B256} {G : Nat}
+failing arms).  The `SLOAD` is the exact successor supplied by the explicit actual count-read law;
+the historical instance discharges it with `ri_sloadH`. -/
+theorem safe_guards_with_count_read_any_data {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B256} {G : Nat}
     {o : Outcome}
-    (hbal : sevm.benvStat.rules.bal = none)
+    (readBase : Devm)
+    (readCount : ∀ {S : List B256} {M : Mem} {G : Nat} {d : Devm},
+      Ninst.Run sevm (St b (solCountSlot :: S) M G) (.reg .sload) d →
+        ∃ G', d = St readBase (b.getStorVal sevm.currentTarget solCountSlot :: S) M G')
     (run : SFunc.Run prog sevm (St b [rt, sgL, sP, wcL, wP, pkL, pP, 0x01b8, sel] mem0 G)
       t_0304_c7 o) :
     pkL = 48 ∧ wcL = 32 ∧ sgL = 96 ∧ 10 ^ 18 ≤ sevm.value.toNat ∧
       sevm.value.toNat % 10 ^ 9 = 0 ∧ sevm.value.toNat / 10 ^ 9 < 2 ^ 64 ∧
-      ∃ b' M' G', Keep (afterSloadH sevm b solCountSlot) b' ∧
+      ∃ b' M' G', Keep readBase b' ∧
         BodyMem M' 256 0x100
           [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 (gweiAmount sevm).toNat),
             (0xc0, (8 : B256).toBytes),
@@ -201,9 +204,9 @@ theorem safe_guardsH_any_data {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL 
     winv 9
     have hslot : Bytes.toB256 [0x20] = solCountSlot := rfl
     rw [hslot] at run
-    obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_sloadH hbal s
+    obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := readCount s
     obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_push s
-    set b'' := afterSloadH sevm b solCountSlot with hb''def
+    set b'' := readBase with hb''def
     set cnt := b.getStorVal sevm.currentTarget solCountSlot with hcntdef
     obtain ⟨G23, ⟨D2, hcall2, run⟩ | ⟨D2, hcall2, -⟩⟩ := ric_call (fs := prog) (k := 25) (by rfl) run
     · obtain ⟨M', G24, rfl, hwf', hr', hs'⟩ := safe_to_little_endian_64_returned_any_data hwf1 hr1
@@ -272,6 +275,25 @@ theorem safe_guardsH_any_data {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL 
         (by rw [hs1']; decide) hfp2 (by decide) (by decide) (by decide) hcall2).elim
   · exact (safe_to_little_endian_64_not_halted_any_data wf_mem0 reads_mem0 (by rw [mem0_size])
       (by rw [mem0_size]) img0_fp (by rw [p80]) (by rw [p80]; omega) (by rw [p80]; decide) hcall1).elim
+
+/-- Historical compatibility instance of the same actual count-read inverse. -/
+theorem safe_guardsH_any_data {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B256} {G : Nat}
+    {o : Outcome}
+    (hbal : sevm.benvStat.rules.bal = none)
+    (run : SFunc.Run prog sevm (St b [rt, sgL, sP, wcL, wP, pkL, pP, 0x01b8, sel] mem0 G)
+      t_0304_c7 o) :
+    pkL = 48 ∧ wcL = 32 ∧ sgL = 96 ∧ 10 ^ 18 ≤ sevm.value.toNat ∧
+      sevm.value.toNat % 10 ^ 9 = 0 ∧ sevm.value.toNat / 10 ^ 9 < 2 ^ 64 ∧
+      ∃ b' M' G', Keep (afterSloadH sevm b solCountSlot) b' ∧
+        BodyMem M' 256 0x100
+          [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 (gweiAmount sevm).toNat),
+            (0xc0, (8 : B256).toBytes),
+            (0xe0, BeaconDeposit.le64 (b.getStorVal sevm.currentTarget solCountSlot).toNat)] ∧
+        SFunc.Run prog sevm
+          (St b' [0xc0, 96, sP, 0x80, 32, wP, 48, pP, BeaconDeposit.depositEventTopic, 0x80,
+            gweiAmount sevm, rt, 96, sP, 32, wP, 48, pP, 0x01b8, sel] M' G') t_0575_c7 o := by
+  exact safe_guards_with_count_read_any_data (afterSloadH sevm b solCountSlot)
+    (by intro S M G d step; exact ri_sloadH hbal step) run
 
 /-- Bounded compatibility projection of the same guard inversion. -/
 theorem safe_guardsH {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B256} {G : Nat}

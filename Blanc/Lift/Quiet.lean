@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import Blanc.Lift.Silent
 import Blanc.StaticCallStorage
 import Blanc.CompiledFixedInvariance
@@ -36,6 +37,8 @@ namespace Blanc.Lift
 
 open Jaune
 open scoped LogOutputHinv
+
+open private resume_callAmsterdam_state from Blanc.LadderBase
 
 /-! ## Log-list equality through an instruction
 
@@ -446,285 +449,454 @@ lemma delegation {gas : GasSchedule} {devm x : Devm} {adr : Adr} {dp : Bool} {na
 
 end ShapeLogs
 
-/-- **Every executable instruction has a log-list shape,** given the rule facts
-the step unfolding needs: no state gas, and the delegation/access values,
-each cased explicitly rather than assumed modern. -/
+private abbrev logsBalances (d : Devm) := (d.logs, d.getBal)
+
+/-- Concrete observations of the same selected instruction prefix; old log consumers
+project this structure without assuming a balance invariant for their child. -/
+private def Xinst.ShapePair (sevm : Sevm) (devm : Devm) (x : Xinst) (s : XStep) : Prop :=
+  (∃ ex, s = .done ex ∧ Execution.Rel (fun a b => logsBalances a = logsBalances b) devm ex) ∨
+  ((x = .create ∨ x = .create2) ∧
+    ∃ (state : Option StateGasRules), ∃ d endowment newAddress mi ms,
+      sevm.benvStat.rules.stateGas = state ∧ logsBalances d = logsBalances devm ∧
+      (state = none ∨ sevm.isStatic = false) ∧
+      s = match state with
+        | none => genericCreate.step sevm d endowment newAddress mi ms
+        | some state => genericCreateAmsterdam.step sevm state d endowment newAddress mi ms) ∨
+  (∃ (state : Option StateGasRules), ∃ d gas reservoir value caller target codeAddress
+      stv isSt ii isz oi osz code dp charged insufficient,
+    sevm.benvStat.rules.stateGas = state ∧ logsBalances d = logsBalances devm ∧
+    ((sevm.isStatic = true ∨ x = .staticcall) →
+      stv = false ∨ value = 0 ∨ caller = target) ∧
+    s = match state with
+      | none => genericCall.step sevm d gas value caller target codeAddress stv isSt
+          ii isz oi osz code dp
+      | some state => genericCallAmsterdam.step sevm state d gas reservoir value caller
+          target codeAddress stv isSt ii isz oi osz code dp charged insufficient)
+
+namespace PairShape
+
+private lemma frame {a b : Devm} (world : Devm.InstructionFrame a b)
+    (logs : b.logs = a.logs) : logsBalances b = logsBalances a :=
+  Prod.ext logs (funext (getBal_eq_of_state_eq world.state.symm))
+
+private lemma mach {a b : Devm} (h : Devm.MachFrame a b) :
+    logsBalances a = logsBalances b :=
+  Prod.ext h.logs (funext (getBal_eq_of_state_eq h.state))
+
+private lemma ofMach {d : Devm} {out : Execution}
+    (h : Execution.Rel Devm.MachFrame d out) :
+    Execution.Rel (fun a b => logsBalances a = logsBalances b) d out := by
+  cases out <;> exact mach h
+
+private lemma ofMachP {α : Type} {d : Devm} {out : Except (EvmError × Devm) (α × Devm)}
+    (h : Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d out) :
+    Outcome.Rel Prod.snd Prod.snd (fun a b => logsBalances a = logsBalances b) d out := by
+  cases out <;> exact mach h
+
+private lemma error {s : Sevm} {d : Devm} {x : Xinst} {e : EvmError × Devm}
+    (h : logsBalances e.2 = logsBalances d) : Xinst.ShapePair s d x (XStep.ofExcept (.error e)) :=
+  Or.inl ⟨_, rfl, h.symm⟩
+
+private lemma bind {s : Sevm} {d base : Devm} {x : Xinst} {α : Type}
+    {out : Except (EvmError × Devm) (α × Devm)}
+    {next : α × Devm → Except (EvmError × Devm) XStep}
+    (basePair : logsBalances base = logsBalances d)
+    (step : Outcome.Rel Prod.snd Prod.snd (fun a b => logsBalances a = logsBalances b) base out)
+    (tail : ∀ v b, logsBalances b = logsBalances d →
+      Xinst.ShapePair s d x (XStep.ofExcept (next (v, b)))) :
+    Xinst.ShapePair s d x (XStep.ofExcept (out >>= next)) := by
+  cases out with
+  | error e => exact error (step.symm.trans basePair)
+  | ok pair => exact tail pair.1 pair.2 (step.symm.trans basePair)
+
+private lemma bindE {s : Sevm} {d base : Devm} {x : Xinst} {out : Execution}
+    {next : Devm → Except (EvmError × Devm) XStep}
+    (basePair : logsBalances base = logsBalances d)
+    (step : Execution.Rel (fun a b => logsBalances a = logsBalances b) base out)
+    (tail : ∀ b, logsBalances b = logsBalances d → Xinst.ShapePair s d x (XStep.ofExcept (next b))) :
+    Xinst.ShapePair s d x (XStep.ofExcept (out >>= next)) := by
+  cases out with
+  | error e => exact error (step.symm.trans basePair)
+  | ok b => exact tail b (step.symm.trans basePair)
+
+private lemma assert {s : Sevm} {d : Devm} {x : Xinst} {p : Prop} [Decidable p]
+    {e : EvmError × Devm} {next : Unit → Except (EvmError × Devm) XStep}
+    (pair : logsBalances e.2 = logsBalances d)
+    (tail : p → Xinst.ShapePair s d x (XStep.ofExcept (next ()))) :
+    Xinst.ShapePair s d x (XStep.ofExcept (Except.assert p e >>= next)) := by
+  unfold Except.assert
+  split
+  · exact tail (by assumption)
+  · exact error pair
+
+private lemma create {s : Sevm} {d base : Devm} {x : Xinst}
+    {state : Option StateGasRules} {endowment : B256} {address : Adr} {mi ms : Nat}
+    (kind : x = .create ∨ x = .create2) (lane : s.benvStat.rules.stateGas = state)
+    (pair : logsBalances base = logsBalances d)
+    (dynamic : state = none ∨ s.isStatic = false) : Xinst.ShapePair s d x
+      (match state with
+      | none => genericCreate.step s base endowment address mi ms
+      | some state => genericCreateAmsterdam.step s state base endowment address mi ms) :=
+  by
+    cases state with
+    | none => exact Or.inr (Or.inl ⟨kind, none, base, endowment, address, mi, ms, lane, pair, dynamic, rfl⟩)
+    | some state =>
+      exact Or.inr (Or.inl ⟨kind, some state, base, endowment, address, mi, ms, lane, pair, dynamic, rfl⟩)
+
+private lemma call {s : Sevm} {d base : Devm} {x : Xinst} {state : Option StateGasRules}
+    {gas reservoir : Nat} {value : B256} {caller target address : Adr} {stv isSt : Bool}
+    {ii isz oi osz : Nat} {code : ByteArray} {dp charged insufficient : Bool}
+    (lane : s.benvStat.rules.stateGas = state) (pair : logsBalances base = logsBalances d)
+    (quiet : (s.isStatic = true ∨ x = .staticcall) →
+      stv = false ∨ value = 0 ∨ caller = target) : Xinst.ShapePair s d x
+      (match state with
+      | none => genericCall.step s base gas value caller target address stv isSt ii isz oi osz code dp
+      | some state => genericCallAmsterdam.step s state base gas reservoir value caller target
+          address stv isSt ii isz oi osz code dp charged insufficient) :=
+  by
+    cases state with
+    | none => exact Or.inr (Or.inr ⟨none, base, gas, reservoir, value, caller, target, address,
+        stv, isSt, ii, isz, oi, osz, code, dp, charged, insufficient, lane, pair, quiet, rfl⟩)
+    | some state => exact Or.inr (Or.inr ⟨some state, base, gas, reservoir, value, caller,
+        target, address, stv, isSt, ii, isz, oi, osz, code, dp, charged, insufficient,
+        lane, pair, quiet, rfl⟩)
+
+private lemma memExtends {d : Devm} {windows : List (Nat × Nat)} :
+    logsBalances (d.memExtends windows) = logsBalances d :=
+  frame (Devm.memExtends_instructionFrame _ _) (Devm.memExtends_logs _ _)
+
+private lemma access {d : Devm} {a : Adr} :
+    logsBalances (addAccessedAddress d a) = logsBalances d :=
+  frame (addAccessedAddress_instructionFrame _ _) rfl
+
+private lemma readAccount {rules : ForkRules} {d : Devm} {a : Adr} :
+    logsBalances (d.balReadAccount rules a) = logsBalances d :=
+  frame (Devm.balReadAccount_instructionFrame _ _ _) (Devm.balReadAccount_logs _ _ _)
+
+private lemma delegation {rules : ForkRules} {d : Devm} {a : Adr} :
+    logsBalances (rules.accessDelegation d a).2.2.2.2 = logsBalances d := by
+  apply frame (ForkRules.accessDelegation_instructionFrame _ _ _)
+  unfold ForkRules.accessDelegation
+  split
+  · exact GasSchedule.accessDelegation_logs
+  · rfl
+
+private lemma completeDelegation {d : Devm} {enabled : Bool} {a : Adr} :
+    logsBalances (completeDelegationAccess d enabled a).2 = logsBalances d := by
+  apply frame (completeDelegationAccess_instructionFrame _ _ _)
+  cases enabled <;> rfl
+
+private lemma pop (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd (fun a b => logsBalances a = logsBalances b) d d.pop := ofMachP (Devm.pop_machFrame d)
+private lemma popToNat (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd (fun a b => logsBalances a = logsBalances b) d d.popToNat := ofMachP (Devm.popToNat_machFrame d)
+private lemma popToAdr (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd (fun a b => logsBalances a = logsBalances b) d d.popToAdr := ofMachP (Devm.popToAdr_machFrame d)
+private lemma push (v : B256) (d : Devm) :
+    Execution.Rel (fun a b => logsBalances a = logsBalances b) d (d.push v) := ofMach (Devm.push_machFrame v d)
+private lemma chargeGas (cost : Nat) (d : Devm) :
+    Execution.Rel (fun a b => logsBalances a = logsBalances b) d (Jaune.chargeGas cost d) := ofMach (chargeGas_machFrame cost d)
+private lemma chargeStateGas (cost : Nat) (d : Devm) :
+    Execution.Rel (fun a b => logsBalances a = logsBalances b) d (Jaune.chargeStateGas cost d) :=
+  ofMach (liftMachExecution_machFrame (Mach.chargeStateGas cost) d)
+
+private lemma shortfall {s : Sevm} {d base : Devm} {x : Xinst} {stipend : Nat}
+    (pair : logsBalances base = logsBalances d) : Xinst.ShapePair s d x
+      (XStep.ofExcept (base.push 0 >>= fun next => .ok (.done (.ok
+        ((next.withReturnData []).withGasLeft (next.gasLeft + stipend)))))) := by
+  refine bindE pair (push 0 base) fun next kept => ?_
+  exact Or.inl ⟨_, rfl, kept.symm⟩
+
+private lemma shortfall' {s : Sevm} {d base : Devm} {x : Xinst} {stipend : Nat}
+    (pair : logsBalances base = logsBalances d) : Xinst.ShapePair s d x
+      (XStep.ofExcept (base.push 0 >>= fun next => .ok (.done (.ok
+        ((next.withGasLeft (next.gasLeft + stipend)).withReturnData []))))) := by
+  refine bindE pair (push 0 base) fun next kept => ?_
+  exact Or.inl ⟨_, rfl, kept.symm⟩
+
+private lemma callRouting {s : Sevm} {value : B256} {target : Adr}
+    (passed : (!s.isStatic) = true ∨ value = 0) :
+    (s.isStatic = true ∨ Xinst.call = .staticcall) →
+      true = false ∨ value = 0 ∨ s.currentTarget = target := by
+  intro selected
+  rcases selected with static | impossible
+  · rcases passed with dynamic | zero
+    · simp only [static, Bool.not_true, Bool.false_eq_true] at dynamic
+    · exact Or.inr (Or.inl zero)
+  · cases impossible
+
+private lemma oldLogs {s : Sevm} {d : Devm} {x : Xinst} {step : XStep}
+    (lane : s.benvStat.rules.stateGas = none) (shape : Xinst.ShapePair s d x step) :
+    Xinst.ShapeLogs s d (x = .create ∨ x = .create2) step := by
+  rcases shape with ⟨ex, step, pair⟩ | ⟨kind, state, base, val, target, mi, ms, selected, pair, _, step⟩ |
+    ⟨state, base, gas, reservoir, val, caller, target, address, stv, isSt, ii, isz, oi, osz,
+      code, dp, charged, insufficient, selected, pair, _, step⟩
+  · refine Or.inl ⟨ex, step, ?_⟩
+    cases ex <;> exact congrArg Prod.fst pair
+  · have none : state = none := selected.symm.trans lane
+    rw [none] at step
+    exact Or.inr (Or.inl ⟨kind, base, val, target, mi, ms, congrArg Prod.fst pair, step⟩)
+  · have none : state = none := selected.symm.trans lane
+    rw [none] at step
+    exact Or.inr (Or.inr ⟨base, gas, val, caller, target, address, stv, isSt, ii, isz, oi, osz,
+      code, dp, congrArg Prod.fst pair, step⟩)
+
+end PairShape
+
+/-- One structural opcode decomposition supplies both old log callbacks and the
+new concrete pair callbacks, without requiring either child observation here. -/
+private theorem Xinst.step_shapePair (sevm : Sevm) (devm : Devm) (x : Xinst) :
+    Xinst.ShapePair sevm devm x (Xinst.step sevm devm x) := by
+  cases x with
+  | create =>
+    simp only [Xinst.step]
+    cases lane : sevm.benvStat.rules.stateGas with
+    | none =>
+      refine PairShape.bind rfl (PairShape.pop devm) fun _ d1 h1 => ?_
+      refine PairShape.bind h1 (PairShape.popToNat d1) fun _ d2 h2 => ?_
+      refine PairShape.bind h2 (PairShape.popToNat d2) fun _ d3 h3 => ?_
+      refine PairShape.bindE h3 (PairShape.chargeGas _ d3) fun next kept => ?_
+      exact PairShape.create (Or.inl rfl) lane (PairShape.memExtends.trans kept) (Or.inl rfl)
+    | some state =>
+      refine PairShape.assert rfl fun dynamic => ?_
+      refine PairShape.bind rfl (PairShape.pop devm) fun _ d1 h1 => ?_
+      refine PairShape.bind h1 (PairShape.popToNat d1) fun _ d2 h2 => ?_
+      refine PairShape.bind h2 (PairShape.popToNat d2) fun _ d3 h3 => ?_
+      refine PairShape.bindE h3 (PairShape.chargeGas _ d3) fun next kept => ?_
+      refine PairShape.assert kept fun _ => ?_
+      exact PairShape.create (Or.inl rfl) lane (PairShape.memExtends.trans kept) (Or.inr (by cases h : sevm.isStatic <;> simp_all only [Bool.not_true, Bool.false_eq_true]))
+  | create2 =>
+    simp only [Xinst.step]
+    split
+    · cases lane : sevm.benvStat.rules.stateGas with
+      | none =>
+        refine PairShape.bind rfl (PairShape.pop devm) fun _ d1 h1 => ?_
+        refine PairShape.bind h1 (PairShape.popToNat d1) fun _ d2 h2 => ?_
+        refine PairShape.bind h2 (PairShape.popToNat d2) fun _ d3 h3 => ?_
+        refine PairShape.bind h3 (PairShape.pop d3) fun _ d4 h4 => ?_
+        refine PairShape.bindE h4 (PairShape.chargeGas _ d4) fun next kept => ?_
+        exact PairShape.create (Or.inr rfl) lane (PairShape.memExtends.trans kept) (Or.inl rfl)
+      | some state =>
+        refine PairShape.assert rfl fun dynamic => ?_
+        refine PairShape.bind rfl (PairShape.pop devm) fun _ d1 h1 => ?_
+        refine PairShape.bind h1 (PairShape.popToNat d1) fun _ d2 h2 => ?_
+        refine PairShape.bind h2 (PairShape.popToNat d2) fun _ d3 h3 => ?_
+        refine PairShape.bind h3 (PairShape.pop d3) fun _ d4 h4 => ?_
+        refine PairShape.bindE h4 (PairShape.chargeGas _ d4) fun next kept => ?_
+        refine PairShape.assert kept fun _ => ?_
+        exact PairShape.create (Or.inr rfl) lane (PairShape.memExtends.trans kept) (Or.inr (by cases h : sevm.isStatic <;> simp_all only [Bool.not_true, Bool.false_eq_true]))
+    · exact PairShape.error rfl
+  | call =>
+    simp only [Xinst.step]
+    cases lane : sevm.benvStat.rules.stateGas with
+    | none =>
+      refine PairShape.bind rfl (PairShape.pop devm) fun _ d1 h1 => ?_
+      refine PairShape.bind h1 (PairShape.popToAdr d1) fun target d2 h2 => ?_
+      refine PairShape.bind h2 (PairShape.pop d2) fun value d3 h3 => ?_
+      refine PairShape.bind h3 (PairShape.popToNat d3) fun _ d4 h4 => ?_
+      refine PairShape.bind h4 (PairShape.popToNat d4) fun _ d5 h5 => ?_
+      refine PairShape.bind h5 (PairShape.popToNat d5) fun _ d6 h6 => ?_
+      refine PairShape.bind h6 (PairShape.popToNat d6) fun _ d7 h7 => ?_
+      dsimp only
+      let access : Devm := match sevm.benvStat.rules.access with
+        | .eip2929 => addAccessedAddress d7 target
+        | .flat _ => d7
+      have accessed : logsBalances access = logsBalances devm := by
+        dsimp only [access]
+        split
+        · exact PairShape.access.trans h7
+        · exact h7
+      let base := (sevm.benvStat.rules.accessDelegation access target).2.2.2.2
+      have prePair : logsBalances base = logsBalances devm :=
+        PairShape.delegation.trans accessed
+      refine PairShape.bindE prePair (PairShape.chargeGas _ base) fun charged kept => ?_
+      refine PairShape.assert kept fun passed => ?_
+      split
+      · exact PairShape.shortfall (PairShape.memExtends.trans kept)
+      · exact PairShape.call (reservoir := 0) (charged := false) (insufficient := false)
+          lane (PairShape.memExtends.trans kept) (PairShape.callRouting passed)
+    | some state =>
+      refine PairShape.bind rfl (PairShape.pop devm) fun _ d1 h1 => ?_
+      refine PairShape.bind h1 (PairShape.popToAdr d1) fun target d2 h2 => ?_
+      refine PairShape.bind h2 (PairShape.pop d2) fun value d3 h3 => ?_
+      refine PairShape.bind h3 (PairShape.popToNat d3) fun _ d4 h4 => ?_
+      refine PairShape.bind h4 (PairShape.popToNat d4) fun _ d5 h5 => ?_
+      refine PairShape.bind h5 (PairShape.popToNat d5) fun _ d6 h6 => ?_
+      refine PairShape.bind h6 (PairShape.popToNat d6) fun _ d7 h7 => ?_
+      dsimp only
+      refine PairShape.assert h7 fun passed => ?_
+      refine PairShape.assert h7 fun _ => ?_
+      let accessed := addAccessedAddress d7 target
+      let delegate := sevm.benvStat.rules.delegationCost accessed target
+      let read1 := accessed.balReadAccount sevm.benvStat.rules target
+      have first : logsBalances read1 = logsBalances devm :=
+        PairShape.readAccount.trans (PairShape.access.trans h7)
+      refine PairShape.assert first fun _ => ?_
+      let read2 := read1.balReadAccount sevm.benvStat.rules delegate.2.1
+      let completed := completeDelegationAccess read2 delegate.1 delegate.2.1
+      have prePair : logsBalances completed.2 = logsBalances devm :=
+        PairShape.completeDelegation.trans (PairShape.readAccount.trans first)
+      refine PairShape.bindE prePair (PairShape.chargeGas _ completed.2) fun charged kept => ?_
+      split
+      · refine PairShape.bindE kept (PairShape.chargeStateGas _ charged) fun stored storageKept => ?_
+        refine PairShape.bindE storageKept (PairShape.chargeGas _ stored) fun sent sentKept => ?_
+        exact PairShape.call lane (PairShape.memExtends.trans sentKept) (PairShape.callRouting passed)
+      · simp only [Except.bind_ok]
+        refine PairShape.bindE kept (PairShape.chargeGas _ charged) fun sent sentKept => ?_
+        exact PairShape.call lane (PairShape.memExtends.trans sentKept) (PairShape.callRouting passed)
+  | callcode =>
+    simp only [Xinst.step]
+    cases lane : sevm.benvStat.rules.stateGas with
+    | none =>
+      refine PairShape.bind rfl (PairShape.pop devm) fun _ d1 h1 => ?_
+      refine PairShape.bind h1 (PairShape.popToAdr d1) fun target d2 h2 => ?_
+      refine PairShape.bind h2 (PairShape.pop d2) fun value d3 h3 => ?_
+      refine PairShape.bind h3 (PairShape.popToNat d3) fun _ d4 h4 => ?_
+      refine PairShape.bind h4 (PairShape.popToNat d4) fun _ d5 h5 => ?_
+      refine PairShape.bind h5 (PairShape.popToNat d5) fun _ d6 h6 => ?_
+      refine PairShape.bind h6 (PairShape.popToNat d6) fun _ d7 h7 => ?_
+      dsimp only
+      let access : Devm := match sevm.benvStat.rules.access with
+        | .eip2929 => addAccessedAddress d7 target
+        | .flat _ => d7
+      have accessed : logsBalances access = logsBalances devm := by
+        dsimp only [access]
+        split
+        · exact PairShape.access.trans h7
+        · exact h7
+      let base := (sevm.benvStat.rules.accessDelegation access target).2.2.2.2
+      have prePair : logsBalances base = logsBalances devm :=
+        PairShape.delegation.trans accessed
+      refine PairShape.bindE prePair (PairShape.chargeGas _ base) fun charged kept => ?_
+      split
+      · exact PairShape.shortfall' (PairShape.memExtends.trans kept)
+      · exact PairShape.call (reservoir := 0) (charged := false) (insufficient := false)
+          lane (PairShape.memExtends.trans kept) ((fun _ => Or.inr (Or.inr rfl)))
+    | some state =>
+      refine PairShape.bind rfl (PairShape.pop devm) fun _ d1 h1 => ?_
+      refine PairShape.bind h1 (PairShape.popToAdr d1) fun target d2 h2 => ?_
+      refine PairShape.bind h2 (PairShape.pop d2) fun value d3 h3 => ?_
+      refine PairShape.bind h3 (PairShape.popToNat d3) fun _ d4 h4 => ?_
+      refine PairShape.bind h4 (PairShape.popToNat d4) fun _ d5 h5 => ?_
+      refine PairShape.bind h5 (PairShape.popToNat d5) fun _ d6 h6 => ?_
+      refine PairShape.bind h6 (PairShape.popToNat d6) fun _ d7 h7 => ?_
+      dsimp only
+      refine PairShape.assert h7 fun _ => ?_
+      let accessed := addAccessedAddress d7 target
+      let delegate := sevm.benvStat.rules.delegationCost accessed target
+      let read1 := accessed.balReadAccount sevm.benvStat.rules target
+      have first : logsBalances read1 = logsBalances devm :=
+        PairShape.readAccount.trans (PairShape.access.trans h7)
+      refine PairShape.assert first fun _ => ?_
+      let read2 := read1.balReadAccount sevm.benvStat.rules delegate.2.1
+      let completed := completeDelegationAccess read2 delegate.1 delegate.2.1
+      have prePair : logsBalances completed.2 = logsBalances devm :=
+        PairShape.completeDelegation.trans (PairShape.readAccount.trans first)
+      refine PairShape.bindE prePair (PairShape.chargeGas _ completed.2) fun charged kept => ?_
+      exact PairShape.call lane (PairShape.memExtends.trans kept) (fun _ => Or.inr (Or.inr rfl))
+  | delegatecall =>
+    simp only [Xinst.step]
+    cases lane : sevm.benvStat.rules.stateGas with
+    | none =>
+      refine PairShape.bind rfl (PairShape.pop devm) fun _ d1 h1 => ?_
+      refine PairShape.bind h1 (PairShape.popToAdr d1) fun target d2 h2 => ?_
+      refine PairShape.bind h2 (PairShape.popToNat d2) fun _ d3 h3 => ?_
+      refine PairShape.bind h3 (PairShape.popToNat d3) fun _ d4 h4 => ?_
+      refine PairShape.bind h4 (PairShape.popToNat d4) fun _ d5 h5 => ?_
+      refine PairShape.bind h5 (PairShape.popToNat d5) fun _ d6 h6 => ?_
+      dsimp only
+      let access : Devm := match sevm.benvStat.rules.access with
+        | .eip2929 => addAccessedAddress d6 target
+        | .flat _ => d6
+      have accessed : logsBalances access = logsBalances devm := by
+        dsimp only [access]
+        split
+        · exact PairShape.access.trans h6
+        · exact h6
+      let base := (sevm.benvStat.rules.accessDelegation access target).2.2.2.2
+      have prePair : logsBalances base = logsBalances devm :=
+        PairShape.delegation.trans accessed
+      refine PairShape.bindE prePair (PairShape.chargeGas _ base) fun charged kept => ?_
+      exact PairShape.call (reservoir := 0) (charged := false) (insufficient := false)
+        lane (PairShape.memExtends.trans kept) (fun _ => Or.inl rfl)
+    | some state =>
+      refine PairShape.bind rfl (PairShape.pop devm) fun _ d1 h1 => ?_
+      refine PairShape.bind h1 (PairShape.popToAdr d1) fun target d2 h2 => ?_
+      refine PairShape.bind h2 (PairShape.popToNat d2) fun _ d3 h3 => ?_
+      refine PairShape.bind h3 (PairShape.popToNat d3) fun _ d4 h4 => ?_
+      refine PairShape.bind h4 (PairShape.popToNat d4) fun _ d5 h5 => ?_
+      refine PairShape.bind h5 (PairShape.popToNat d5) fun _ d6 h6 => ?_
+      dsimp only
+      refine PairShape.assert h6 fun _ => ?_
+      let accessed := addAccessedAddress d6 target
+      let delegate := sevm.benvStat.rules.delegationCost accessed target
+      let read1 := accessed.balReadAccount sevm.benvStat.rules target
+      have first : logsBalances read1 = logsBalances devm :=
+        PairShape.readAccount.trans (PairShape.access.trans h6)
+      refine PairShape.assert first fun _ => ?_
+      let read2 := read1.balReadAccount sevm.benvStat.rules delegate.2.1
+      let completed := completeDelegationAccess read2 delegate.1 delegate.2.1
+      have prePair : logsBalances completed.2 = logsBalances devm :=
+        PairShape.completeDelegation.trans (PairShape.readAccount.trans first)
+      refine PairShape.bindE prePair (PairShape.chargeGas _ completed.2) fun charged kept => ?_
+      exact PairShape.call lane (PairShape.memExtends.trans kept) (fun _ => Or.inl rfl)
+  | staticcall =>
+    simp only [Xinst.step]
+    cases lane : sevm.benvStat.rules.stateGas with
+    | none =>
+      refine PairShape.bind rfl (PairShape.pop devm) fun _ d1 h1 => ?_
+      refine PairShape.bind h1 (PairShape.popToAdr d1) fun target d2 h2 => ?_
+      refine PairShape.bind h2 (PairShape.popToNat d2) fun _ d3 h3 => ?_
+      refine PairShape.bind h3 (PairShape.popToNat d3) fun _ d4 h4 => ?_
+      refine PairShape.bind h4 (PairShape.popToNat d4) fun _ d5 h5 => ?_
+      refine PairShape.bind h5 (PairShape.popToNat d5) fun _ d6 h6 => ?_
+      dsimp only
+      let access : Devm := match sevm.benvStat.rules.access with
+        | .eip2929 => addAccessedAddress d6 target
+        | .flat _ => d6
+      have accessed : logsBalances access = logsBalances devm := by
+        dsimp only [access]
+        split
+        · exact PairShape.access.trans h6
+        · exact h6
+      let base := (sevm.benvStat.rules.accessDelegation access target).2.2.2.2
+      have prePair : logsBalances base = logsBalances devm :=
+        PairShape.delegation.trans accessed
+      refine PairShape.bindE prePair (PairShape.chargeGas _ base) fun charged kept => ?_
+      exact PairShape.call (reservoir := 0) (charged := false) (insufficient := false)
+        lane (PairShape.memExtends.trans kept) (fun _ => Or.inr (Or.inl rfl))
+    | some state =>
+      refine PairShape.bind rfl (PairShape.pop devm) fun _ d1 h1 => ?_
+      refine PairShape.bind h1 (PairShape.popToAdr d1) fun target d2 h2 => ?_
+      refine PairShape.bind h2 (PairShape.popToNat d2) fun _ d3 h3 => ?_
+      refine PairShape.bind h3 (PairShape.popToNat d3) fun _ d4 h4 => ?_
+      refine PairShape.bind h4 (PairShape.popToNat d4) fun _ d5 h5 => ?_
+      refine PairShape.bind h5 (PairShape.popToNat d5) fun _ d6 h6 => ?_
+      dsimp only
+      refine PairShape.assert h6 fun _ => ?_
+      let accessed := addAccessedAddress d6 target
+      let delegate := sevm.benvStat.rules.delegationCost accessed target
+      let read1 := accessed.balReadAccount sevm.benvStat.rules target
+      have first : logsBalances read1 = logsBalances devm :=
+        PairShape.readAccount.trans (PairShape.access.trans h6)
+      refine PairShape.assert first fun _ => ?_
+      let read2 := read1.balReadAccount sevm.benvStat.rules delegate.2.1
+      let completed := completeDelegationAccess read2 delegate.1 delegate.2.1
+      have prePair : logsBalances completed.2 = logsBalances devm :=
+        PairShape.completeDelegation.trans (PairShape.readAccount.trans first)
+      refine PairShape.bindE prePair (PairShape.chargeGas _ completed.2) fun charged kept => ?_
+      exact PairShape.call lane (PairShape.memExtends.trans kept) (fun _ => Or.inr (Or.inl rfl))
+
+/-- Compatibility projection of the same structural routing proof. -/
 lemma Xinst.step_shapeLogs_noStateGas (sevm : Sevm) (devm : Devm) (x : Xinst)
     {b : Bool} {a : AccessSchedule}
     (hsg : sevm.benvStat.rules.stateGas = none)
     (hdel : sevm.benvStat.rules.delegationEnabled = b)
     (hacc : sevm.benvStat.rules.access = a) :
     Xinst.ShapeLogs sevm devm (x = .create ∨ x = .create2) (Xinst.step sevm devm x) := by
-  cases x with
-  | create =>
-    simp only [Xinst.step, hsg]
-    refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-    refine ShapeLogs.bind h1 (LogsWalk.popToNat d1) fun _ d2 h2 => ?_
-    refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
-    refine ShapeLogs.bindE h3 (LogsWalk.chargeGas _ d3) fun d4 h4 => ?_
-    exact ShapeLogs.create (Or.inl trivial) h4
-  | create2 =>
-    simp only [Xinst.step, hsg]
-    split
-    · refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-      refine ShapeLogs.bind h1 (LogsWalk.popToNat d1) fun _ d2 h2 => ?_
-      refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
-      refine ShapeLogs.bind h3 (LogsWalk.pop d3) fun _ d4 h4 => ?_
-      refine ShapeLogs.bindE h4 (LogsWalk.chargeGas _ d4) fun d5 h5 => ?_
-      exact ShapeLogs.create (Or.inr trivial) h5
-    · exact ShapeLogs.error rfl
-  | call =>
-    cases b with
-    | true =>
-      cases a with
-      | eip2929 =>
-        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_enabled hdel]
-        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun callee d2 h2 => ?_
-        refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
-        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-        refine ShapeLogs.bind h6 (LogsWalk.popToNat d6) fun _ d7 h7 => ?_
-        dsimp only
-        rcases hdel : sevm.benvStat.rules.gas.accessDelegation
-            (addAccessedAddress d7 callee) callee with ⟨dpv, na, cd, dagc, d8⟩
-        have h8 := ShapeLogs.delegation (x := addAccessedAddress d7 callee) h7 hdel
-        refine ShapeLogs.bindE h8 (LogsWalk.chargeGas _ d8) fun d9 h9 => ?_
-        refine ShapeLogs.assert h9 ?_
-        split
-        · exact ShapeLogs.shortfall h9
-        · exact ShapeLogs.call h9
-      | flat g =>
-        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_enabled hdel]
-        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun callee d2 h2 => ?_
-        refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
-        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-        refine ShapeLogs.bind h6 (LogsWalk.popToNat d6) fun _ d7 h7 => ?_
-        dsimp only
-        rcases hdel : sevm.benvStat.rules.gas.accessDelegation
-            d7 callee with ⟨dpv, na, cd, dagc, d8⟩
-        have h8 := ShapeLogs.delegation (x := d7) h7 hdel
-        refine ShapeLogs.bindE h8 (LogsWalk.chargeGas _ d8) fun d9 h9 => ?_
-        refine ShapeLogs.assert h9 ?_
-        split
-        · exact ShapeLogs.shortfall h9
-        · exact ShapeLogs.call h9
-    | false =>
-      cases a with
-      | eip2929 =>
-        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_disabled hdel]
-        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun callee d2 h2 => ?_
-        refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
-        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-        refine ShapeLogs.bind h6 (LogsWalk.popToNat d6) fun _ d7 h7 => ?_
-        dsimp only
-        refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ (addAccessedAddress d7 callee)) fun d9 h9 => ?_
-        refine ShapeLogs.assert h9 ?_
-        split
-        · exact ShapeLogs.shortfall h9
-        · exact ShapeLogs.call h9
-      | flat g =>
-        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_disabled hdel]
-        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun callee d2 h2 => ?_
-        refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
-        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-        refine ShapeLogs.bind h6 (LogsWalk.popToNat d6) fun _ d7 h7 => ?_
-        dsimp only
-        refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ d7) fun d9 h9 => ?_
-        refine ShapeLogs.assert h9 ?_
-        split
-        · exact ShapeLogs.shortfall h9
-        · exact ShapeLogs.call h9
-  | callcode =>
-    cases b with
-    | true =>
-      cases a with
-      | eip2929 =>
-        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_enabled hdel]
-        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
-        refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
-        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-        refine ShapeLogs.bind h6 (LogsWalk.popToNat d6) fun _ d7 h7 => ?_
-        dsimp only
-        rcases hdel : sevm.benvStat.rules.gas.accessDelegation
-            (addAccessedAddress d7 cadr) cadr with ⟨dpv, na, cd, dagc, d8⟩
-        have h8 := ShapeLogs.delegation (x := addAccessedAddress d7 cadr) h7 hdel
-        refine ShapeLogs.bindE h8 (LogsWalk.chargeGas _ d8) fun d9 h9 => ?_
-        split
-        · exact ShapeLogs.shortfall' h9
-        · exact ShapeLogs.call h9
-      | flat g =>
-        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_enabled hdel]
-        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
-        refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
-        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-        refine ShapeLogs.bind h6 (LogsWalk.popToNat d6) fun _ d7 h7 => ?_
-        dsimp only
-        rcases hdel : sevm.benvStat.rules.gas.accessDelegation
-            d7 cadr with ⟨dpv, na, cd, dagc, d8⟩
-        have h8 := ShapeLogs.delegation (x := d7) h7 hdel
-        refine ShapeLogs.bindE h8 (LogsWalk.chargeGas _ d8) fun d9 h9 => ?_
-        split
-        · exact ShapeLogs.shortfall' h9
-        · exact ShapeLogs.call h9
-    | false =>
-      cases a with
-      | eip2929 =>
-        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_disabled hdel]
-        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
-        refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
-        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-        refine ShapeLogs.bind h6 (LogsWalk.popToNat d6) fun _ d7 h7 => ?_
-        dsimp only
-        refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ (addAccessedAddress d7 cadr)) fun d9 h9 => ?_
-        split
-        · exact ShapeLogs.shortfall' h9
-        · exact ShapeLogs.call h9
-      | flat g =>
-        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_disabled hdel]
-        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
-        refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
-        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-        refine ShapeLogs.bind h6 (LogsWalk.popToNat d6) fun _ d7 h7 => ?_
-        dsimp only
-        refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ d7) fun d9 h9 => ?_
-        split
-        · exact ShapeLogs.shortfall' h9
-        · exact ShapeLogs.call h9
-  | delegatecall =>
-    cases b with
-    | true =>
-      cases a with
-      | eip2929 =>
-        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_enabled hdel]
-        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
-        refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
-        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-        dsimp only
-        rcases hdel : sevm.benvStat.rules.gas.accessDelegation
-            (addAccessedAddress d6 cadr) cadr with ⟨dpv, na, cd, dagc, d7⟩
-        have h7 := ShapeLogs.delegation (x := addAccessedAddress d6 cadr) h6 hdel
-        refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ d7) fun d8 h8 => ?_
-        exact ShapeLogs.call h8
-      | flat g =>
-        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_enabled hdel]
-        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
-        refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
-        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-        dsimp only
-        rcases hdel : sevm.benvStat.rules.gas.accessDelegation
-            d6 cadr with ⟨dpv, na, cd, dagc, d8⟩
-        have h7 := ShapeLogs.delegation (x := d6) h6 hdel
-        refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ d8) fun d9 h9 => ?_
-        exact ShapeLogs.call h9
-    | false =>
-      cases a with
-      | eip2929 =>
-        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_disabled hdel]
-        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
-        refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
-        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-        dsimp only
-        refine ShapeLogs.bindE h6 (LogsWalk.chargeGas _ (addAccessedAddress d6 cadr)) fun d8 h8 => ?_
-        exact ShapeLogs.call h8
-      | flat g =>
-        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_disabled hdel]
-        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
-        refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
-        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-        dsimp only
-        refine ShapeLogs.bindE h6 (LogsWalk.chargeGas _ d6) fun d8 h8 => ?_
-        exact ShapeLogs.call h8
-  | staticcall =>
-    cases b with
-    | true =>
-      cases a with
-      | eip2929 =>
-        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_enabled hdel]
-        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun tgt d2 h2 => ?_
-        refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
-        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-        dsimp only
-        rcases hdel : sevm.benvStat.rules.gas.accessDelegation
-            (addAccessedAddress d6 tgt) tgt with ⟨dpv, na, cd, dagc, d7⟩
-        have h7 := ShapeLogs.delegation (x := addAccessedAddress d6 tgt) h6 hdel
-        refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ d7) fun d8 h8 => ?_
-        exact ShapeLogs.call h8
-      | flat g =>
-        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_enabled hdel]
-        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun tgt d2 h2 => ?_
-        refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
-        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-        dsimp only
-        rcases hdel : sevm.benvStat.rules.gas.accessDelegation
-            d6 tgt with ⟨dpv, na, cd, dagc, d7⟩
-        have h7 := ShapeLogs.delegation (x := d6) h6 hdel
-        refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ d7) fun d8 h8 => ?_
-        exact ShapeLogs.call h8
-    | false =>
-      cases a with
-      | eip2929 =>
-        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_disabled hdel]
-        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun tgt d2 h2 => ?_
-        refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
-        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-        dsimp only
-        refine ShapeLogs.bindE h6 (LogsWalk.chargeGas _ (addAccessedAddress d6 tgt)) fun d8 h8 => ?_
-        exact ShapeLogs.call h8
-      | flat g =>
-        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_disabled hdel]
-        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun tgt d2 h2 => ?_
-        refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
-        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-        dsimp only
-        refine ShapeLogs.bindE h6 (LogsWalk.chargeGas _ d6) fun d8 h8 => ?_
-        exact ShapeLogs.call h8
+  cases hdel
+  cases hacc
+  exact PairShape.oldLogs hsg (Xinst.step_shapePair sevm devm x)
 
 /-- **Every executable instruction on a fork from Shanghai on has a log-list shape.** -/
 lemma Xinst.step_shapeLogs (sevm : Sevm) (devm : Devm) (x : Xinst)
@@ -743,6 +915,41 @@ theorem initDevm_logs {msg : Msg} (hsg : msg.benv.stat.rules.stateGas = none) :
   dsimp only
   rw [hsg]
 
+/-- Zero, disabled and self transfers emit no entry log, on either meter lane. -/
+theorem initDevm_logs_of_staticTransfer {msg : Msg}
+    (quiet : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      msg.caller = msg.currentTarget) : (initDevm msg).logs = [] := by
+  unfold initDevm Devm.logs
+  dsimp only
+  split
+  · rfl
+  · rcases quiet with off | zero | self
+    · simp only [off, Bool.false_eq_true, ↓reduceIte]
+    · simp only [Devm.emitTransferLog, zero, or_true, ↓reduceIte, ite_self]
+    · simp only [Devm.emitTransferLog, self, eq_self, true_or, ↓reduceIte, ite_self]
+
+/-- A successful self payment restores balances even when account normalization changes storage. -/
+theorem Msg.benvAfterTransfer_balances_of_staticTransfer {msg : Msg} {entry : Benv}
+    (quiet : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      msg.caller = msg.currentTarget)
+    (transfer : msg.benvAfterTransfer = .ok entry) :
+    entry.state.bal = msg.benv.state.bal := by
+  by_cases moves : msg.shouldTransferValue = true ∧ msg.value ≠ 0
+  · have self : msg.caller = msg.currentTarget := quiet.resolve_left
+      (fun off => Bool.noConfusion (off.symm.trans moves.1)) |>.resolve_left moves.2
+    obtain ⟨mid, debit, rfl⟩ := of_benvAfterTransfer moves.1 moves.2 transfer
+    obtain ⟨_, rfl⟩ := State.of_subBal debit
+    change (msg.benv.state.setBal msg.caller
+      (msg.benv.state.bal msg.caller - msg.value) |>.addBal msg.currentTarget msg.value).bal = _
+    rw [← self]
+    funext a
+    by_cases same : msg.caller = a
+    · subst a
+      simp only [State.bal, State.addBal, State.setBal_get_self, Acct.clearIfEmpty_bal,
+        Acct.withBal, B256.sub_add_cancel]
+    · simp only [State.bal, State.addBal, State.setBal_get_ne same]
+  · rw [benvAfterTransfer_eq_of_not_transfer moves transfer]
+
 /-- The log hypothesis a recursive step needs about its child: a committing child
 execution ends with its entry log list. -/
 def Xlot.KeepsLogs : Xlot → Prop
@@ -750,66 +957,253 @@ def Xlot.KeepsLogs : Xlot → Prop
   | .some ⟨cevm, raw⟩ => ∀ c : Execution.commits raw = true,
       (Execution.committedPost raw c).logs = cevm.dyna.logs
 
+/-- A clean settled call exposes its actual interpreted source or native entry observation. -/
+theorem ProcessMessage.clean_pair_source {msg : Msg} {xl : Xlot} {child : Devm}
+    (run : ProcessMessage msg xl (.ok child)) (clean : child.error.isSome = false) :
+    ∃ entry : Benv, msg.benvAfterTransfer = .ok entry ∧
+      ((∃ raw : Devm, xl = .some ⟨initEvm (msg.withBenv entry), .ok raw⟩ ∧
+          Execution.commits (.ok raw) = true ∧
+          (child.logs, child.getBal) = (raw.logs, raw.getBal)) ∨
+        (child.logs, child.getBal) =
+          ((initDevm (msg.withBenv entry)).logs, (initDevm (msg.withBenv entry)).getBal)) := by
+  obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp run
+  obtain ⟨evm2, rfl, hcase⟩ := processMessage.settle_ok_cases hset.symm
+  have hclean : ¬ child.error.isSome = true := by
+    simp only [clean, Bool.false_eq_true, not_false_eq_true]
+  have hc : (child.logs, child.getBal) = (evm2.logs, evm2.getBal) ∧
+      child.error = evm2.error := by
+    rcases hcase with ⟨herr, hrb⟩ | ⟨_, h⟩
+    · exfalso
+      apply hclean
+      rw [← hrb]
+      exact herr
+    · subst h
+      constructor <;> (unfold Devm.recordTouch; split <;> rfl)
+  replace hclean : ¬ evm2.error.isSome = true := by
+    rw [← hc.2]
+    exact hclean
+  unfold FrameBody at hbody
+  rcases transfer : msg.benvAfterTransfer with error | entry <;>
+    simp only [transfer] at hbody
+  · cases hbody.2
+  refine ⟨entry, rfl, ?_⟩
+  try unfold ExecuteCode at hbody
+  rcases entered : executeCode.enter (msg.withBenv entry) with evm | raw <;>
+    simp only [entered] at hbody
+  · obtain ⟨raw, slot, handled⟩ := hbody
+    have actual := exec_ok_of_handleError handled.symm hclean
+    subst actual slot
+    have initial : evm = initEvm (msg.withBenv entry) := by
+      unfold executeCode.enter at entered
+      split at entered
+      · cases entered; rfl
+      · split at entered
+        · cases entered
+        · cases entered; rfl
+    refine Or.inl ⟨evm2, ?_, ?_, hc.1⟩
+    · rw [initial]
+    · cases error : evm2.error <;>
+        simp_all only [Execution.commits, Option.isNone_none, Option.isSome_some,
+          Bool.true_eq_false]
+  · obtain ⟨_, handled⟩ := hbody
+    have actual := exec_ok_of_handleError handled.symm hclean
+    unfold executeCode.enter at entered
+    split at entered
+    · cases entered
+    · split at entered
+      · cases entered
+        unfold executePrecomp applyPrecompResult at actual
+        split at actual
+        · cases actual
+        · cases actual
+          exact Or.inr hc.1
+      · cases entered
+
+/-- Clean child observations, with actual transfer and rollback routed before projection. -/
+theorem ProcessMessage.clean_logs_balances {msg : Msg} {xl : Xlot} {child : Devm}
+    (quiet : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      msg.caller = msg.currentTarget)
+    (run : ProcessMessage msg xl (.ok child)) (clean : child.error.isSome = false)
+    (body : ∀ (evm : Evm) (raw : Execution), xl = .some ⟨evm, raw⟩ →
+      ∀ committed : Execution.commits raw = true,
+        ((Execution.committedPost raw committed).logs,
+          (Execution.committedPost raw committed).getBal) = (evm.dyna.logs, evm.dyna.getBal)) :
+    child.logs = [] ∧ child.getBal = msg.benv.state.bal := by
+  obtain ⟨entry, transfer, interpreted | native⟩ := clean_pair_source run clean
+  · obtain ⟨raw, slot, committed, source⟩ := interpreted
+    have kept := body _ _ slot committed
+    have pair := source.trans kept
+    refine ⟨?_, ?_⟩
+    · exact (congrArg Prod.fst pair).trans (initDevm_logs_of_staticTransfer quiet)
+    · exact (congrArg Prod.snd pair).trans
+        (Msg.benvAfterTransfer_balances_of_staticTransfer quiet transfer)
+  · exact ⟨(congrArg Prod.fst native).trans (initDevm_logs_of_staticTransfer quiet),
+      (congrArg Prod.snd native).trans
+        (Msg.benvAfterTransfer_balances_of_staticTransfer quiet transfer)⟩
+
+/-- Actual failed message settlement restores the saved balances before caller incorporation. -/
+theorem ProcessMessage.failed_balances {msg : Msg} {xl : Xlot} {child : Devm}
+    (run : ProcessMessage msg xl (.ok child)) (failed : child.error.isSome = true) :
+    child.getBal = msg.benv.state.bal := by
+  obtain ⟨_, _, settled⟩ := ProcessMessage.iff_body.mp run
+  obtain ⟨raw, _, restored | clean⟩ := processMessage.settle_ok_cases settled.symm
+  · rw [← restored.2]
+    funext a
+    unfold Devm.getBal Devm.getAcct Devm.recordTouch
+    split <;> rfl
+  · have error : child.error = raw.error := by
+      rw [← clean.2]
+      unfold Devm.recordTouch
+      split <;> rfl
+    exact (clean.1 (error ▸ failed)).elim
+
+/-- Amsterdam's guarded call resume has the same concrete log/balance observation as its child. -/
+theorem Resume.callAmsterdam_logs_balances {state : StateGasRules} {parent child post : Devm}
+    {oi os : Nat} {charged : Bool}
+    (run : (Resume.callAmsterdam state parent oi os charged).run (.ok child) = .ok post) :
+    (post.logs, post.getBal) =
+      ((if child.error.isSome then parent.logs else parent.logs ++ child.logs), child.getBal) := by
+  apply Prod.ext
+  · have finish : ∀ d : Devm,
+        d.logs = (if child.error.isSome then parent.logs else parent.logs ++ child.logs) →
+        ∀ flag : B256, (d.push flag >>= fun d' => .ok (d'.memWrite oi (child.output.take os))) =
+          .ok post → post.logs =
+            (if child.error.isSome then parent.logs else parent.logs ++ child.logs) := by
+      intro d logs flag done
+      obtain ⟨pushed, push, done⟩ := Except.bind_eq_ok done
+      cases done
+      exact (Devm.push_of_push push).logs.symm.trans logs
+    unfold Resume.run liftToExecution at run
+    dsimp only [bind, Except.bind, Except.assert] at run
+    by_cases failed : child.error.isSome = true
+    · rw [ite_eq_left failed] at run
+      by_cases settled : child.AmsterdamFailedChildSettled
+      · rw [ite_eq_left settled] at run
+        dsimp only at run
+        by_cases paid : charged = true
+        · rw [ite_eq_left paid] at run
+          exact finish _ (by rw [ite_eq_left failed]; rfl) _ run
+        · rw [ite_eq_right paid] at run
+          exact finish _ (by rw [ite_eq_left failed]; rfl) _ run
+      · rw [ite_eq_right settled] at run
+        cases run
+    · rw [ite_eq_right failed] at run
+      by_cases uncommitted : child.AmsterdamChildUncommitted
+      · rw [ite_eq_left uncommitted] at run
+        dsimp only at run
+        exact finish _ (by rw [ite_eq_right failed]; rfl) _ run
+      · rw [ite_eq_right uncommitted] at run
+        cases run
+  · exact funext (getBal_eq_of_state_eq (resume_callAmsterdam_state run))
+
+/-- Ordinary call resumption projects the already proved state and log observations. -/
+theorem Resume.call_logs_balances {parent child post : Devm} {oi os : Nat}
+    (run : (Resume.call parent oi os).run (.ok child) = .ok post) :
+    (post.logs, post.getBal) =
+      ((if child.error.isSome then parent.logs else parent.logs ++ child.logs), child.getBal) :=
+  Prod.ext (Resume.call_logs run) (funext (getBal_eq_of_state_eq (Resume.call_state run)))
+
+/-- The actual call frame and either selected resume preserve the caller's concrete observation. -/
+theorem ProcessMessage.resume_call_logs_balances
+    {state : Option StateGasRules} {sevm : Sevm} {parent post : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {stv isSt : Bool} {ii isz oi osz : Nat}
+    {code : ByteArray} {dp charged : Bool} {grant : Nat} {xl : Xlot}
+    {raw : Except (EvmError × State × AdrSet × Tra) Devm}
+    (quiet : stv = false ∨ value = 0 ∨ caller = target)
+    (frame : ProcessMessage
+      { callMsg sevm parent gas value caller target codeAddress stv isSt
+          (parent.memory.data.sliceD ii isz 0) code dp with stateGasGrant := grant } xl raw)
+    (resume : (match state with
+      | none => Resume.call parent oi osz
+      | some state => Resume.callAmsterdam state parent oi osz charged).run raw = .ok post)
+    (body : ∀ (evm : Evm) (raw : Execution), xl = .some ⟨evm, raw⟩ →
+      ∀ committed : Execution.commits raw = true,
+        ((Execution.committedPost raw committed).logs,
+          (Execution.committedPost raw committed).getBal) = (evm.dyna.logs, evm.dyna.getBal)) :
+    (post.logs, post.getBal) = (parent.logs, parent.getBal) := by
+  cases raw with
+  | error error =>
+    cases state <;> simp only [Resume.run, liftToExecution, bind, Except.bind] at resume
+    all_goals cases resume
+  | ok child =>
+    have pair : (post.logs, post.getBal) =
+        ((if child.error.isSome then parent.logs else parent.logs ++ child.logs), child.getBal) := by
+      cases state with
+      | none => exact Resume.call_logs_balances resume
+      | some state => exact Resume.callAmsterdam_logs_balances resume
+    by_cases failed : child.error.isSome = true
+    · rw [ite_eq_left failed] at pair
+      exact pair.trans (Prod.ext rfl (ProcessMessage.failed_balances frame failed))
+    · have clean : child.error.isSome = false := Bool.eq_false_iff.mpr failed
+      obtain ⟨logs, balances⟩ := ProcessMessage.clean_logs_balances quiet frame clean body
+      rw [ite_eq_right failed, logs, List.append_nil, balances] at pair
+      exact pair
+
+/-- A selected ordinary or Amsterdam generic call preserves logs and balances when its
+actual value transfer is disabled, zero or self-directed. -/
+theorem GenericCall.logs_balances_of_staticTransfer
+    {state : Option StateGasRules} {sevm : Sevm} {pre post : Devm} {gas reservoir : Nat}
+    {value : B256} {caller target codeAddress : Adr} {stv isSt : Bool} {ii isz oi osz : Nat}
+    {code : ByteArray} {dp charged insufficient : Bool} {xl : Xlot}
+    (quiet : stv = false ∨ value = 0 ∨ caller = target)
+    (run : XStep.Run (match state with
+      | none => genericCall.step sevm pre gas value caller target codeAddress stv isSt
+          ii isz oi osz code dp
+      | some state => genericCallAmsterdam.step sevm state pre gas reservoir value
+          caller target codeAddress stv isSt ii isz oi osz code dp charged insufficient)
+      xl (.ok post))
+    (body : ∀ (evm : Evm) (raw : Execution), xl = .some ⟨evm, raw⟩ →
+      ∀ committed : Execution.commits raw = true,
+        ((Execution.committedPost raw committed).logs,
+          (Execution.committedPost raw committed).getBal) = (evm.dyna.logs, evm.dyna.getBal)) :
+    (post.logs, post.getBal) = (pre.logs, pre.getBal) := by
+  have preflight : ∀ d : Devm, (d.logs, d.getBal) = (pre.logs, pre.getBal) →
+      XStep.Run (XStep.ofExcept (do
+        let pushed ← d.push 0
+        pure (.done (.ok pushed)))) xl (.ok post) →
+      (post.logs, post.getBal) = (pre.logs, pre.getBal) := by
+    intro d pair done
+    rcases pushed : d.push 0 with error | next <;>
+      simp only [pushed, XStep.ofExcept, bind, Except.bind, XStep.Run] at done
+    · cases done.2
+    · obtain ⟨_, done⟩ := done
+      cases done
+      exact (Prod.ext (Devm.push_of_push pushed).logs.symm
+        (funext (getBal_eq_of_state_eq (Devm.push_of_push pushed).state.symm))).trans pair
+  cases state with
+  | none =>
+    simp only [genericCall.step] at run
+    split at run
+    · refine preflight _ ?_ run
+      rfl
+    · obtain ⟨raw, frame, resume⟩ := run
+      exact ProcessMessage.resume_call_logs_balances (state := none) (grant := 0) (charged := false)
+        (parent := pre.withReturnData []) quiet frame resume.symm body
+  | some state =>
+    simp only [genericCallAmsterdam.step] at run
+    split at run
+    · cases charged <;>
+        simp only [Bool.false_eq_true, ↓reduceIte] at run
+      all_goals (refine preflight _ ?_ run; rfl)
+    · obtain ⟨raw, frame, resume⟩ := run
+      exact ProcessMessage.resume_call_logs_balances (state := some state) (grant := reservoir)
+        (parent := pre.withReturnData []) quiet frame resume.symm body
+
 /-- **A clean call-frame child carries no logs** when its fork has no state gas and its
-interpreted body, if any, keeps its entry log list: the frame starts with none, a
-precompile adds none, and settlement returns a clean body unchanged. -/
+interpreted body, if any, keeps its entry log list. -/
 theorem ProcessMessage.clean_logs {msg : Msg} {xl : Xlot} {child : Devm}
     (hsg : msg.benv.stat.rules.stateGas = none)
     (run : ProcessMessage msg xl (.ok child)) (hclean : child.error.isSome = false)
     (body : Xlot.KeepsLogs xl) : child.logs = [] := by
-  obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp run
-  obtain ⟨evm2, rfl, hcase⟩ := processMessage.settle_ok_cases hset.symm
-  have hclean' : ¬ child.error.isSome = true := by simp only [hclean, Bool.false_eq_true,
-    not_false_eq_true]
-  -- Settlement records the touch, which moves only the touched-account set.
-  have hc : child.logs = evm2.logs ∧ child.error = evm2.error := by
-    rcases hcase with ⟨herr, hrb⟩ | ⟨_, h⟩
-    · exfalso
-      apply hclean'
-      rw [← hrb]
-      exact herr
-    · subst h
-      exact ⟨rfl, rfl⟩
-  rw [hc.1]
-  replace hclean' : ¬ evm2.error.isSome = true := by
-    rw [← hc.2]
-    exact hclean'
-  unfold FrameBody at hbody
-  rcases hbt : msg.benvAfterTransfer with e | benv <;> simp only [hbt] at hbody
-  · cases hbody.2
-  have hsg' : (msg.withBenv benv).benv.stat.rules.stateGas = none :=
-    (Msg.benvAfterTransfer_ok_stateGas hbt).trans hsg
-  try unfold ExecuteCode at hbody
-  rcases hent : executeCode.enter (msg.withBenv benv) with evm | raw <;>
-    simp only [hent] at hbody
-  · obtain ⟨raw, hxl, hr⟩ := hbody
-    have hraw := exec_ok_of_handleError hr.symm hclean'
-    subst hraw hxl
-    have hevm : evm = initEvm (msg.withBenv benv) := by
-      unfold executeCode.enter at hent
-      split at hent
-      · cases hent; rfl
-      · split at hent
-        · cases hent
-        · cases hent; rfl
-    have hkeep := body (by
-      cases h : evm2.error <;> simp_all only [Option.isSome_none, Bool.false_eq_true, false_and, not_false_eq_true, and_self, or_true, Msg.withBenv_stat_rules, ExceptT.stM_eq, Execution.commits, Option.isNone_none, Option.isSome_some, Bool.true_eq_false])
-    change evm2.logs = evm.dyna.logs at hkeep
-    rw [hkeep, hevm]
-    exact initDevm_logs hsg'
-  · obtain ⟨-, hr⟩ := hbody
-    have hraw := exec_ok_of_handleError hr.symm hclean'
-    unfold executeCode.enter at hent
-    split at hent
-    · cases hent
-    · split at hent
-      · cases hent
-        unfold executePrecomp applyPrecompResult at hraw
-        split at hraw
-        · cases hraw
-        · cases hraw
-          exact initDevm_logs hsg'
-      · cases hent
+  obtain ⟨entry, transfer, interpreted | native⟩ := clean_pair_source run hclean
+  · have noGas : (msg.withBenv entry).benv.stat.rules.stateGas = none :=
+      (Msg.benvAfterTransfer_ok_stateGas transfer).trans hsg
+    obtain ⟨raw, slot, committed, source⟩ := interpreted
+    rw [slot] at body
+    exact ((congrArg Prod.fst source).trans (body committed)).trans (initDevm_logs noGas)
+  · have noGas : (msg.withBenv entry).benv.stat.rules.stateGas = none :=
+      (Msg.benvAfterTransfer_ok_stateGas transfer).trans hsg
+    exact (congrArg Prod.fst native).trans (initDevm_logs noGas)
 
 /-- **A successful generic call keeps the caller's log list** on a fork without state
 gas, given that the interpreted child, if any, keeps its entry log list. -/
@@ -875,6 +1269,41 @@ theorem Xinst.logs_of_ok {sevm : Sevm} {pre post : Devm} {x : Xinst} {xl : Xlot}
     · rcases hc with h | h <;> cases h
   · exact (GenericCall.logs_of_ok hfork.rules_stateGas_none run body).trans hd
 
+/-- The same routing shape yields concrete log/balance preservation when its actual child does. -/
+theorem Xinst.static_logs_balances_of_ok {sevm : Sevm} {pre post : Devm}
+    {x : Xinst} {xl : Xlot}
+    (selected : sevm.isStatic = true ∨ x = .staticcall)
+    (run : Xinst.Run sevm pre x xl (.ok post))
+    (body : ∀ (evm : Evm) (raw : Execution), xl = .some ⟨evm, raw⟩ →
+      ∀ committed : Execution.commits raw = true,
+        ((Execution.committedPost raw committed).logs,
+          (Execution.committedPost raw committed).getBal) = (evm.dyna.logs, evm.dyna.getBal)) :
+    (post.logs, post.getBal) = (pre.logs, pre.getBal) := by
+  unfold Xinst.Run at run
+  rcases Xinst.step_shapePair sevm pre x with ⟨ex, step, pair⟩ |
+    ⟨kind, state, base, val, target, mi, ms, _, pair, dynamic, step⟩ |
+    ⟨state, base, gas, reservoir, val, caller, target, address, stv, isSt, ii, isz, oi, osz,
+      code, dp, charged, insufficient, _, pair, quiet, step⟩ <;> rw [step] at run
+  · obtain ⟨_, actual⟩ := run
+    cases actual
+    exact pair.symm
+  · exfalso
+    have static : sevm.isStatic = true := by
+      rcases selected with static | rfl
+      · exact static
+      · rcases kind with impossible | impossible <;> cases impossible
+    rcases dynamic with rfl | forbidden
+    · exact GenericCreate.not_ok_of_static static run
+    · exact Bool.noConfusion (forbidden.symm.trans static)
+  · cases state with
+    | none =>
+      exact (GenericCall.logs_balances_of_staticTransfer (state := none)
+        (reservoir := reservoir) (charged := charged) (insufficient := insufficient)
+        (quiet selected) run body).trans pair
+    | some state =>
+      exact (GenericCall.logs_balances_of_staticTransfer (state := some state)
+        (quiet selected) run body).trans pair
+
 /-! ## Static execution keeps the log list -/
 
 /-- `LOG` cannot succeed in a static frame. -/
@@ -890,20 +1319,31 @@ theorem Rinst.log_not_ok_of_static {pc : Nat} {sevm : Sevm} {pre post : Devm} {n
   simp only [assertDynamic, Except.assert, hs, Bool.not_true, Bool.false_eq_true, ↓reduceIte,
     reduceCtorEq] at hassert
 
+/-- Both meter lanes enforce the actual static SELFDESTRUCT guard. -/
+private theorem Linst.selfdestruct_not_ok_of_static_any {sevm : Sevm} {pre post : Devm}
+    (hs : sevm.isStatic = true)
+    (run : Linst.Run sevm pre .selfdestruct (.ok post)) : False := by
+  cases lane : sevm.benvStat.rules.stateGas with
+  | none =>
+    simp only [Linst.Run, Linst.run, lane] at run
+    rcases Except.bind_eq_ok run with ⟨_, _, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨_, _, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, _, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨_, _, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨_, _, run₅⟩
+    rcases Except.bind_eq_ok run₅ with ⟨_, hassert, _⟩
+    simp only [assertDynamic, Except.assert, hs, Bool.not_true, Bool.false_eq_true, ↓reduceIte,
+      reduceCtorEq] at hassert
+  | some state =>
+    simp only [Linst.Run, Linst.run, lane, assertDynamic, Except.assert, hs,
+      Bool.not_true, Bool.false_eq_true, ↓reduceIte, Except.bind_error, reduceCtorEq] at run
+
 /-- `SELFDESTRUCT` cannot succeed in a static frame of a fork from Shanghai on. -/
 theorem Linst.selfdestruct_not_ok_of_static {sevm : Sevm} {pre post : Devm}
     (hfork : ShanghaiOnwards sevm.benvStat.fork) (hs : sevm.isStatic = true)
     (run : Linst.Run sevm pre .selfdestruct (.ok post)) : False := by
-  have hsg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
-  simp only [Linst.Run, Linst.run, hsg] at run
-  rcases Except.bind_eq_ok run with ⟨_, _, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨_, _, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨_, _, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨_, _, run₄⟩
-  rcases Except.bind_eq_ok run₄ with ⟨_, _, run₅⟩
-  rcases Except.bind_eq_ok run₅ with ⟨_, hassert, _⟩
-  simp only [assertDynamic, Except.assert, hs, Bool.not_true, Bool.false_eq_true, ↓reduceIte,
-    reduceCtorEq] at hassert
+  have _ := hfork.rules_stateGas_none
+  exact Linst.selfdestruct_not_ok_of_static_any hs run
 
 /-- `REVERT` never succeeds. -/
 theorem Linst.revert_not_ok {sevm : Sevm} {pre post : Devm}
@@ -947,11 +1387,11 @@ theorem Jinst.logs_of_ok {evm : Evm} {j : Jinst} {pc : Nat} {post : Devm}
 
 /-- One successful same-frame driver step of a static frame on a fork from Shanghai on keeps the
 log list. -/
-private theorem staticStep_cont_logs
+private theorem staticStep_cont_pair
     {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post)
-    (static : sevm.isStatic = true) (hfork : ShanghaiOnwards sevm.benvStat.fork) :
-    post.logs = pre.logs := by
+    (static : sevm.isStatic = true) :
+    logsBalances post = logsBalances pre := by
   cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
   | none =>
       unfold Evm.step at step
@@ -972,7 +1412,9 @@ private theorem staticStep_cont_logs
               rcases pair with ⟨actualPc, actualPost⟩
               rw [jumpEq] at step
               cases step
-              exact Jinst.logs_of_ok jumpEq
+              have frame := Jinst.run_instructionFrame ⟨pc, sevm, pre⟩ jumpInst
+              rw [jumpEq] at frame
+              exact PairShape.frame frame (Jinst.logs_of_ok jumpEq)
       | next instruction =>
           have nstep : Ninst.step ⟨pc, sevm, pre⟩ instruction = .cont pc' post := by
             rw [← Evm.step_next decoded]
@@ -985,28 +1427,39 @@ private theorem staticStep_cont_logs
             exact ⟨rfl, rfl⟩
           cases instruction with
           | push bytes bound =>
-              exact (Ninst.Hinv.inv (f := Devm.logs)
+              exact Prod.ext (Ninst.Hinv.inv (f := Devm.logs)
                 (show Ninst.Run sevm pre (.push bytes bound) post from
                   ⟨.none, trivial, pc, nrun⟩)).symm
+                (Ninst.Hinv.inv (f := Devm.getBal)
+                  (show Ninst.Run sevm pre (.push bytes bound) post from
+                    ⟨.none, trivial, pc, nrun⟩)).symm
           | exec executable =>
-              exact Xinst.logs_of_ok hfork (Or.inl static) (XStep.run_toStep.mp nrun) trivial
-          | dupn imm => exact Ninst.dupn_logs ⟨.none, trivial, pc, nrun⟩
-          | swapn imm => exact Ninst.swapn_logs ⟨.none, trivial, pc, nrun⟩
-          | exchange imm => exact Ninst.exchange_logs ⟨.none, trivial, pc, nrun⟩
+              exact Xinst.static_logs_balances_of_ok (Or.inl static)
+                (XStep.run_toStep.mp nrun) (by intro _ _ impossible; cases impossible)
+          | dupn imm =>
+              exact PairShape.frame (Ninst.dupn_instructionFrame_effectRec (xl := .none) trivial nrun)
+                (Ninst.dupn_logs ⟨.none, trivial, pc, nrun⟩)
+          | swapn imm =>
+              exact PairShape.frame (Ninst.swapn_instructionFrame_effectRec (xl := .none) trivial nrun)
+                (Ninst.swapn_logs ⟨.none, trivial, pc, nrun⟩)
+          | exchange imm =>
+              exact PairShape.frame (Ninst.exchange_instructionFrame_effectRec (xl := .none) trivial nrun)
+                (Ninst.exchange_logs ⟨.none, trivial, pc, nrun⟩)
           | reg regular =>
               have rrun : Rinst.run ⟨pc, sevm, pre⟩ regular = .ok post :=
                 (Step.run_ofExecution.mp nrun).2.symm
               by_cases hlog : ∃ n, regular = .log n
               · rcases hlog with ⟨n, rfl⟩
                 exact (Rinst.log_not_ok_of_static static rrun).elim
-              · exact Rinst.logs_of_ok (fun n h => hlog ⟨n, h⟩) rrun
+              · exact Prod.ext (Rinst.logs_of_ok (fun n h => hlog ⟨n, h⟩) rrun)
+                  (Rinst.preserves_bal rrun).symm
 
 /-- A successfully halted node of a static frame on a fork from Shanghai on keeps the log list. -/
-private theorem staticHalt_logs
+private theorem staticHalt_pair
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .halt out)
-    (static : sevm.isStatic = true) (hfork : ShanghaiOnwards sevm.benvStat.fork) :
-    ∀ post, out = .ok post → post.logs = pre.logs := by
+    (static : sevm.isStatic = true) :
+    ∀ post, out = .ok post → logsBalances post = logsBalances pre := by
   intro post hout
   subst hout
   cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
@@ -1026,13 +1479,17 @@ private theorem staticHalt_logs
       | last last =>
           rw [Evm.step_last decoded] at step
           have run : Linst.Run sevm pre last (.ok post) := Step.halt.inj step
-          change post.logs = pre.logs
+          change logsBalances post = logsBalances pre
           cases last with
-          | stop => exact (Linst.Hinv.inv run).symm
-          | return_ => exact (Linst.Hinv.inv run).symm
+          | stop =>
+              exact Prod.ext (Linst.Hinv.inv (f := Devm.logs) (g := Devm.logs) run).symm
+                (Linst.Hinv.inv (f := Devm.getBal) (g := Devm.getBal) run).symm
+          | return_ =>
+              exact Prod.ext (Linst.Hinv.inv (f := Devm.logs) (g := Devm.logs) run).symm
+                (Linst.Hinv.inv (f := Devm.getBal) (g := Devm.getBal) run).symm
           | revert => exact (Linst.revert_not_ok run).elim
           | selfdestruct =>
-              exact (Linst.selfdestruct_not_ok_of_static hfork static run).elim
+              exact (Linst.selfdestruct_not_ok_of_static_any static run).elim
 
 /-- A log fact about every successful outcome holds for the committed post. -/
 private theorem Execution.committedPost_logs_of_ok {out : Execution} {pre : Devm}
@@ -1042,20 +1499,27 @@ private theorem Execution.committedPost_logs_of_ok {out : Execution} {pre : Devm
   | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post => exact h post rfl
 
-/-- **Static execution keeps the log list.**  A successful execution (`.ok post`, committing
-or not) of a static frame on a fork from Shanghai on ends with exactly its entry log list: `LOG`
-cannot complete in a static frame, every other step keeps the list, and every child is
-static and merges its (empty) log list only on success. -/
-theorem Exec.logs_eq_of_static_ok
+/-- Successful concrete observations determine the actual committed post. -/
+private theorem Execution.committedPost_pair_of_ok {out : Execution} {pre : Devm}
+    (h : ∀ post, out = .ok post → logsBalances post = logsBalances pre)
+    (committed : Execution.commits out = true) :
+    logsBalances (Execution.committedPost out committed) = logsBalances pre := by
+  cases out with
+  | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
+  | ok post => exact h post rfl
+
+/-- A successful static execution preserves its concrete log/balance observation on either meter
+lane. The original child run supplies the recursive premise at the actual filled slot. -/
+theorem Exec.static_logs_balances_of_ok
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (static : sevm.isStatic = true)
-    (hfork : ShanghaiOnwards sevm.benvStat.fork) :
-    ∀ post, out = .ok post → post.logs = pre.logs := by
+    :
+    ∀ post, out = .ok post → (post.logs, post.getBal) = (pre.logs, pre.getBal) := by
   induction run with
-  | halt step => exact staticHalt_logs step static hfork
+  | halt step => exact staticHalt_pair step static
   | cont step _ ih =>
       intro post hout
-      exact (ih static hfork post hout).trans (staticStep_cont_logs step static hfork)
+      exact (ih static post hout).trans (staticStep_cont_pair step static)
   | doneErr _ _ _ => intro post hout; cases hout
   | @doneOk _ nodeSevm nodePre _ _ _ _ nodePost _ step enter resumeRun _ ih =>
       intro post hout
@@ -1064,8 +1528,9 @@ theorem Exec.logs_eq_of_static_ok
         unfold Xinst.Run XStep.Run
         rw [spawn]
         exact ⟨_, RunFrame.of_done enter, resumeRun.symm⟩
-      exact (ih static hfork post hout).trans
-        (Xinst.logs_of_ok hfork (Or.inl static) xrun trivial)
+      exact (ih static post hout).trans
+        (Xinst.static_logs_balances_of_ok (Or.inl static) xrun
+          (by intro _ _ impossible; cases impossible))
   | runErr _ _ _ _ _ => intro post hout; cases hout
   | runOk step enter _ resumeRun _ childIH nextIH =>
       intro post hout
@@ -1075,11 +1540,39 @@ theorem Exec.logs_eq_of_static_ok
         rw [spawn]
         exact ⟨_, RunFrame.of_run enter, resumeRun.symm⟩)
       have childStatic := Evm.step_run_isStatic step enter static
-      have childFork := Evm.step_spawn_child_shanghaiOnwards step enter hfork
-      exact (nextIH static hfork post hout).trans
-        (Xinst.logs_of_ok hfork (Or.inl static) xrun
-          (fun childCommitted => Execution.committedPost_logs_of_ok
-            (childIH childStatic childFork) childCommitted))
+      exact (nextIH static post hout).trans
+        (Xinst.static_logs_balances_of_ok (Or.inl static) xrun (by
+          intro child raw slot committed
+          cases slot
+          exact Execution.committedPost_pair_of_ok (childIH childStatic) committed))
+
+/-- An actual successful STATICCALL preserves logs and every account balance on either meter lane.
+Its original filled child is discharged by the single static execution induction. -/
+theorem Ninst.staticcall_logs_balances_any {sevm : Sevm} {pre post : Devm}
+    (run : Ninst.Run sevm pre (.exec .staticcall) post) :
+    (post.logs, post.getBal) = (pre.logs, pre.getBal) := by
+  rcases run with ⟨slot, filled, pc, stepRun⟩
+  have xrun : Xinst.Run sevm pre .staticcall slot (.ok post) := by
+    simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run] using stepRun
+  apply Xinst.static_logs_balances_of_ok (Or.inr rfl) xrun
+  intro child raw actual committed
+  cases actual
+  rcases filled with ⟨childRun⟩
+  rcases XStep.Run.some_inv xrun with ⟨frame, resume, spawn, enter, _⟩
+  have childStatic := (Frame.enter_run_isStatic enter).trans
+    (Xinst.step_staticcall_spawn_isStatic spawn)
+  exact Execution.committedPost_pair_of_ok
+    (Exec.static_logs_balances_of_ok childRun childStatic) committed
+
+/-- Compatibility projection from the single all-fork static execution induction. -/
+theorem Exec.logs_eq_of_static_ok
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (static : sevm.isStatic = true)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) :
+    ∀ post, out = .ok post → post.logs = pre.logs := by
+  have _ := hfork.rules_stateGas_none
+  intro post actual
+  exact congrArg Prod.fst (Exec.static_logs_balances_of_ok run static post actual)
 
 /-- **Static execution keeps the log list**, committed form: a committing execution of a
 static frame on a fork from Shanghai on ends with exactly its entry log list

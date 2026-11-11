@@ -13,13 +13,7 @@ open Jaune Blanc.ExecutionTrace
 
 private theorem cert_onlyStaticcall :
     ∀ f ∈ cert.prog, f.execsSatisfy Xinst.isStaticcall = true := by
-  intro f member
-  simp only [Cert.prog, cert, List.map_cons, List.map_nil,
-    List.mem_cons, List.not_mem_nil, or_false] at member
-  rcases member with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-  all_goals decide +kernel
+  exact cert_execs_staticcall
 
 /-- The checked deployed certificate permits only STATICCALL at every actual
 same-frame location, including internal jumps and returns. -/

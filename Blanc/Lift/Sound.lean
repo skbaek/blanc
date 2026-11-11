@@ -1,5 +1,5 @@
 import Blanc.Lift.Check
-import Blanc.Lift.MemMap
+import Blanc.Lift.StaticcallCapability
 import Blanc.LadderSem
 import Blanc.ExecutionFrames
 
@@ -938,30 +938,60 @@ def NodeClaimLane (code : ByteArray) (c : Cert) (ms : List MemMap) (b : Bool)
   (∀ r ∈ Exec.rawFrameDescendants pk.exc, r ∈ Exec.rawFrameRoots R.exc) →
     NodeClaim0Lane code c ms b R pk
 
-/-- The recursion, in its most general form: the no-state-gas lane, or a certificate with no
-call-family node. `node_soundM_noStateGas` and `node_soundM` are its first lane. -/
-theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+/-- The old syntactic no-call restriction is the false capability predicate. -/
+theorem treeNoExec_eq_execsSatisfy_false (f : SFunc) :
+    treeNoExec f = f.execsSatisfy (fun _ => false) := by
+  induction f with
+  | next n f ih =>
+    cases n <;> simp_all only [treeNoExec, nodeNoExec, SFunc.execsSatisfy,
+      Bool.false_and, Bool.true_and]
+  | _ => simp_all only [treeNoExec, SFunc.execsSatisfy]
+
+/-- The same recursion invariant with an explicit law for each admitted call instruction. -/
+def NodeClaim0Cap (allowed : Xinst → Bool) (code : ByteArray) (c : Cert) (ms : List MemMap) (b : Bool)
+    (R pk : Exec.Deriv) : Prop :=
+  ∀ (post : Devm), pk.exn = .ok post → pk.sevm.code = code →
+  (∀ x, allowed x = true → StepCapability pk.sevm (.exec x)) →
+  (∀ (k : Nat) (g : SFunc), c.prog[k]? = some g → g.execsSatisfy allowed = true) →
+  ∀ (m : Nat) (a : List AVal) (f : SFunc) (ρ : B256) (S base : List B256) (μ : MemMap),
+    f.execsSatisfy allowed = true →
+    checkNodeM code c.entries ms b m pk.pc a μ f = true →
+    pk.devm.stack = S ++ base → FrameMatches ρ a S → MemMatches ρ μ pk.devm.memory →
+    SFunc.RunP (StepIn R) c.prog pk.sevm pk.devm f (.halted post) ∨
+    (RetIn a μ ∧
+      ∃ (devm' : Devm) (S' : List B256) (exc' : Exec ρ.toNat pk.sevm devm' (.ok post)),
+        Exec.Deriv.lt ⟨ρ.toNat, pk.sevm, devm', .ok post, exc'⟩ pk ∧
+        SFunc.RunP (StepIn R) c.prog pk.sevm pk.devm f (.returned devm') ∧
+        devm'.stack = S' ++ base ∧ S'.length = m)
+
+/-- The capability invariant with the original raw-descendant carrier. -/
+def NodeClaimCap (allowed : Xinst → Bool) (code : ByteArray) (c : Cert)
+    (ms : List MemMap) (b : Bool) (R pk : Exec.Deriv) : Prop :=
+  (∀ r ∈ Exec.rawFrameDescendants pk.exc, r ∈ Exec.rawFrameRoots R.exc) →
+    NodeClaim0Cap allowed code c ms b R pk
+
+/-- One recursion over actual execution derivations, parameterized by instruction capabilities. -/
+theorem node_soundM_cap {allowed : Xinst → Bool} {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (hc : Cert.CheckedM code c ms b)
-    (R : Exec.Deriv) : ∀ pk : Exec.Deriv, NodeClaimLane code c ms b R pk := by
+    (R : Exec.Deriv) : ∀ pk : Exec.Deriv, NodeClaimCap allowed code c ms b R pk := by
   apply Exec.Deriv.strongRec
   intro pk ih hsub
-  replace ih : ∀ q, Exec.Deriv.lt q pk → NodeClaim0Lane code c ms b R q :=
+  replace ih : ∀ q, Exec.Deriv.lt q pk → NodeClaim0Cap allowed code c ms b R q :=
     fun q hq => ih q hq (fun r hr => hsub r (desc_sub_of_lt hq r hr))
-  intro post hpost hcode hfork m a f ρ S base μ hno hcheck hstack hframe hmem
+  intro post hpost hcode steps only m a f ρ S base μ hno hcheck hstack hframe hmem
   rcases pk with ⟨pc, sevm, devm, exn, exc⟩
   cases exn with
   | error e => cases hpost
   | ok post =>
     cases hpost
     have hentryNo : ∀ {k : Nat} {g : SFunc}, c.prog[k]? = some g →
-        sevm.benvStat.rules.stateGas = none ∨ treeNoExec g = true :=
-      fun hg => hfork.imp_right fun h => h _ _ hg
+        g.execsSatisfy allowed = true := fun hg => only _ _ hg
     cases f with
     | branch f g =>
-      have hnoF := hno.imp_right fun h => by
-        simp only [treeNoExec, Bool.and_eq_true] at h; exact h.1
-      have hnoG := hno.imp_right fun h => by
-        simp only [treeNoExec, Bool.and_eq_true] at h; exact h.2
+      have hnoF : f.execsSatisfy allowed = true := by
+        simp only [SFunc.execsSatisfy, Bool.and_eq_true] at hno; exact hno.1
+      have hnoG : g.execsSatisfy allowed = true := by
+        simp only [SFunc.execsSatisfy, Bool.and_eq_true] at hno; exact hno.2
       cases a with
       | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
       | cons av a0 =>
@@ -1018,7 +1048,7 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
                       subst x
                       have hrun := ih
                         ⟨pc + 1, sevm, inter, .ok post, exc'⟩
-                        (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' f ρ S1 base μ hnoF
+                        (Exec.Deriv.lt_of_prec prec) post rfl hcode steps only m a' f ρ S1 base μ hnoF
                         (live_fall (hs1 ▸ h1) hcheck'.1.2) hinter htail
                         (hmem.of_memory_eq pop.memory)
                       cases hrun with
@@ -1051,7 +1081,7 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
                       subst x
                       have hrun := ih
                         ⟨t.toNat, sevm, inter, .ok post, exc'⟩
-                        (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' g ρ S1 base μ hnoG
+                        (Exec.Deriv.lt_of_prec prec) post rfl hcode steps only m a' g ρ S1 base μ hnoG
                         (live_taken hy (hs1 ▸ h1) hcheck'.2) hinter htail
                         (hmem.of_memory_eq pop.memory)
                       cases hrun with
@@ -1133,7 +1163,7 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
                         subst x
                         have hrun := ih
                           ⟨pc + 1, sevm, inter, .ok post, exc'⟩
-                          (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' f ρ
+                          (Exec.Deriv.lt_of_prec prec) post rfl hcode steps only m a' f ρ
                           S1 base μ hno (live_fall (hs1 ▸ h1) hcheck'.2) hinter htail
                           (hmem.of_memory_eq pop.memory)
                         cases hrun with
@@ -1173,7 +1203,7 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
                         subst x
                         have hrun := ih
                           ⟨t.toNat, sevm, inter, .ok post, exc'⟩
-                          (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork e.rets
+                          (Exec.Deriv.lt_of_prec prec) post rfl hcode steps only e.rets
                           e.frame g ρ S1 base (ms.getD k []) (hentryNo hg) hentry' hinter hframe'
                           ((hmem.of_memory_eq pop.memory).of_memCompat hmc)
                         cases hrun with
@@ -1199,13 +1229,10 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
         exact hbyte
       exact Or.inl (SFunc.RunP.last (Linst.run_of_at exc h_at))
     | next n f =>
-      have hneN : sevm.benvStat.rules.stateGas = none ∨ ∀ x, n ≠ .exec x :=
-        hno.imp_right fun h => nodeNe_of_noExec (by
-          simp only [treeNoExec, Bool.and_eq_true] at h; exact h.1)
-      have hnoF := hno.imp_right fun h => by
-        simp only [treeNoExec, Bool.and_eq_true] at h; exact h.2
+      have capN : StepCapability sevm n := capability_of_next steps hno
+      have hnoF := SFunc.execsSatisfy_next_tail hno
       have next_nonpush (n : Ninst)
-          (hne0 : sevm.benvStat.rules.stateGas = none ∨ ∀ x, n ≠ .exec x) (a0 a' : List AVal) (out : Pattern)
+          (cap0 : StepCapability sevm n) (a0 a' : List AVal) (out : Pattern)
           (hlen : a.length ≤ 1024)
           (htrans : ninstTransfer n (indexPattern a.length) = some out)
           (hread : out.mapM (readBack a) = some a0)
@@ -1237,7 +1264,7 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
           · exact matches_some_map base
         have hmap := ninstTransfer_map (label a ρ) rfl htrans
         have happ := ninstTransfer_append (base.map some) hmap
-        have hout := ninstTransfer_run_lane hne0 hinput happ run
+        have hout := cap0.stack hinput happ run
         rw [mapM_readBack_label hread] at hout
         rcases matches_split hout with ⟨S', below, hsp, hfirst, hbelow⟩
         have hbelow' : below = base := matches_some_map_eq hbelow
@@ -1246,10 +1273,10 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
         have hframe0 : FrameMatches ρ a' S' := by
           rw [hfold]
           exact frameMatches_foldTop hframe hstack run hinter (matches_to_frame hfirst)
-        obtain ⟨hframe', hmem'⟩ := step_mem_sound_lane b hne0 hframe hstack hmem run hinter hframe0
+        obtain ⟨hframe', hmem'⟩ := cap0.memory b hframe hstack hmem run hinter hframe0
         have hrun := ih
           ⟨pc + n.size, sevm, inter, .ok post, exc'⟩
-          (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m _ f ρ S' base _
+          (Exec.Deriv.lt_of_prec prec) post rfl hcode steps only m _ f ρ S' base _
           hnoF hchild hinter hframe' hmem'
         cases hrun with
         | inl run' => exact Or.inl (SFunc.RunP.next runS run')
@@ -1264,7 +1291,7 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
             deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
             SFunc.RunP.next runS run', hst, hlen'⟩
       have next_checked (n : Ninst)
-          (hne0 : sevm.benvStat.rules.stateGas = none ∨ ∀ x, n ≠ .exec x)
+          (cap0 : StepCapability sevm n)
           (hnpush : ∀ (bs : Bytes) (fits : bs.length ≤ 32),
             n ≠ .push bs fits)
           (hcheck :
@@ -1294,7 +1321,7 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
             simpa only [ha] using hrest
           rcases absNinst_nonpush_spec hnpush ha with
             ⟨hlen, out, a0, htrans, hread, hfold⟩
-          exact next_nonpush n hne0 a0 a' out hlen htrans hread hfold hchild h_at
+          exact next_nonpush n cap0 a0 a' out hlen htrans hread hfold hchild h_at
       cases n with
       | push bs fits =>
         have hcheck' :
@@ -1319,10 +1346,10 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
         have hframe0 :
             FrameMatches ρ (.const (Bytes.toB256 bs) :: a)
               (Bytes.toB256 bs :: S) := List.Forall₂.cons rfl hframe
-        obtain ⟨hframe', hmem'⟩ := step_mem_sound_lane b hneN hframe hstack hmem run
+        obtain ⟨hframe', hmem'⟩ := capN.memory b hframe hstack hmem run
           (by rw [hstack']; rfl) hframe0
         have hrun := ih ⟨pc + (Ninst.push bs fits).size, sevm, inter,
-            .ok post, exc'⟩ (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m
+            .ok post, exc'⟩ (Exec.Deriv.lt_of_prec prec) post rfl hcode steps only m
             _ f ρ (Bytes.toB256 bs :: S) base _ hnoF hcheck'.2 hstack' hframe' hmem'
         cases hrun with
         | inl run' => exact Or.inl (SFunc.RunP.next runS run')
@@ -1345,7 +1372,7 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
           apply bytesAt_slice (ninst_bytes_ne_nil (Ninst.reg r))
           rw [hcode]
           exact hbyte
-        exact next_checked (Ninst.reg r) hneN
+        exact next_checked (Ninst.reg r) capN
           (by intro bs fits h; cases h) hcheck h_at
       | exec x =>
         simp only [checkNodeM, Bool.and_eq_true] at hcheck
@@ -1354,7 +1381,7 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
           apply bytesAt_slice (ninst_bytes_ne_nil (Ninst.exec x))
           rw [hcode]
           exact hcheck.1.1
-        exact next_checked (Ninst.exec x) hneN
+        exact next_checked (Ninst.exec x) capN
           (by intro bs fits h; cases h) hcheck h_at
       | dupn i =>
         simp only [checkNodeM, Bool.and_eq_true] at hcheck
@@ -1363,7 +1390,7 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
           apply bytesAt_slice (ninst_bytes_ne_nil (Ninst.dupn i))
           rw [hcode]
           exact hcheck.1.1
-        exact next_checked (Ninst.dupn i) hneN
+        exact next_checked (Ninst.dupn i) capN
           (by intro bs fits h; cases h) hcheck h_at
       | swapn i =>
         simp only [checkNodeM, Bool.and_eq_true] at hcheck
@@ -1372,7 +1399,7 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
           apply bytesAt_slice (ninst_bytes_ne_nil (Ninst.swapn i))
           rw [hcode]
           exact hcheck.1.1
-        exact next_checked (Ninst.swapn i) hneN
+        exact next_checked (Ninst.swapn i) capN
           (by intro bs fits h; cases h) hcheck h_at
       | exchange i =>
         simp only [checkNodeM, Bool.and_eq_true] at hcheck
@@ -1381,7 +1408,7 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
           apply bytesAt_slice (ninst_bytes_ne_nil (Ninst.exchange i))
           rw [hcode]
           exact hcheck.1.1
-        exact next_checked (Ninst.exchange i) hneN
+        exact next_checked (Ninst.exchange i) capN
           (by intro bs fits h; cases h) hcheck h_at
     | dest f =>
       have hcheck' : byteAt code pc = some (Jinst.toUInt8 .jumpdest) ∧
@@ -1396,7 +1423,7 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
       have hstack' : inter.stack = S ++ base := by
         rw [← burn.stack, hstack]
       have hrun := ih ⟨pc + 1, sevm, inter, .ok post, exc'⟩
-        (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a f ρ S base μ
+        (Exec.Deriv.lt_of_prec prec) post rfl hcode steps only m a f ρ S base μ
         hno hcheck'.2 hstack' hframe (hmem.of_memory_eq burn.memory)
       cases hrun with
       | inl run => exact Or.inl (SFunc.RunP.dest burn run)
@@ -1456,7 +1483,7 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
                 subst x
                 have hrun := ih
                   ⟨t.toNat, sevm, inter, .ok post, exc'⟩
-                  (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork e.rets
+                  (Exec.Deriv.lt_of_prec prec) post rfl hcode steps only e.rets
                   e.frame g ρ S1 base (ms.getD k []) (hentryNo hg) hentry' hinter hframe'
                   ((hmem.of_memory_eq pop.memory).of_memCompat hmc)
                 cases hrun with
@@ -1532,7 +1559,7 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
                       simp only [List.append_assoc]
                     have hrun := ih
                       ⟨t.toNat, sevm, inter, .ok post, exc'⟩
-                      (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork e.rets
+                      (Exec.Deriv.lt_of_prec prec) post rfl hcode steps only e.rets
                       e.frame g 0 Sf (Sr ++ base) (ms.getD k []) (hentryNo hg) hentry' hstacke hframee
                       (by rw [hempty]; exact memMatches_nil _ _)
                     cases hrun with
@@ -1571,7 +1598,7 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
                         have hframee' : FrameMatches r e.frame Sf := hframee
                         have hrun := ih
                           ⟨t.toNat, sevm, inter, .ok post, exc'⟩
-                          (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork e.rets
+                          (Exec.Deriv.lt_of_prec prec) post rfl hcode steps only e.rets
                           e.frame g r Sf (Sr ++ base) (ms.getD k []) (hentryNo hg) hentry' hstacke hframee'
                           (by rw [hempty]; exact memMatches_nil _ _)
                         cases hrun with
@@ -1612,7 +1639,7 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
                             Exec.Deriv.lt_of_prec prec2
                           have hrun' := ih
                             ⟨r.toNat + 1, sevm, inter2, .ok post, exc2⟩
-                            (deriv_lt_trans hlt_dest hlt_call) post rfl hcode hfork m
+                            (deriv_lt_trans hlt_dest hlt_call) post rfl hcode steps only m
                             (List.replicate e.rets .unk ++ a'.drop e.frame.length)
                             d ρ (Sret ++ Sr) base [] hno hcall.2.2 hstackd hcont
                             (memMatches_nil _ _)
@@ -1707,7 +1734,7 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
           FrameMatches ρ (.const (Nat.toB256 p) :: a) (Nat.toB256 p :: S) :=
         List.Forall₂.cons rfl hframe
       have hrun := ih ⟨p + 1, sevm, inter, .ok post, exc'⟩
-        (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m
+        (Exec.Deriv.lt_of_prec prec) post rfl hcode steps only m
         (.const (Nat.toB256 p) :: a) f ρ (Nat.toB256 p :: S) base μ hno hchild hstack' hframe'
         (hmem.of_memory_eq (pc_stepRun_memory hstepPc).symm)
       cases hrun with
@@ -1728,6 +1755,25 @@ theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
       have hstep := Evm.step_invOp (devm := devm) hnone
       cases Exec.halt_inv exc hstep
 
+/-- Compatibility with the original no-state-gas or no-call interface. -/
+theorem node_soundM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+    (hc : Cert.CheckedM code c ms b)
+    (R : Exec.Deriv) : ∀ pk : Exec.Deriv, NodeClaimLane code c ms b R pk := by
+  intro pk hsub post hpost hcode hfork m a f ρ S base μ hno
+  by_cases hsg : pk.sevm.benvStat.rules.stateGas = none
+  · exact node_soundM_cap (allowed := fun _ => true) hc R pk hsub post hpost hcode
+      (fun _ _ => capability_of_lane (Or.inl hsg))
+      (fun _ g _ => SFunc.execsSatisfy_true g)
+      m a f ρ S base μ (SFunc.execsSatisfy_true f)
+  · exact node_soundM_cap (allowed := fun _ => false) hc R pk hsub post hpost hcode
+      (fun _ impossible => by cases impossible)
+      (fun k g hg => by
+        rw [← treeNoExec_eq_execsSatisfy_false]
+        exact hfork.resolve_left hsg k g hg)
+      m a f ρ S base μ (by
+        rw [← treeNoExec_eq_execsSatisfy_false]
+        exact hno.resolve_left hsg)
+
 theorem node_soundM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (hc : Cert.CheckedM code c ms b)
     (R : Exec.Deriv) : ∀ pk : Exec.Deriv, NodeClaimNoStateGas code c ms b R pk := by
@@ -1740,13 +1786,13 @@ theorem node_soundM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
   intro pk hsub post hpost hcode hfork
   exact node_soundM_noStateGas hc R pk hsub post hpost hcode hfork.rules_stateGas_none
 
-/-- The lifting theorem inside the derivation, from checked entries whose entry
-`0` starts the frame, on the general lane. -/
-theorem lift_sound_inM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+/-- Assemble the root entry once for the capability recursion. -/
+theorem lift_sound_inM_cap {allowed : Xinst → Bool} {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (hck : Cert.CheckedM code c ms b)
     (hstart : ∃ e f c', c = (e, f) :: c' ∧ e.pc = 0 ∧ e.frame = [] ∧ ms.getD 0 [] = [])
     {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hlane : sevm.benvStat.rules.stateGas = none ∨ ProgNoExec c.prog) (exc : Exec 0 sevm pre (.ok post)) :
+    (steps : ∀ x, allowed x = true → StepCapability sevm (.exec x))
+    (only : ∀ f ∈ c.prog, f.execsSatisfy allowed = true) (exc : Exec 0 sevm pre (.ok post)) :
     SProg.RunP (StepIn ⟨0, sevm, pre, .ok post, exc⟩) c.prog sevm pre post := by
   obtain ⟨e, f, c', rfl, hepc, hef, hm0⟩ := hstart
   have hf := hck 0 e f (by simp only [Cert.entries, List.map_cons, List.length_cons,
@@ -1757,12 +1803,10 @@ theorem lift_sound_inM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b 
   have hf0 : checkNodeM code (Cert.entries ((e, f) :: c')) ms b e.rets 0 [] [] f = true := by
     rw [hm0, hepc, hef] at hf
     exact hf
-  have hrun := node_soundM_lane hck ⟨0, sevm, pre, .ok post, exc⟩ ⟨0, sevm, pre, .ok post, exc⟩
+  have hrun := node_soundM_cap hck ⟨0, sevm, pre, .ok post, exc⟩ ⟨0, sevm, pre, .ok post, exc⟩
     (fun r hr => List.mem_cons_of_mem _ hr)
-    post rfl hcode hlane e.rets [] f 0 [] pre.stack []
-    (hlane.imp_right fun h => h 0 f (by simp only [Cert.prog, List.map_cons, List.length_cons,
-      List.length_map, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos,
-      List.getElem_cons_zero])) hf0 (by simp only [List.nil_append])
+    post rfl hcode steps (fun _ g hg => only g (List.mem_of_getElem? hg)) e.rets [] f 0 [] pre.stack []
+    (only f (by simp only [Cert.prog, List.map_cons, List.mem_cons, true_or])) hf0 (by simp only [List.nil_append])
     (by simp only [FrameMatches, List.forall₂_nil_right_iff]) (memMatches_nil _ _)
   refine ⟨f, ?_, ?_⟩
   · simp only [Cert.prog, List.map_cons, List.length_cons, List.length_map, lt_add_iff_pos_left,
@@ -1770,6 +1814,38 @@ theorem lift_sound_inM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b 
   · cases hrun with
     | inl run => exact run
     | inr run => exact absurd run.1 retIn_nil_nil
+
+/-- Compatibility with the original entry lifting interface. -/
+theorem lift_sound_inM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+    (hck : Cert.CheckedM code c ms b)
+    (hstart : ∃ e f c', c = (e, f) :: c' ∧ e.pc = 0 ∧ e.frame = [] ∧ ms.getD 0 [] = [])
+    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (hlane : sevm.benvStat.rules.stateGas = none ∨ ProgNoExec c.prog) (exc : Exec 0 sevm pre (.ok post)) :
+    SProg.RunP (StepIn ⟨0, sevm, pre, .ok post, exc⟩) c.prog sevm pre post := by
+  by_cases hsg : sevm.benvStat.rules.stateGas = none
+  · exact lift_sound_inM_cap (allowed := fun _ => true) hck hstart hcode
+      (fun _ _ => capability_of_lane (Or.inl hsg))
+      (fun f _ => SFunc.execsSatisfy_true f) exc
+  · apply lift_sound_inM_cap (allowed := fun _ => false) hck hstart hcode
+      (fun _ impossible => by cases impossible) _ exc
+    intro f hf
+    obtain ⟨k, hk⟩ := List.mem_iff_getElem?.mp hf
+    rw [← treeNoExec_eq_execsSatisfy_false]
+    exact hlane.resolve_left hsg k f hk
+
+/-- Actual STATICCALL capabilities discharge the call law on every fork. -/
+theorem lift_sound_inM_staticcall {allowed : Xinst → Bool} {code : ByteArray}
+    {c : Cert} {ms : List MemMap} {b : Bool}
+    (hck : Cert.CheckedM code c ms b)
+    (hstart : ∃ e f c', c = (e, f) :: c' ∧ e.pc = 0 ∧ e.frame = [] ∧ ms.getD 0 [] = [])
+    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (onlyStaticcall : ∀ x, allowed x = true → x = .staticcall)
+    (only : ∀ f ∈ c.prog, f.execsSatisfy allowed = true) (exc : Exec 0 sevm pre (.ok post)) :
+    SProg.RunP (StepIn ⟨0, sevm, pre, .ok post, exc⟩) c.prog sevm pre post := by
+  apply lift_sound_inM_cap hck hstart hcode _ only exc
+  intro x hx
+  rw [onlyStaticcall x hx]
+  exact staticcall_capability sevm
 
 theorem lift_sound_inM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (hck : Cert.CheckedM code c ms b)

@@ -1,4 +1,5 @@
 import Blanc.Lift.BeaconDeposit.HistSafeGuards
+import Blanc.Lift.AmsterdamWalk
 
 /-!
 # Safety segment B1: the guards and the two `to_little_endian_64` calls, inverted
@@ -61,5 +62,24 @@ theorem safe_guards {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B256
           (St b' [0xc0, 96, sP, 0x80, 32, wP, 48, pP, BeaconDeposit.depositEventTopic, 0x80,
             gweiAmount sevm, rt, 96, sP, 32, wP, 48, pP, 0x01b8, sel] M' G') t_0575_c7 o := by
   exact (fun _ : sevm.data.length < 2 ^ 256 => safe_guards_any_data hfork run) hcd
+
+/-- The same six actual guards under EIP-2929, retaining the count read's BAL metadata. -/
+theorem safe_guardsA_any_data {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B256} {G : Nat}
+    {o : Outcome}
+    (access : sevm.benvStat.rules.access = .eip2929)
+    (run : SFunc.Run prog sevm (St b [rt, sgL, sP, wcL, wP, pkL, pP, 0x01b8, sel] mem0 G)
+      t_0304_c7 o) :
+    pkL = 48 ∧ wcL = 32 ∧ sgL = 96 ∧ 10 ^ 18 ≤ sevm.value.toNat ∧
+      sevm.value.toNat % 10 ^ 9 = 0 ∧ sevm.value.toNat / 10 ^ 9 < 2 ^ 64 ∧
+      ∃ b' M' G', Keep (afterSloadA sevm b solCountSlot) b' ∧
+        BodyMem M' 256 0x100
+          [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 (gweiAmount sevm).toNat),
+            (0xc0, (8 : B256).toBytes),
+            (0xe0, BeaconDeposit.le64 (b.getStorVal sevm.currentTarget solCountSlot).toNat)] ∧
+        SFunc.Run prog sevm
+          (St b' [0xc0, 96, sP, 0x80, 32, wP, 48, pP, BeaconDeposit.depositEventTopic, 0x80,
+            gweiAmount sevm, rt, 96, sP, 32, wP, 48, pP, 0x01b8, sel] M' G') t_0575_c7 o := by
+  exact safe_guards_with_count_read_any_data (afterSloadA sevm b solCountSlot)
+    (by intro S M G d step; exact ri_sloadA access step) run
 
 end Blanc.Lift.BeaconDeposit

@@ -19,4 +19,25 @@ namespace Blanc.Lift.BeaconDeposit
 
 open Jaune
 
+/-- The deployed checked certificate's original closed STATICCALL membership fact. -/
+theorem cert_execs_staticcall :
+    ∀ f ∈ cert.prog, f.execsSatisfy Xinst.isStaticcall = true := by
+  intro f member
+  simp only [Cert.prog, cert, List.map_cons, List.map_nil,
+    List.mem_cons, List.not_mem_nil, or_false] at member
+  rcases member with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
+    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
+    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+  all_goals decide +kernel
+
+/-- Successful actual bytecode execution, retaining its original StepIn provenance on every rule set. -/
+theorem lift_sound_in_any_rules {sevm : Sevm} {pre post : Devm}
+    (hcode : sevm.code = code) (executed : Exec 0 sevm pre (.ok post)) :
+    SProg.RunP (StepIn ⟨0, sevm, pre, .ok post, executed⟩) prog sevm pre post := by
+  apply lift_sound_inM_staticcall (allowed := Xinst.isStaticcall)
+    (Cert.checkedM_of_check cert_check) _ hcode _ cert_execs_staticcall executed
+  · exact ⟨_, _, _, rfl, rfl, rfl, rfl⟩
+  · intro x admitted
+    cases x <;> simp_all only [Xinst.isStaticcall, Bool.false_eq_true]
+
 end Blanc.Lift.BeaconDeposit

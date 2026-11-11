@@ -4,15 +4,6 @@ namespace Blanc.Lift
 
 open Jaune
 
-/-- Check a restriction on external instruction families throughout a
-synthetic tree. Internal certificate calls retain their separate references. -/
-def SFunc.execsSatisfy (allowed : Xinst → Bool) : SFunc → Bool
-  | .next (.exec x) f => allowed x && f.execsSatisfy allowed
-  | .next _ f | .dest f | .branchTo f _ | .callNext _ f | .pcAt _ f =>
-      f.execsSatisfy allowed
-  | .branch f g => f.execsSatisfy allowed && g.execsSatisfy allowed
-  | _ => true
-
 /-- Restriction at the active cursor and every suspended internal return. -/
 def Cursor.ExecsSatisfy (allowed : Xinst → Bool) (cursor : Cursor) : Prop :=
   cursor.f.execsSatisfy allowed = true ∧
