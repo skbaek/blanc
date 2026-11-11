@@ -462,6 +462,14 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   `callChildMsg … 0 …` keeps the entry environment and ignores `stmid`);
   `callChildPost_facts_zero` projects the resumed parent
   when the output window is empty, whatever the child returned.
+- For an exact fixed-width word writer over a real zero-value CALL, use
+  [`Blanc/Lift/SystemWordWriter.lean`](../Blanc/Lift/SystemWordWriter.lean):
+  `program_compile` identifies the 65-byte PUSH32/MSTORE/CALL/STOP runtime,
+  `childMsg_data` identifies its full word input, and `exec` consumes the actual
+  parent-built child execution equation and clean child error under `CoveredFork`
+  and its explicit CALL admission premises. `post_facts`, `post_code` and
+  `post_storage` expose the settled child effects and status one. The child law
+  and a closed kept-history control remain separate obligations.
 - `accessDelegation_worldMeta` carries transient storage and the storage-access
   warm set through the exact delegation-resolution equation;
   `accessDelegation_createdAccounts` carries the created-account set.
@@ -3284,6 +3292,11 @@ a known joint body) with `toBytesJoin_append`, and close each closed
 `longHeaderS` by `decide +kernel` instead of a `norm_num` header computation.
 `encode_bytes_nil` and `toBytesPack_of_pos` (`Blanc/RlpBytesInjective.lean`) are
 the shared one-line encoder facts.
+For unbounded encoder and receipt-index separation, use
+[`Blanc/RlpReceiptKeys.lean`](../Blanc/RlpReceiptKeys.lean):
+`RlpConcrete.encode_bytes_injective`, `receipt_key_injective` and `receipt_key_ne`
+cover arbitrary byte payloads and every natural index, including zero and indices
+at or above 128. These are encoder/key facts, not a decoder-validity or receipt-lookup premise.
 `decode_byte` and `decode_empty_bytes` cover the one-byte headers; `parse_cons`
 composes the actual first-item and remaining-list equations.
 `decode_hash` proves the fixed-width header-word roundtrip, including leading
@@ -4577,6 +4590,16 @@ derive actual trie preservation for enabled and disabled request processing.
 preservation from the same original request result.
 `StagedBodyTrace.receiptsTrie_eq_transactionBout` transports through the actual
 withdrawal and final access-list fields to the body's final output.
+For the ordered receipts and selected logs of original indexed transaction roots, use
+[`Blanc/ExecutionKeptReceiptLogs.lean`](../Blanc/ExecutionKeptReceiptLogs.lean):
+`TransactionsRoots.receipt_keptAt_logs` gives the exact ordered key append,
+positional `Forall₂` final-trie lookups and equality of address-filtered receipt
+logs with the original kept-frame added-log sequence. It requires `stateGas = none`,
+`bal = none` and the indexed list's strict order; `putIndex_pairwise` supplies that
+order for the actual `putIndex` list. `MessageRoots.keptAt_logs` gives the original
+message-to-kept log equality under `stateGas = none` and the address-filter implication.
+Receipt completeness and log attribution are derived from the supplied original
+carrier, with no installed-code, calldata-bound or entry-freshness premise.
 
 
 For a successful creation receipt, use

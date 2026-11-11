@@ -715,9 +715,10 @@ CONTRACTS["consolidation-request"].extend(["Lift.ConsolidationRequest.Occurrence
 # Protocol-contract corpus Mac proof checkpoints: additive shared observers and family leaves.
 SHARED += ["ExecutionKeptEntered", "Lift.EnvironmentInv", "BytesSliceNat"]
 SHARED += ["ListFold", "ExecutionKeptFresh", "Lift.LogSilent"]
+SHARED += ["Lift.SystemWordWriter", "RlpReceiptKeys", "ExecutionKeptReceiptLogs"]
 CONTRACTS["beacon-roots"].extend([
     "Corpus.Proofs.BeaconRootsClassification", "Corpus.Proofs.BeaconRootsFrames",
-    "Lift.BeaconRoots.Frame", "Lift.BeaconRoots.Read",
+    "Lift.BeaconRoots.Frame", "Lift.BeaconRoots.Read", "Lift.BeaconRoots.Writer",
 ])
 CONTRACTS["history-storage"].extend([
     "Corpus.Proofs.HistoryStorage", "Lift.HistoryStorage.Frame", "Lift.HistoryStorage.Read",
