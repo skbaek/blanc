@@ -1,4 +1,4 @@
-import Blanc.Corpus.Freeze.BuilderRequest
+import Blanc.Composition.Corpus.Freeze.BuilderRequest
 import Blanc.Lift.BuilderRequest.PrivilegedFrame
 
 /-!

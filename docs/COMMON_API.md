@@ -2516,6 +2516,18 @@ a bare set-membership goal does not identify this execution-specific route.
   `BodyRoots.roots_fresh` derives freshness of actual body roots, and
   `KeptHistory.fresh` derives it for every frame kept at a selected address,
   without a code, fork or budget premise. Entry output has its separate API below.
+  For installed runtime transport on the original kept transaction carrier, use
+  [`Blanc/ExecutionKeptRuntime.lean`](../Blanc/ExecutionKeptRuntime.lean):
+  `MessageRoots.runtime_entry` retains pc zero, target, installed nonempty nondelegating code,
+  actual message stat and `Exec.FreshEntry`, from the actual routed message.
+  `TransactionRoots.runtime_of_runtimeSafety` and `TransactionsRoots.runtime_of_runtimeSafety`
+  use `InstalledRuntimeSafety`, installed code, `rules.stateGas = none` and
+  `rules.settle.touchedSweep = false`; they preserve the installed code through settlement
+  and give pc zero, target, code, fork and actual fresh-entry facts for every kept target frame.
+  The target may already belong to the created-account set; no calldata-size bound is required.
+  At an arbitrary message boundary, `MessageRoots.not_deleted_of_runtimeSafety` additionally
+  requires the target absent from `msg.inheritedDeletions`; the transaction producer derives
+  this opening exclusion from the actual preparation. It does not erase inherited deletions.
   For cleared entry output in a covered-fork kept history, use
   [`Blanc/ExecutionKeptEntered.lean`](../Blanc/ExecutionKeptEntered.lean):
   `KeptHistory.keptAt_output` gives `f.pre.output = []` for every frame actually kept at the selected address.

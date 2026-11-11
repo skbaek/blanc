@@ -717,6 +717,7 @@ CONTRACTS["consolidation-request"].extend(["Lift.ConsolidationRequest.Occurrence
 SHARED += ["ExecutionKeptEntered", "Lift.EnvironmentInv", "BytesSliceNat"]
 SHARED += ["ListFold", "ExecutionKeptFresh", "Lift.LogSilent"]
 SHARED += ["Lift.SystemWordWriter", "RlpReceiptKeys", "ExecutionKeptReceiptLogs"]
+SHARED += ["ExecutionKeptRuntime"]
 CONTRACTS["beacon-roots"].extend([
     "Corpus.Proofs.BeaconRootsClassification", "Corpus.Proofs.BeaconRootsFrames",
     "Lift.BeaconRoots.Frame", "Lift.BeaconRoots.Read", "Lift.BeaconRoots.Writer",
@@ -749,6 +750,7 @@ COMPOSITION = {
     "Composition.Corpus.Proofs.RingTotality": ('beacon-roots', 'history-storage'),
     "Composition.RequestPhaseAmsterdam": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestCodesKept": ('builder-request', 'withdrawal-request'),
+    "Composition.BuilderRequestClassification": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestPublicObservers": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestPublicGuarantees": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestPublicFindings": ('builder-request', 'withdrawal-request'),

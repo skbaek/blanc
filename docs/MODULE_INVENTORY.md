@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-576 shared modules, 548 with a module summary.
+577 shared modules, 549 with a module summary.
 
 ## `Blanc/`
 
@@ -127,6 +127,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`ExecutionKeptFresh.lean`](../Blanc/ExecutionKeptFresh.lean) | Exact fresh machines in the settlement-retained kept carrier | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionKeptPreCalls.lean`](../Blanc/ExecutionKeptPreCalls.lean) | **Kept-history pre-execution system calls, header links, and random access.** A kept block opens with two pre-execution system calls (`beaconRootsCall` at `beaconRootsAddress` and `historyStorageCall` at `historyStorageAddress`), runs its decoded transactions from … | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionKeptReceiptLogs.lean`](../Blanc/ExecutionKeptReceiptLogs.lean) | Log sequence compatibility of the existing kept and committed projections | [T3](COMMON_API.md#t3-the-wrapper-is-a-transaction-and-the-fact-is-about-an-installed-contract) |
+| [`ExecutionKeptRuntime.lean`](../Blanc/ExecutionKeptRuntime.lean) | Installed runtime transport on the original kept transaction carrier | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionKeptTop.lean`](../Blanc/ExecutionKeptTop.lean) | **The top-level executions of a message.** `processMessageCall` runs at most one interpreter execution, on either lane of the rule record. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionKeptValue.lean`](../Blanc/ExecutionKeptValue.lean) | **Kept-frame value: never falls, and covers the kept values.** **Build target.** Jaune pin `e8db2742`, built on `tests@v21.0.1`, EELS `1562e2f`. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionMessageAdmission.lean`](../Blanc/ExecutionMessageAdmission.lean) | **Trace-local admission through message wrappers.** The retained message carriers expose the exact recursive `Exec` selected by Jaune's deterministic wrappers. | [T2a](COMMON_API.md#t2a-i-need-a-frame-invariant-under-trace-local-entry-premises) |
