@@ -108,7 +108,15 @@
     },
     {
       "id": "C-S4",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Composition.ConsolidationRequestPublic.history_fifo_mainnet",
+          "pin": "thm:Blanc.Composition.ConsolidationRequestPublic.history_fifo_mainnet"
+        }
+      ]
     },
     {
       "id": "B-S4",
