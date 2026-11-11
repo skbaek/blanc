@@ -1,6 +1,7 @@
 import Blanc.Composition.BuilderRequestPublicGuarantees
 import Blanc.Lift.BuilderRequest.Deposit.Fifo
 import Blanc.Lift.BuilderRequest.Exit.Fifo
+import Blanc.Lift.BuilderRequest.Latch
 
 /-!
 # Freeze record (G0, part cb): EIP-8282 cells B-S2 and B-S4
@@ -8,13 +9,13 @@ import Blanc.Lift.BuilderRequest.Exit.Fifo
 Statements only, against Blanc main `7f2a69ba` and Jaune `c30cf0a5`. Nothing here is proved, registered in the
 layering classification, or imported by the root.
 
-* `B_S2`: one statement for each builder contract (Form A, under `HistoryClean` and `SystemCodeAbsent`). Every frame a
-  kept history keeps at the contract is the block's own dequeue, a submission or a fee read, with its storage, log,
-  output and balance effect.
-  *Form B note (user decision packet):* an unrestricted Form B dropping `HistoryClean` and `SystemCodeAbsent` must
-  account **both** for the latch arm (a `SYSTEM_ADDRESS` call with nonempty calldata) **and** for user-originated
-  empty-calldata `SYSTEM_ADDRESS` dequeues before Amsterdam, because the runtime's `CALLER == SYSTEM_ADDRESS` dispatch
-  does not inspect the execution fork.
+* `B_S2`: unrestricted Form B, selected by the user on 2026-11-11 (goal revision 3, section 13).
+  Every frame a kept history keeps at either contract is a SYSTEM_ADDRESS empty-calldata dequeue, a SYSTEM_ADDRESS
+  nonempty-calldata latch, a non-system submission or a non-system fee read, with exact storage, log, output and
+  balance effects. No `HistoryClean` or `SystemCodeAbsent` premise is used. Both privileged arms apply on every kept
+  fork: the caller dispatch does not test whether Amsterdam has activated. Thus a user-originated SYSTEM_ADDRESS
+  call before Amsterdam can dequeue or latch, although the protocol schedules its own builder calls only at Amsterdam.
+  The latch is reversible: the next empty-calldata system call resets slot 0 from the inhibitor to zero.
 * `B_S4`: the delivery statement rooted at an observed mainnet checkpoint, block 26,211,406 (timestamp 1,792,229,651,
   hash `0x71b1…f661`, `stateRoot = expectedStateRoot`), the block of the recorded creation transaction; the record
   holds the full tip schema together with the five whole-account/storage equalities `ValidJointG`'s checkpoint fields
@@ -41,18 +42,35 @@ def quotedExcess (target : B256) (pre : Devm) (a : Adr) : B256 :=
 
 /-! ## B-S2: what succeeds, per contract -/
 
-/-- **What a settled frame at the builder deposit contract is.** Exactly one of three. No arm's code moves a balance:
-the value a call carries is credited before the frame starts. -/
+/-- **Unrestricted settled-frame classification at the builder deposit contract.** Exactly one of four disjoint
+caller/calldata forms. No arm's code moves a balance: any value transfer occurs before the frame starts. The system
+arms do not constrain value or fork and need not be protocol-scheduled calls. -/
 inductive DepositSettled (b : KeptBlock) (f : Exec.Frame) : Prop
-  /-- **Dequeue: the block's own call.** The caller is SYSTEM_ADDRESS, the calldata is empty and the block is at
-  Amsterdam. The world state after is `sysState` (the four bookkeeping words, nothing else); the output is the first
-  `min(64, (tail − head) mod 2^256)` stored records, 184 bytes each; no log. -/
-  | dequeue (caller : f.sevm.caller = systemAddress) (empty : f.sevm.data = []) (fork : b.fork = .amsterdam)
+  /-- **Dequeue.** A non-static SYSTEM_ADDRESS call with empty calldata, at any kept fork. Its world is exactly
+  `sysState`: the pointer updates, slot 0's word-arithmetic excess update (including inhibitor-to-zero reset), and
+  cleared count, with every other account field unchanged. Output is the first `min(64, (tail − head) mod 2^256)`
+  records, 184 bytes each with the amount little-endian; no log or balance change. -/
+  | dequeue (caller : f.sevm.caller = systemAddress) (empty : f.sevm.data = [])
+      (dynamic : f.sevm.isStatic = false)
       (state : f.post.state = sysState Deposit.sysShape f.pre.state depositAddr)
       (output : f.post.output = Deposit.sysOutput.drained (f.pre.getStorVal depositAddr)
         (f.pre.getStorVal depositAddr 2)
         (drainCount Deposit.sysShape.cap.word (f.pre.getStorVal depositAddr 2)
           (f.pre.getStorVal depositAddr 3)).toNat)
+      (balance : ∀ a, f.post.getBal a = f.pre.getBal a)
+      (logs : f.post.logs = f.pre.logs)
+  /-- **Reversible latch.** A non-static SYSTEM_ADDRESS call with nonempty calldata, at any kept fork. It drains
+  exactly as `dequeue`, sets slot 0 to `B256.max` and clears slot 1; exact world `latchState`, same output and no log
+  or balance change. It reads neither CALLVALUE nor the calldata contents. A later empty-calldata dequeue resets the
+  inhibitor to zero. -/
+  | latch (caller : f.sevm.caller = systemAddress) (nonempty : f.sevm.data ≠ [])
+      (dynamic : f.sevm.isStatic = false)
+      (state : f.post.state = latchState Deposit.sysShape f.pre.state depositAddr)
+      (output : f.post.output = Deposit.sysOutput.drained (f.pre.getStorVal depositAddr)
+        (f.pre.getStorVal depositAddr 2)
+        (drainCount Deposit.sysShape.cap.word (f.pre.getStorVal depositAddr 2)
+          (f.pre.getStorVal depositAddr 3)).toNat)
+      (balance : ∀ a, f.post.getBal a = f.pre.getBal a)
       (logs : f.post.logs = f.pre.logs)
   /-- **Submission.** 184 bytes from a caller other than SYSTEM_ADDRESS, non-static, slot 0 off the inhibitor, the
   credited amount at least 1 ETH and the value at least the credit plus the quoted fee. The record is stored at the
@@ -66,7 +84,7 @@ inductive DepositSettled (b : KeptBlock) (f : Exec.Frame) : Prop
       (logs : f.post.logs = f.pre.logs ++ [⟨depositAddr, [], f.sevm.data⟩])
       (output : f.post.output = f.pre.output)
   /-- **Fee read.** Empty calldata and no value from a caller other than SYSTEM_ADDRESS, slot 0 off the inhibitor:
-  returns the quoted fee as one word and changes nothing. -/
+  returns the quoted fee as one word and changes no storage, balance or log. Static reads are allowed. -/
   | feeRead (caller : f.sevm.caller ≠ systemAddress) (empty : f.sevm.data = []) (value : f.sevm.value = 0)
       (active : f.pre.getStorVal depositAddr 0 ≠ B256.max)
       (output : f.post.output = (wordFee (quotedExcess 8 f.pre depositAddr)).toBytes)
@@ -74,14 +92,28 @@ inductive DepositSettled (b : KeptBlock) (f : Exec.Frame) : Prop
       (balance : ∀ a, f.post.getBal a = f.pre.getBal a)
       (logs : f.post.logs = f.pre.logs)
 
-/-- **What a settled frame at the builder exit contract is.** Exactly one of three. -/
+/-- **Unrestricted settled-frame classification at the builder exit contract.** Exactly one of the same four
+disjoint forms, with 48-byte submissions and at most 16 dequeued 68-byte records. -/
 inductive ExitSettled (b : KeptBlock) (f : Exec.Frame) : Prop
-  /-- **Dequeue: the block's own call.** As for the deposit contract, with at most 16 records of 68 bytes. -/
-  | dequeue (caller : f.sevm.caller = systemAddress) (empty : f.sevm.data = []) (fork : b.fork = .amsterdam)
+  /-- **Dequeue.** A non-static SYSTEM_ADDRESS empty-calldata call at any kept fork, including user-originated
+  calls before Amsterdam. Exact pointer/excess/count update, output, balance and log effects. -/
+  | dequeue (caller : f.sevm.caller = systemAddress) (empty : f.sevm.data = [])
+      (dynamic : f.sevm.isStatic = false)
       (state : f.post.state = sysState Exit.sysShape f.pre.state exitAddr)
       (output : f.post.output = Exit.sysOutput.drained (f.pre.getStorVal exitAddr)
         (f.pre.getStorVal exitAddr 2)
         (drainCount Exit.sysShape.cap.word (f.pre.getStorVal exitAddr 2) (f.pre.getStorVal exitAddr 3)).toNat)
+      (balance : ∀ a, f.post.getBal a = f.pre.getBal a)
+      (logs : f.post.logs = f.pre.logs)
+  /-- **Reversible latch.** The same drain on nonempty calldata, exact world `latchState` (slot 0 at the inhibitor,
+  slot 1 cleared), at any kept fork; same output, no log or balance change. No zero-value guard. -/
+  | latch (caller : f.sevm.caller = systemAddress) (nonempty : f.sevm.data ≠ [])
+      (dynamic : f.sevm.isStatic = false)
+      (state : f.post.state = latchState Exit.sysShape f.pre.state exitAddr)
+      (output : f.post.output = Exit.sysOutput.drained (f.pre.getStorVal exitAddr)
+        (f.pre.getStorVal exitAddr 2)
+        (drainCount Exit.sysShape.cap.word (f.pre.getStorVal exitAddr 2) (f.pre.getStorVal exitAddr 3)).toNat)
+      (balance : ∀ a, f.post.getBal a = f.pre.getBal a)
       (logs : f.post.logs = f.pre.logs)
   /-- **Submission.** 48 bytes from a caller other than SYSTEM_ADDRESS, non-static, slot 0 off the inhibitor, value
   at least the quoted fee. The record (caller, then the calldata) is stored at the tail; one topicless log of its 68
@@ -94,7 +126,7 @@ inductive ExitSettled (b : KeptBlock) (f : Exec.Frame) : Prop
       (balance : ∀ a, f.post.getBal a = f.pre.getBal a)
       (logs : f.post.logs = f.pre.logs ++ [⟨exitAddr, [], f.sevm.caller.toBytes ++ f.sevm.data⟩])
       (output : f.post.output = f.pre.output)
-  /-- **Fee read.** As for the deposit contract. -/
+  /-- **Fee read.** As for the deposit contract: empty calldata, zero value, active, static or dynamic. -/
   | feeRead (caller : f.sevm.caller ≠ systemAddress) (empty : f.sevm.data = []) (value : f.sevm.value = 0)
       (active : f.pre.getStorVal exitAddr 0 ≠ B256.max)
       (output : f.post.output = (wordFee (quotedExcess 2 f.pre exitAddr)).toBytes)
@@ -102,38 +134,35 @@ inductive ExitSettled (b : KeptBlock) (f : Exec.Frame) : Prop
       (balance : ∀ a, f.post.getBal a = f.pre.getBal a)
       (logs : f.post.logs = f.pre.logs)
 
-/-- **B-S2 at the deposit contract.** Every frame a kept history keeps at the builder deposit contract is the block's
-own dequeue, a submission or a fee read. In particular no kept frame is a system call with calldata (the latch arm),
-and no block before Amsterdam dequeues. -/
+/-- **B-S2 at the deposit contract, unrestricted Form B.** Every settled frame a kept history keeps there is a
+dequeue, latch, submission or fee read with the exact effects above. SYSTEM_ADDRESS may send transactions, hold
+code, be a 7702 authority or be created; no clean-history or system-code-absence premise is used. A dequeue need not
+be the block's scheduled request call, and its fork need not be Amsterdam. -/
 def B_S2_deposit : Prop :=
   ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
     -- kept: a kept history (covered forks and Amsterdam) from a start holding both builder codes
-    (_kept : CodesKept cfg start blocks stop)
-    -- clean: no kept block has SYSTEM_ADDRESS as a sender or a 7702 authority, and none creates it
-    (_clean : HistoryClean blocks)
-    -- system: no code at SYSTEM_ADDRESS at the start
-    (_system : SystemCodeAbsent start),
+    (_kept : CodesKept cfg start blocks stop),
     ∀ b ∈ blocks, ∀ f ∈ b.keptAt depositAddr, DepositSettled b f
 
-/-- **B-S2 at the exit contract.** Every frame a kept history keeps at the builder exit contract is the block's own
-dequeue, a submission or a fee read. -/
+/-- **B-S2 at the exit contract, unrestricted Form B.** The same four-arm exhaustive classification, with neither
+SYSTEM_ADDRESS exclusions nor a protocol-scheduled-only restriction on its privileged calls. -/
 def B_S2_exit : Prop :=
   ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
     -- kept: a kept history (covered forks and Amsterdam) from a start holding both builder codes
-    (_kept : CodesKept cfg start blocks stop)
-    -- clean: no kept block has SYSTEM_ADDRESS as a sender or a 7702 authority, and none creates it
-    (_clean : HistoryClean blocks)
-    -- system: no code at SYSTEM_ADDRESS at the start
-    (_system : SystemCodeAbsent start),
+    (_kept : CodesKept cfg start blocks stop),
     ∀ b ∈ blocks, ∀ f ∈ b.keptAt exitAddr, ExitSettled b f
 
-/-- **B-S2.** One statement for each builder contract (Form A: `CodesKept`, `HistoryClean`, `SystemCodeAbsent`). Note
-that an unrestricted Form B without `HistoryClean` and `SystemCodeAbsent` would have to admit both the nonempty-calldata
-`SYSTEM_ADDRESS` latch arm and pre-Amsterdam user-originated empty-calldata `SYSTEM_ADDRESS` dequeues, since the
-deployed bytecode's `CALLER == SYSTEM_ADDRESS` branch does not inspect `b.fork`. -/
+/-- **B-S2.** One unrestricted statement for each builder contract, under `CodesKept` only. The four arms are
+pairwise disjoint by caller and calldata: SYSTEM_ADDRESS empty/nonempty, non-system submission-length/empty. The
+reversible latch and pre-Amsterdam user-originated SYSTEM_ADDRESS dequeues are included explicitly. -/
 def B_S2 : Prop := B_S2_deposit ∧ B_S2_exit
 
-/-! ### B-S2 negative controls -/
+/-! ### B-S2 negative controls
+
+The guard-deletion and spurious-success witnesses below falsify the unrestricted four-arm relations: their caller
+is explicitly non-system, so neither new privileged arm can classify the mutant. The old clean-history/empty-system
+premise control is superseded: its latch behavior is now a required success arm, not a counterexample.
+-/
 
 /-- Replace `repl.length` bytes starting at `offset` in `code`. -/
 def patchBytes (code : ByteArray) (offset : Nat) (repl : List UInt8) : ByteArray :=
