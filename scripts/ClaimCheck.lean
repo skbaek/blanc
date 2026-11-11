@@ -14,6 +14,9 @@ import Blanc.Lift.WithdrawalRequest.FifoDrainControl
 import Blanc.Composition.WithdrawalRequestFeeHeadline
 import Blanc.Composition.ConsolidationRequestPublicHeadlines
 import Blanc.Composition.ConsolidationRequestPublicHistory
+import Blanc.Lift.BeaconDeposit.BeaconEnv
+import Blanc.Lift.BeaconDeposit.Creation.Deploy
+import Blanc.Lift.BeaconDeposit.HistDeployment
 -- `open private` below; no longer reached transitively under mathlib 4.35.
 import Batteries.Tactic.OpenPrivate
 
@@ -2475,3 +2478,111 @@ example {checkpoint final : BlockChain} {blocks : List KeptBlock}
   history_fifo_mainnet history obs clean cap
 
 end Blanc.Composition.ConsolidationRequestPublic
+
+namespace Blanc.Lift.BeaconDeposit
+open Jaune Blanc Blanc.ExecutionTrace
+
+-- Beacon deposit: configuredHistory_solInv_sys
+example {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {initialHistory : List B256}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (systemInstalled : SystemCodeInstalled checkpoint.state)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
+    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
+    (noAuthority : trace.NoAuthorityAt 2)
+    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ 2)
+    (installed : checkpoint.state.getCode ca = code)
+    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
+    SolInv (future.state.getStor ca) (initialHistory ++ committedNodes ca trace) :=
+  configuredHistory_solInv_sys trace systemInstalled systemNoAuthority systemNoFrame checkpointEmpty noAuthority noFrame installed invariant
+
+end Blanc.Lift.BeaconDeposit
+
+namespace Blanc.Lift.BeaconDeposit.Creation
+open Jaune Blanc.BeaconDeposit Blanc.Lift.BeaconDeposit Blanc.ForkUniform
+
+-- Beacon deposit: beacon_deploy_covered
+example (f : Fork) (hf : CoveredFork f) :
+    depositAddress = computeContractAddress deployer 0 ∧
+    ∃ post, processCreateMessage (deployMsg.withFork f) = .ok post ∧
+      (post.getCode depositAddress).toList = Blanc.Lift.BeaconDeposit.code.toList ∧
+      SolInv (Devm.getStor post depositAddress) [] :=
+  beacon_deploy_covered f hf
+
+end Blanc.Lift.BeaconDeposit.Creation
+
+namespace Blanc.Lift.BeaconDeposit
+open Jaune
+open Blanc.BeaconDeposit
+
+-- Beacon deposit definition: SolInv
+example (stor : Stor) (history : List B256) :
+    SolInv stor history ↔
+      (SolZeroHashesCorrect stor ∧ Inv Bytes.sha256 (solAcc stor) history) :=
+  Iff.rfl
+
+end Blanc.Lift.BeaconDeposit
+
+namespace Blanc.Lift.BeaconDeposit
+open Jaune Blanc.ExecutionTrace
+
+-- Beacon deposit definition: depositCount
+example {cfg : ChainConfig} {D B : BlockChain} (history : ConfiguredHistoryTraceIn HistFork cfg D B) :
+    depositCount history = ((B.state.getStor Creation.depositAddress).get solCountSlot).toNat :=
+  rfl
+
+-- Beacon deposit definition: storedRoot
+example {cfg : ChainConfig} {D B : BlockChain} (history : ConfiguredHistoryTraceIn HistFork cfg D B) :
+    storedRoot history =
+      BeaconDeposit.Acc.root Bytes.sha256 (solAcc (B.state.getStor Creation.depositAddress)) :=
+  rfl
+
+-- Beacon deposit definition: committedDeposits
+example {cfg : ChainConfig} {D B : BlockChain} (history : ConfiguredHistoryTraceIn HistFork cfg D B) :
+    committedDeposits history = committedNodesIn Creation.depositAddress history :=
+  rfl
+
+-- Beacon deposit definition: DepositHistory
+example {cfg : ChainConfig} {D B : BlockChain} (history : ConfiguredHistoryTraceIn HistFork cfg D B) :
+    DepositHistory history ↔
+      (depositCount history = (committedDeposits history).length ∧
+        storedRoot history =
+          BeaconDeposit.mixedRootOf Bytes.sha256 (committedDeposits history)) :=
+  Iff.rfl
+
+-- Beacon deposit: beacon_deposits
+example {B : BlockChain} (d : BeaconDeploymentTo B) :
+    DepositHistory d.trace :=
+  beacon_deposits d
+
+-- Beacon deposit constructor: BeaconDeploymentTo.mk
+example {B : BlockChain} (pre D C C1 P : BlockChain)
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre D)
+    (atTwo : block.bodyTrace.decodedTxs[2]? = some Creation.HistoricalTx.tx)
+    (receipt : Fin 5 × Receipt)
+    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes (2 : Nat).toBytes)]? =
+      some receipt)
+    (succeeded : receipt.2.succeeded = true)
+    (emptyLogs : block.blockOutput.blockLogs.filter
+      (fun log => log.address == Creation.depositAddress) = [])
+    (dc : ConfiguredHistoryTraceIn HistFork mainnetChainConfig D C)
+    (first : ConfiguredBlockTraceIn HistFork mainnetChainConfig C C1)
+    (tail : ConfiguredHistoryTraceIn HistFork mainnetChainConfig C1 P)
+    (modern : ConfiguredHistoryTrace mainnetChainConfig P B)
+    (anchors : HistoricalSeamAnchors D C P first.block)
+    (checkpointEmpty : D.state.getCode 2 = ByteArray.empty)
+    (historicalNoFrame : ∀ root ∈ ((dc.step first).append tail).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ (2 : Adr))
+    (modernSystemNoAuthority : ∀ p ∈ systemContracts, modern.NoAuthorityAt p.1)
+    (modernNoAuthority : modern.NoAuthorityAt 2)
+    (modernNoFrame : ∀ root ∈ modern.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ (2 : Adr)) :
+    BeaconDeploymentTo B :=
+  ⟨pre, D, C, C1, P, block, atTwo, receipt, lookup, succeeded, emptyLogs, dc, first, tail, modern,
+    anchors, checkpointEmpty, historicalNoFrame, modernSystemNoAuthority, modernNoAuthority,
+    modernNoFrame⟩
+
+end Blanc.Lift.BeaconDeposit
