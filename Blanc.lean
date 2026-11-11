@@ -31,6 +31,7 @@ import Blanc.CompiledWalkInversion
 import Blanc.Composition.BuilderRequestCarrier
 import Blanc.Composition.BuilderRequestClassification
 import Blanc.Composition.BuilderRequestCodesKept
+import Blanc.Composition.BuilderRequestControls
 import Blanc.Composition.BuilderRequestJointG
 import Blanc.Composition.BuilderRequestJointGAppends
 import Blanc.Composition.BuilderRequestJointGBalance
@@ -69,6 +70,8 @@ import Blanc.Composition.Corpus.Proofs.RingHistory
 import Blanc.Composition.Corpus.Proofs.RingTotality
 import Blanc.Composition.Corpus.Proofs.RingValue
 import Blanc.Composition.DepositParse
+import Blanc.Composition.DepositShortLogControl
+import Blanc.Composition.DepositShortLogInput
 import Blanc.Composition.RequestPhaseAmsterdam
 import Blanc.Composition.RequestPhaseAmsterdamBal
 import Blanc.Composition.RequestPhaseOrder
