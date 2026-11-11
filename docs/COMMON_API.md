@@ -1434,6 +1434,12 @@ For the `genesis_time` field after actual pending-deposit processing,
 successful `processPendingDeposits` result, for arbitrary preset, fork and
 context. This is field preservation, not an initial-genesis or clock theorem.
 
+For successful clock arithmetic, the same module's `computeTimeAtSlotMs_nat`
+gives the exact natural value of a successful millisecond clock. Under
+`SLOT_DURATION_MS % 1000 = 0`, `computeTimeAtSlotOf_grid` retains the actual
+successful `secondsToMilliseconds` origin, and `successful_clock_cancel`
+cancels that same effective converted genesis between two successful clocks.
+
 For consensus SSZ byte equations, use
 [`Blanc/ConsensusSsz.lean`](../Blanc/ConsensusSsz.lean):
 `leBytes_eight_eq_reverse_toBytes` (little-endian `uint64` bytes are Jaune's

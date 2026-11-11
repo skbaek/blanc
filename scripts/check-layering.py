@@ -802,6 +802,7 @@ COMPOSITION = {
 SHARED += ["ExecutionKeptStorageFold", "JointGloasReplayStep"]
 COMPOSITION.update({
     "Composition.ConsolidationRequestPublicStorage": ("consolidation-request",),
+    "Composition.DepositConsensusOutcomes": ("beacon-deposit",),
     "Composition.DepositPendingPass": ("beacon-deposit",),
     "Composition.BuilderRequestApplicability.Checks": ("builder-request",),
 })

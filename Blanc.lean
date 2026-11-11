@@ -74,6 +74,7 @@ import Blanc.Composition.Corpus.Proofs.ConsolidationLatency
 import Blanc.Composition.Corpus.Proofs.RingHistory
 import Blanc.Composition.Corpus.Proofs.RingTotality
 import Blanc.Composition.Corpus.Proofs.RingValue
+import Blanc.Composition.DepositConsensusOutcomes
 import Blanc.Composition.DepositParse
 import Blanc.Composition.DepositPendingPass
 import Blanc.Composition.DepositShortLogControl
