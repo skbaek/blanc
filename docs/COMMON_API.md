@@ -2498,6 +2498,11 @@ a bare set-membership goal does not identify this execution-specific route.
   `Exec.descendantFrames_caller_excluded_neutral`.
   [`Blanc/ExecutionKeptTop.lean`](../Blanc/ExecutionKeptTop.lean): `MessageRoots`, both lanes of `processMessageCall`.
   [`Blanc/ExecutionKeptChain.lean`](../Blanc/ExecutionKeptChain.lean): `TransactionRoots`, `BodyRoots`, `KeptHistory`.
+  For cleared entry output in a covered-fork kept history, use
+  [`Blanc/ExecutionKeptEntered.lean`](../Blanc/ExecutionKeptEntered.lean):
+  `KeptHistory.keptAt_output` gives `f.pre.output = []` for every frame actually kept at the selected address.
+  Its top-level `MessageRoots`, transaction, request and body lemmas require `rules.stateGas = none`;
+  the history theorem discharges that from its covered-fork premise. Its history scope excludes Amsterdam.
   The per-block SYSTEM_ADDRESS premises a request-contract history theorem takes (no sender, no authority, no
   creation there) are one structure, [`Blanc/ExecutionKeptClean.lean`](../Blanc/ExecutionKeptClean.lean):
   `HistoryClean`, stated by the EIP-8282 builder and EIP-7251 public history headlines.
@@ -3283,6 +3288,10 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
 
 ### M1. The goal is a `sliceD` normalization
 
+- Bounded natural-number parser reads in
+  [`Blanc/BytesSliceNat.lean`](../Blanc/BytesSliceNat.lean): `Bytes.sliceToNat_of_le` identifies
+  `data.sliceToNat start width` with `Bytes.toNat (data.sliceD start width 0)` when
+  `start + width ≤ data.length`.
 - Read a fixed-size ABI `bytes4` head word with `argBytes4` in
   [`Blanc/CommonCore.lean`](../Blanc/CommonCore.lean).  It right-aligns the
   ABI's left-aligned four significant bytes before an integer comparison;
@@ -6080,6 +6089,10 @@ every shared module with its own summary and the branches that cite it.
 
 #### C9.9. I need to walk a successful lifted run
 
+- Symbolic environment-push inversion in
+  [`Blanc/Lift/EnvironmentInv.lean`](../Blanc/Lift/EnvironmentInv.lean): `ri_number` and `ri_timestamp`
+  identify the successor as `St` with the block-number word or timestamp pushed onto the original stack,
+  the same base and memory, and an existential remaining gas value. They state no numeric gas charge.
 - Successful lifted run to facts (safety, the inversion walk): per-node `ric_*`
   (control, over `SFunc.RunCut`; `SFunc.Run.cut`/`SFunc.RunCut.uncut` for uncut
   runs) and per-instruction `ri_*` (successor as an `St`, `ri_xor` among them; numeral-offset forms

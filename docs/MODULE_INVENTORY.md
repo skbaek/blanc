@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-566 shared modules, 539 with a module summary.
+569 shared modules, 542 with a module summary.
 
 ## `Blanc/`
 
@@ -24,6 +24,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`Basic.lean`](../Blanc/Basic.lean) | Blanc's own prefix/split algebra over lists (Split, Pref, Frel) and the tactic helpers built on it. | [Root](COMMON_API.md#root-what-are-you-trying-to-do) |
 | [`BlockForward.lean`](../Blanc/BlockForward.lean) | Contract-neutral forward construction of one configured block. | [T7](COMMON_API.md#t7-i-must-construct-a-configured-block-forward-from-its-parts) |
 | [`BytePattern.lean`](../Blanc/BytePattern.lean) | Exact byte-pattern occurrences. | [Root](COMMON_API.md#root-what-are-you-trying-to-do) |
+| [`BytesSliceNat.lean`](../Blanc/BytesSliceNat.lean) | Bounded natural-number reads from byte images | [M1](COMMON_API.md#m1-the-goal-is-a-sliced-normalization) |
 | [`BytesWrite.lean`](../Blanc/BytesWrite.lean) | Contract-neutral byte-image write laws | [M1](COMMON_API.md#m1-the-goal-is-a-sliced-normalization) |
 | [`CallSpawnExact.lean`](../Blanc/CallSpawnExact.lean) | *(no module summary)* | [E2](COMMON_API.md#e2-the-walk-crosses-a-child-frame) |
 | [`ChargeGas.lean`](../Blanc/ChargeGas.lean) | *(no module summary)* | [E4](COMMON_API.md#e4-i-need-a-common-terminal-walk) |
@@ -120,6 +121,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`ExecutionKeptChain.lean`](../Blanc/ExecutionKeptChain.lean) | **Kept frames along a transaction, a body and a history.** The levels above `MessageRoots`. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionKeptClean.lean`](../Blanc/ExecutionKeptClean.lean) | **A kept history clean of SYSTEM_ADDRESS.** Three per-block premises about `SYSTEM_ADDRESS` over a kept history: no kept block's transaction is sent by it, no authorization recovers to it, and no kept frame creates at it. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionKeptConfigured.lean`](../Blanc/ExecutionKeptConfigured.lean) | **Configured histories as kept histories, and the kept carrier's uniqueness.** A covered-fork configured history (`ConfiguredHistoryTrace`, the carrier of the request-contract libraries before Amsterdam) is a kept history (`KeptHistory`, which also reaches Amsterdam) over the … | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
+| [`ExecutionKeptEntered.lean`](../Blanc/ExecutionKeptEntered.lean) | Entry-output facts for the actual kept-frame carrier. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionKeptFacts.lean`](../Blanc/ExecutionKeptFacts.lean) | **What every kept frame enters with, and what a committing run leaves at the account.** Rule-neutral companions of `ExecutionKeptFrames`. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionKeptFrames.lean`](../Blanc/ExecutionKeptFrames.lean) | **Kept frames at one account, by recursion on the run.** Rule-neutral: nothing here reads `stateGas` or a fork. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionKeptPreCalls.lean`](../Blanc/ExecutionKeptPreCalls.lean) | **Kept-history pre-execution system calls, header links, and random access.** A kept block opens with two pre-execution system calls (`beaconRootsCall` at `beaconRootsAddress` and `historyStorageCall` at `historyStorageAddress`), runs its decoded transactions from … | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
@@ -310,7 +312,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 
 | module | summary | cited in |
 |---|---|---|
-| [`RingCommon.lean`](../Blanc/Corpus/Freeze/RingCommon.lean) | **G0 freeze (protocol-contract-corpus-v1, part rh): vocabulary shared by the R and H cells.** A freeze record, not a landing: this module is deliberately absent from the layering classification and the root. | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
+| [`RingCommon.lean`](../Blanc/Corpus/Freeze/RingCommon.lean) | **G0 freeze (protocol-contract-corpus-v1, part rh): vocabulary shared by the R and H cells.** This shared source vocabulary is registered in the layering classification and imported by the generated library root. | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
 
 ## `Blanc/Lift/`
 
@@ -370,6 +372,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`Deploy.lean`](../Blanc/Lift/Deploy.lean) | **Deploying lifted creation code.** The bridge from a gas-exact synthetic run of a lifted constructor (`SProg.RunExact` of a checked certificate of the creation input, `Blanc/Lift/Exact.lean`) to Jaune's CREATE settlement `processCreateMessage`: the run is a real Jaune execution … | [C9.11](COMMON_API.md#c911-i-need-deployment-create-create2-or-a-clone) |
 | [`Ecrecover.lean`](../Blanc/Lift/Ecrecover.lean) | **The ECRECOVER precompile on arbitrary input.** `ecrecoverSigner` is Jaune's own recovery on the four input words of any calldata; malformed `v`, zero or out-of-range scalars and failed recovery give `none`. | [M1](COMMON_API.md#m1-the-goal-is-a-sliced-normalization) |
 | [`EcrecoverCall.lean`](../Blanc/Lift/EcrecoverCall.lean) | One actual recovery request and return-consumption engine for checked source layouts. | [M1](COMMON_API.md#m1-the-goal-is-a-sliced-normalization) |
+| [`EnvironmentInv.lean`](../Blanc/Lift/EnvironmentInv.lean) | Environment pushes inverted over a symbolic walk state | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Exact.lean`](../Blanc/Lift/Exact.lean) | **The gas-exact converse for lifted bytecode.** `SFunc.RunExact` is the executable, exact-gas sibling of `SFunc.Run`. | [C9.2](COMMON_API.md#c92-i-need-to-connect-a-real-execution-with-a-lifted-run) |
 | [`ExactCallProfile.lean`](../Blanc/Lift/ExactCallProfile.lean) | **Exact, gas-stable profiles for one external call.** The debit and canonical successor are supplied before the call's input gas. | [E2](COMMON_API.md#e2-the-walk-crosses-a-child-frame) |
 | [`ExactLeaf.lean`](../Blanc/Lift/ExactLeaf.lean) | **A gas-exact lifted run as a node-walk leaf child.** A parent's node walk (`Blanc/Lift/NodeWalk.lean`) consumes a call-family child through `spawn_resume_ok`, which asks, of every derivation node at the child's start configuration `c`, its outcome and the shadows describing the … | [E5](COMMON_API.md#e5-i-need-to-inspect-what-happened-in-an-exec) |

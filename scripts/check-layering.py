@@ -712,6 +712,17 @@ CONTRACTS["history-storage"] = ["Corpus.Freeze.HistoryStorage", "Lift.HistorySto
 CONTRACTS["beacon-deposit"].extend(["Corpus.Freeze.DepositCells", "Corpus.Freeze.DepositLedger"])
 CONTRACTS["consolidation-request"].extend(["Lift.ConsolidationRequest.Occurrence"])
 
+# Protocol-contract corpus Mac proof checkpoints: additive shared observers and family leaves.
+SHARED += ["ExecutionKeptEntered", "Lift.EnvironmentInv", "BytesSliceNat"]
+CONTRACTS["beacon-roots"].extend([
+    "Corpus.Proofs.BeaconRootsClassification", "Corpus.Proofs.BeaconRootsFrames",
+    "Lift.BeaconRoots.Frame", "Lift.BeaconRoots.Read",
+])
+CONTRACTS["history-storage"].extend([
+    "Corpus.Proofs.HistoryStorage", "Lift.HistoryStorage.Frame", "Lift.HistoryStorage.Read",
+])
+CONTRACTS["beacon-deposit"].extend(["Lift.BeaconDeposit.LogCodec"])
+
 # Explicit semantic ownership, not the union of existing imports. Abstract token
 # interfaces do not add WETH9/USDC to PairToken/PairTwoToken; concrete instances
 # do. Single-family token adapters and Curve replay adapters stay narrow. The
@@ -723,6 +734,7 @@ CONTRACTS["consolidation-request"].extend(["Lift.ConsolidationRequest.Occurrence
 # Each entry is a nonempty tuple of distinct CONTRACTS keys. Adding a composition
 # declares its boundary here; no default family or production exception exists.
 COMPOSITION = {
+    "Composition.Corpus.Proofs.RingValue": ('beacon-roots', 'history-storage'),
     "Composition.Corpus.Freeze.ConsolidationExecution": ('consolidation-request',),
     "Composition.Corpus.Freeze.ConsolidationJoint": ('consolidation-request',),
     "Composition.Corpus.Freeze.BuilderRequest": ('builder-request', 'withdrawal-request'),

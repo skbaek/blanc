@@ -10,6 +10,7 @@ import Blanc.BeaconDepositEncoding
 import Blanc.BeaconDepositModel
 import Blanc.BlockForward
 import Blanc.BytePattern
+import Blanc.BytesSliceNat
 import Blanc.BytesWrite
 import Blanc.CallSpawnExact
 import Blanc.ChargeGas
@@ -63,6 +64,7 @@ import Blanc.Composition.Corpus.Freeze.ConsolidationJoint
 import Blanc.Composition.Corpus.Proofs.ConsolidationExecution
 import Blanc.Composition.Corpus.Proofs.ConsolidationLatency
 import Blanc.Composition.Corpus.Proofs.RingTotality
+import Blanc.Composition.Corpus.Proofs.RingValue
 import Blanc.Composition.RequestPhaseAmsterdam
 import Blanc.Composition.RequestPhaseAmsterdamBal
 import Blanc.Composition.RequestPhaseOrder
@@ -79,6 +81,9 @@ import Blanc.Corpus.Freeze.DepositCells
 import Blanc.Corpus.Freeze.DepositLedger
 import Blanc.Corpus.Freeze.HistoryStorage
 import Blanc.Corpus.Freeze.RingCommon
+import Blanc.Corpus.Proofs.BeaconRootsClassification
+import Blanc.Corpus.Proofs.BeaconRootsFrames
+import Blanc.Corpus.Proofs.HistoryStorage
 import Blanc.DelegatecallEnvelope
 import Blanc.DeploymentMessage
 import Blanc.DeploymentTouch
@@ -162,6 +167,7 @@ import Blanc.ExecutionKeptBalSilent
 import Blanc.ExecutionKeptChain
 import Blanc.ExecutionKeptClean
 import Blanc.ExecutionKeptConfigured
+import Blanc.ExecutionKeptEntered
 import Blanc.ExecutionKeptFacts
 import Blanc.ExecutionKeptFrames
 import Blanc.ExecutionKeptPreCalls
@@ -340,6 +346,7 @@ import Blanc.Lift.BeaconDeposit.Layout
 import Blanc.Lift.BeaconDeposit.Lift
 import Blanc.Lift.BeaconDeposit.LittleEndian
 import Blanc.Lift.BeaconDeposit.Liveness
+import Blanc.Lift.BeaconDeposit.LogCodec
 import Blanc.Lift.BeaconDeposit.Prog
 import Blanc.Lift.BeaconDeposit.Refines
 import Blanc.Lift.BeaconDeposit.RootLoop
@@ -352,6 +359,8 @@ import Blanc.Lift.BeaconDeposit.SafeGuards
 import Blanc.Lift.BeaconDeposit.SafeLittleEndian
 import Blanc.Lift.BeaconDeposit.SafeViews
 import Blanc.Lift.BeaconDeposit.Views
+import Blanc.Lift.BeaconRoots.Frame
+import Blanc.Lift.BeaconRoots.Read
 import Blanc.Lift.BeaconRoots.Totality
 import Blanc.Lift.BndInterval
 import Blanc.Lift.BuilderRequest.Accepts
@@ -499,6 +508,7 @@ import Blanc.Lift.DelegatecallControl
 import Blanc.Lift.Deploy
 import Blanc.Lift.Ecrecover
 import Blanc.Lift.EcrecoverCall
+import Blanc.Lift.EnvironmentInv
 import Blanc.Lift.Exact
 import Blanc.Lift.ExactCallProfile
 import Blanc.Lift.ExactLeaf
@@ -545,6 +555,8 @@ import Blanc.Lift.HistPackedShaSize
 import Blanc.Lift.HistShaWalk
 import Blanc.Lift.HistStaticCall
 import Blanc.Lift.HistoryGas
+import Blanc.Lift.HistoryStorage.Frame
+import Blanc.Lift.HistoryStorage.Read
 import Blanc.Lift.HistoryStorage.Totality
 import Blanc.Lift.IdentityCall
 import Blanc.Lift.IdentityCallGas

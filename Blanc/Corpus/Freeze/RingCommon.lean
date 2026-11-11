@@ -8,8 +8,8 @@ import Blanc.SystemContracts
 /-!
 # G0 freeze (protocol-contract-corpus-v1, part rh): vocabulary shared by the R and H cells
 
-A freeze record, not a landing: this module is deliberately absent from the layering classification and the
-root. Every definition here is the minimal vocabulary the frozen statements of
+This shared source vocabulary is registered in the layering classification and imported by the generated
+library root. Every definition here is the minimal vocabulary the frozen statements of
 `Blanc.Corpus.Freeze.BeaconRoots` and `Blanc.Corpus.Freeze.HistoryStorage` read. On landing, `ring` and
 `keptAtAddr` go to a shared module (they name no contract), and each family owns its own observation record.
 
