@@ -481,20 +481,28 @@ theorem history_fifo (R : Reading c) (L : Linked c ty) (P : Premises c cfg start
 boundary. At Amsterdam it emits the first `cap` records of the queue its request step read, and the submissions
 through its request boundary, after the start queue, are the earlier blocks' emissions followed by that queue.
 Either way its request bytes are its emitted records, each `R.size` bytes. -/
-theorem history_block (R : Reading c) (L : Linked c ty) (P : Premises c cfg start blocks stop st)
+theorem history_block_with_prefix (R : Reading c) (L : Linked c ty) (P : Premises c cfg start blocks stop st)
     {pre post : List KeptBlock} {b : KeptBlock} (split : blocks = pre ++ b :: post) :
-    ((blockEmissions R ty b).flatten = blockDelivered ty b ∧ ∀ e ∈ blockEmissions R ty b, e.length = R.size) ∧
+    (((blockEmissions R ty b).flatten = blockDelivered ty b ∧ ∀ e ∈ blockEmissions R ty b, e.length = R.size) ∧
     (b.fork ≠ .amsterdam → blockEmissions R ty b = [] ∧ queueAtRequests R b = []) ∧
     (b.fork = .amsterdam →
       blockEmissions R ty b = (queueAtRequests R b).take c.cap ∧
       st.queue.map c.out ++ submissions c pre ++ boundarySubmissions c b =
-        emissions R ty pre ++ queueAtRequests R b) := by
+        emissions R ty pre ++ queueAtRequests R b)) ∧
+    (b.fork = .amsterdam →
+      ∃ (xs ys : List (Delivery.Frame c)) (g : Delivery.Frame c) (f : Exec.Frame),
+        Corresponds c (xs ++ g :: ys) (History.kept c.address blocks) ∧
+        Chain (start.state.getStor c.address) (xs ++ g :: ys) (stop.state.getStor c.address) ∧
+        Chain (start.state.getStor c.address) xs g.before ∧
+        requestFrame c.address b = some f ∧ Matches c g f ∧
+        g.event = .system false ∧ queueAtRequests R b = (queueAfter st xs).queue.map c.out) := by
   obtain ⟨fss, hf, chain, subs⟩ := P.frames L
+  have allcorr := corresponds_flatten hf
   rw [split] at hf
   obtain ⟨fpre, fs, fpost, rfl, hpre, hb, -⟩ := Blanc.List.forall₂_split hf
   have eF : (fpre ++ fs :: fpost).flatten = fpre.flatten ++ (fs ++ fpost.flatten) := by
     rw [List.flatten_append, List.flatten_cons]
-  rw [eF] at chain subs
+  rw [eF] at chain subs allcorr
   have slots : queueBase c.width (st.tail + (Delivery.submissions (fpre.flatten ++ (fs ++ fpost.flatten))).length)
       ≤ 2 ^ 256 := by rw [subs]; exact P.slots
   have count : st.count + (Delivery.submissions (fpre.flatten ++ (fs ++ fpost.flatten))).length < 2 ^ 256 := by
@@ -525,7 +533,7 @@ theorem history_block (R : Reading c) (L : Linked c ty) (P : Premises c cfg star
     set Y := fpost.flatten
     have e : X ++ ((gs ++ g :: hs) ++ Y) = (X ++ gs) ++ g :: (hs ++ Y) := by
       simp only [List.append_assoc, List.cons_append]
-    rw [e] at chain slots count
+    rw [e] at chain slots count allcorr
     have hl : (Delivery.submissions (X ++ gs)).length ≤
         (Delivery.submissions ((X ++ gs) ++ g :: (hs ++ Y))).length := by
       rw [Delivery.submissions_append (X ++ gs), List.length_append]
@@ -549,49 +557,79 @@ theorem history_block (R : Reading c) (L : Linked c ty) (P : Premises c cfg star
       cases h2 with
       | cons starts _ => exact starts
     have d := h1.delivered P.rep slotsP countP
-    have queue : queueAtRequests R b = ((st.queue ++ Delivery.submissions (X ++ gs)).drop
-        (deliveredRecords st X)).map c.out := by
+    have actual_queue : queueAtRequests R b = (queueAfter st (X ++ gs)).queue.map c.out := by
       unfold queueAtRequests requestFrame
       rw [found]
       dsimp only
-      rw [← mg.before, starts, storedQueue_eq R d.represents, d.queue, kX]
-    refine ⟨feed delivered, fun ne => absurd am ne, fun _ => ⟨?_, ?_⟩⟩
-    · rw [blockEmissions_of_output R delivered, queue, List.map_take]
-    · have hsubPre : submissions c pre = (Delivery.submissions X).map c.out := by
-        unfold submissions
-        rw [(corresponds_flatten hpre).submissions]
-        rfl
-      have hbound : boundarySubmissions c b = (Delivery.submissions gs).map c.out := by
-        unfold boundarySubmissions
-        rw [taken, ← cg.submissions]
-      have em := emissions_segments R hpre (xs := []) (ys := (gs ++ g :: hs) ++ Y)
-        (by simpa only [List.nil_append, List.append_assoc, List.cons_append] using chain)
-        P.rep (by simpa only [List.nil_append, List.append_assoc, List.cons_append] using slots)
-        (by simpa only [List.nil_append, List.append_assoc, List.cons_append] using count)
-      have z : deliveredRecords st ([] : List (Delivery.Frame c)) = 0 := rfl
-      rw [List.nil_append, List.nil_append, z, Nat.sub_zero, List.drop_zero] at em
-      have hk : deliveredRecords st X ≤ (st.queue ++ Delivery.submissions X).length := deliveredRecords_le st X
-      have tS : (st.queue ++ Delivery.submissions (X ++ ((gs ++ g :: hs) ++ Y))).take (deliveredRecords st X) =
-          (st.queue ++ Delivery.submissions X).take (deliveredRecords st X) := by
-        rw [Delivery.submissions_append, ← List.append_assoc, List.take_append_of_le_length hk]
-      have tT : (st.queue ++ Delivery.submissions (X ++ gs)).take (deliveredRecords st X) =
-          (st.queue ++ Delivery.submissions X).take (deliveredRecords st X) := by
-        rw [Delivery.submissions_append, ← List.append_assoc, List.take_append_of_le_length hk]
-      rw [hsubPre, hbound, em, tS, queue, ← tT]
-      conv => rhs; rw [← List.map_append, List.take_append_drop]
-      rw [Delivery.submissions_append, List.map_append, List.map_append, List.append_assoc]
+      rw [← mg.before, starts, storedQueue_eq R d.represents]
+    have queue : queueAtRequests R b = ((st.queue ++ Delivery.submissions (X ++ gs)).drop
+        (deliveredRecords st X)).map c.out := by
+      rw [actual_queue, d.queue, kX]
+    have original : ((blockEmissions R ty b).flatten = blockDelivered ty b ∧ ∀ e ∈ blockEmissions R ty b, e.length = R.size) ∧
+    (b.fork ≠ .amsterdam → blockEmissions R ty b = [] ∧ queueAtRequests R b = []) ∧
+    (b.fork = .amsterdam →
+      blockEmissions R ty b = (queueAtRequests R b).take c.cap ∧
+      st.queue.map c.out ++ submissions c pre ++ boundarySubmissions c b =
+        emissions R ty pre ++ queueAtRequests R b) := by
+      refine ⟨feed delivered, fun ne => absurd am ne, fun _ => ⟨?_, ?_⟩⟩
+      · rw [blockEmissions_of_output R delivered, queue, List.map_take]
+      · have hsubPre : submissions c pre = (Delivery.submissions X).map c.out := by
+          unfold submissions
+          rw [(corresponds_flatten hpre).submissions]
+          rfl
+        have hbound : boundarySubmissions c b = (Delivery.submissions gs).map c.out := by
+          unfold boundarySubmissions
+          rw [taken, ← cg.submissions]
+        have em := emissions_segments R hpre (xs := []) (ys := (gs ++ g :: hs) ++ Y)
+          (by simpa only [List.nil_append, List.append_assoc, List.cons_append] using chain)
+          P.rep (by simpa only [List.nil_append, List.append_assoc, List.cons_append] using slots)
+          (by simpa only [List.nil_append, List.append_assoc, List.cons_append] using count)
+        have z : deliveredRecords st ([] : List (Delivery.Frame c)) = 0 := rfl
+        rw [List.nil_append, List.nil_append, z, Nat.sub_zero, List.drop_zero] at em
+        have hk : deliveredRecords st X ≤ (st.queue ++ Delivery.submissions X).length := deliveredRecords_le st X
+        have tS : (st.queue ++ Delivery.submissions (X ++ ((gs ++ g :: hs) ++ Y))).take (deliveredRecords st X) =
+            (st.queue ++ Delivery.submissions X).take (deliveredRecords st X) := by
+          rw [Delivery.submissions_append, ← List.append_assoc, List.take_append_of_le_length hk]
+        have tT : (st.queue ++ Delivery.submissions (X ++ gs)).take (deliveredRecords st X) =
+            (st.queue ++ Delivery.submissions X).take (deliveredRecords st X) := by
+          rw [Delivery.submissions_append, ← List.append_assoc, List.take_append_of_le_length hk]
+        rw [hsubPre, hbound, em, tS, queue, ← tT]
+        conv => rhs; rw [← List.map_append, List.take_append_drop]
+        rw [Delivery.submissions_append, List.map_append, List.map_append, List.append_assoc]
+    refine ⟨original, fun _ => ⟨X ++ gs, hs ++ Y, g, f, allcorr, chain, ?_, found, mg, gev, actual_queue⟩⟩
+    rw [starts]
+    exact h1
   · rw [ite_eq_right am] at hcount
     have users : ∀ x ∈ b.keptAt c.address, x.sevm.caller ≠ systemAddress := fun x hx => by
       simpa only [isSystemFrame, decide_eq_false_iff_not] using Blanc.List.filter_length_zero isSystemFrame hcount x hx
     have none : blockDelivered ty b = ([] : List c.Record).flatMap c.out := by
       rw [← hb.2.1, systemOutput_noSystem (hb.1.noSystem users)]
       rfl
-    refine ⟨feed none, fun _ => ⟨?_, ?_⟩, fun h => absurd h am⟩
-    · rw [blockEmissions_of_output R none]
-      rfl
-    · unfold queueAtRequests requestFrame
-      rw [List.find?_eq_none.mpr fun x hx => by
-        simpa only [isSystemFrame, decide_eq_true_eq] using users x hx]
+    have original : ((blockEmissions R ty b).flatten = blockDelivered ty b ∧ ∀ e ∈ blockEmissions R ty b, e.length = R.size) ∧
+    (b.fork ≠ .amsterdam → blockEmissions R ty b = [] ∧ queueAtRequests R b = []) ∧
+    (b.fork = .amsterdam →
+      blockEmissions R ty b = (queueAtRequests R b).take c.cap ∧
+      st.queue.map c.out ++ submissions c pre ++ boundarySubmissions c b =
+        emissions R ty pre ++ queueAtRequests R b) := by
+      refine ⟨feed none, fun _ => ⟨?_, ?_⟩, fun h => absurd h am⟩
+      · rw [blockEmissions_of_output R none]
+        rfl
+      · unfold queueAtRequests requestFrame
+        rw [List.find?_eq_none.mpr fun x hx => by
+          simpa only [isSystemFrame, decide_eq_true_eq] using users x hx]
+    exact ⟨original, fun same => False.elim (am same)⟩
+
+
+/-- The original block statement, projected from the same boundary derivation. -/
+theorem history_block (R : Reading c) (L : Linked c ty) (P : Premises c cfg start blocks stop st)
+    {pre post : List KeptBlock} {b : KeptBlock} (split : blocks = pre ++ b :: post) :
+    ((blockEmissions R ty b).flatten = blockDelivered ty b ∧ ∀ e ∈ blockEmissions R ty b, e.length = R.size) ∧
+    (b.fork ≠ .amsterdam → blockEmissions R ty b = [] ∧ queueAtRequests R b = []) ∧
+    (b.fork = .amsterdam →
+      blockEmissions R ty b = (queueAtRequests R b).take c.cap ∧
+      st.queue.map c.out ++ submissions c pre ++ boundarySubmissions c b =
+        emissions R ty pre ++ queueAtRequests R b) :=
+  (history_block_with_prefix R L P split).1
 
 /-! ## Occurrences -/
 
