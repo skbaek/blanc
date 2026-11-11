@@ -155,6 +155,7 @@ SHARED = ["Basic", "BytePattern", "Semantics", "HistoricalFork", "ShanghaiOnward
                                  "ExecutionRetainedCodeSettlement",
                                  "Lift.CreateSettlementMeta",
                                  ]
+SHARED += ["JointTime", "Lift.StaticcallCapability"]
 # Newly extracted common modules live in a separate additive row so concurrent
 # contract branches can extend the historical table cleanly.
 SHARED += ["MessageExecution", "MessageExecutionInversion",

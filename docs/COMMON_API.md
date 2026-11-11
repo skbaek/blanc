@@ -1422,6 +1422,12 @@ For the stable frozen ring vocabulary, use
 `Blanc.Corpus.Freeze.RingJoint`. This frozen carrier and `Blanc.RingJoint` are distinct nominal types;
 use the carrier required by the statement rather than assuming they are interchangeable.
 
+For the `genesis_time` field after actual pending-deposit processing,
+[`Blanc/JointTime.lean`](../Blanc/JointTime.lean)'s
+`processPendingDeposits_genesis_time` projects equality from the actual
+successful `processPendingDeposits` result, for arbitrary preset, fork and
+context. This is field preservation, not an initial-genesis or clock theorem.
+
 For consensus SSZ byte equations, use
 [`Blanc/ConsensusSsz.lean`](../Blanc/ConsensusSsz.lean):
 `leBytes_eight_eq_reverse_toBytes` (little-endian `uint64` bytes are Jaune's
@@ -5381,6 +5387,11 @@ every shared module with its own summary and the branches that cite it.
 
 #### C9.2. I need to connect a real execution with a lifted run
 
+- The instruction obligations consumed by the shared node proof are
+  `StepCapability.stack` and `.memory` in
+  [`Blanc/Lift/StaticcallCapability.lean`](../Blanc/Lift/StaticcallCapability.lean).
+  `staticcall_capability` supplies both for an actual successful STATICCALL on
+  every fork. Node recursion and full lifting remain in Sound.
 - On a fork with a state-gas record, for a certificate with no call-family node (`ProgNoExec`,
   `treeNoExec`, now in `Blanc/Lift/Sound.lean`): `lift_sound_noExec`, on the general `lift_sound_lane`.
 - Execution to lifted run (safety), in [`Blanc/Lift/Sound.lean`](../Blanc/Lift/Sound.lean).
