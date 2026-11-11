@@ -6,7 +6,7 @@ at its release tag, listed in `scripts/live-set.toml`.
 Every headline below names the theorem that carries it, the premises it needs,
 and what it does not say. This page is about the exogenous bytes themselves.
 
-Historical exhibits outside paper v2, including WETH9, Beacon deposit, Lido, Uniswap and Blanc-native programmes, are preserved in the [archived corpus](https://github.com/skbaek/blanc/blob/corpus-v1-20261105/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md). The section and disclosure labels below retain their historical numbering. The archive is outside the live corpus and is not promised to build against later revisions.
+Historical exhibits outside paper v2, including WETH9, Lido, Uniswap and Blanc-native programmes, are preserved in the [archived corpus](https://github.com/skbaek/blanc/blob/corpus-v1-20261105/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md). The section and disclosure labels below retain their historical numbering. The archive is outside the live corpus and is not promised to build against later revisions.
 
 **A Blanc theorem is a statement about Jaune's modeled semantics, not a
 deployment audit** ([`SECURITY.md`](../SECURITY.md)). Nothing here says that a
@@ -109,6 +109,7 @@ The shared finite separation checks retain their characterizations:
 - [EIP-7002 withdrawal requests](claim-map/withdrawal-request.md)
 - [EIP-8282 builder requests](claim-map/builder-request.md)
 - [EIP-7251 consolidation requests](claim-map/consolidation-request.md)
+- [Beacon deposit](claim-map/beacon-deposit.md)
 
 ## 6. Summary matrix
 
@@ -187,7 +188,7 @@ leaf theorems: theorems of a `Blanc.*` module that no other Blanc declaration
 uses (`scripts/leaf_audit.py`, `scripts/GATES.md` "Leaf audit"), each covered
 by the union walk. It is generated
 into `scripts/leaf-count.json` (never hand-edited) and quoted by the README and
-the sites. At this commit it is 1922 leaf results (1877 public, 45 private).
+the sites. At this commit it is 1870 leaf results (1825 public, 45 private).
 The review ledger separately records the last review; the audit reports new
 or changed leaves. The count is a property of the library at a commit, not of any cited theorem;
 a cited theorem that another theorem uses is simply not a leaf. Bind any

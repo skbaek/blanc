@@ -656,6 +656,55 @@ CONTRACTS.setdefault("consolidation-request", []).extend([
     "Lift.ConsolidationRequest.Frames",
 ])
 
+# Beacon deposit contract, the deployed bytes (protocol-contract-corpus-v1, restored from the archive
+# tag corpus-v1-20261105): the lifted runtime and creation code, the model and reference root it
+# refines, and the frame, history and deployment-rooted results.
+CONTRACTS["beacon-deposit"] = [
+    "BeaconDepositCore", "BeaconDepositCorrectness", "BeaconDepositEncoding", "BeaconDepositModel",
+    "Lift.BeaconDeposit.BeaconEnv", "Lift.BeaconDeposit.Body", "Lift.BeaconDeposit.BodyCount",
+    "Lift.BeaconDeposit.BodyEvent", "Lift.BeaconDeposit.BodyEventHead", "Lift.BeaconDeposit.BodyEventKit",
+    "Lift.BeaconDeposit.BodyEventLoop", "Lift.BeaconDeposit.BodyEventSig", "Lift.BeaconDeposit.BodyGuards",
+    "Lift.BeaconDeposit.BodyInsertDead", "Lift.BeaconDeposit.BodyInsertLive", "Lift.BeaconDeposit.BodyNode",
+    "Lift.BeaconDeposit.BodyPubkeyRoot", "Lift.BeaconDeposit.BodyShaKit",
+    "Lift.BeaconDeposit.BodySignatureRoot", "Lift.BeaconDeposit.BodySpec", "Lift.BeaconDeposit.Cert",
+    "Lift.BeaconDeposit.Check", "Lift.BeaconDeposit.CheckTries", "Lift.BeaconDeposit.CommittedExec",
+    "Lift.BeaconDeposit.CommittedHistory", "Lift.BeaconDeposit.CommittedReplay",
+    "Lift.BeaconDeposit.CountView", "Lift.BeaconDeposit.Creation.Cert", "Lift.BeaconDeposit.Creation.Check",
+    "Lift.BeaconDeposit.Creation.Deploy", "Lift.BeaconDeposit.Creation.HistoricalDeploy",
+    "Lift.BeaconDeposit.Creation.HistoricalTxInput", "Lift.BeaconDeposit.Creation.HistoricalTxRaw",
+    "Lift.BeaconDeposit.Creation.HistoricalTxRecover", "Lift.BeaconDeposit.Creation.HistoricalTxSettle",
+    "Lift.BeaconDeposit.Creation.HistoricalTxTrace", "Lift.BeaconDeposit.Creation.HistoricalWalk",
+    "Lift.BeaconDeposit.Creation.Walk", "Lift.BeaconDeposit.DepositArgs", "Lift.BeaconDeposit.DepositDecode",
+    "Lift.BeaconDeposit.DepositExec", "Lift.BeaconDeposit.Erc165", "Lift.BeaconDeposit.HistBeaconEnv",
+    "Lift.BeaconDeposit.HistCommittedExec", "Lift.BeaconDeposit.HistCommittedHistory",
+    "Lift.BeaconDeposit.HistDeployment", "Lift.BeaconDeposit.HistDepositEntries",
+    "Lift.BeaconDeposit.HistDepositLogs", "Lift.BeaconDeposit.HistLadder", "Lift.BeaconDeposit.HistSafe",
+    "Lift.BeaconDeposit.HistSafeCount", "Lift.BeaconDeposit.HistSafeGuards",
+    "Lift.BeaconDeposit.HistSafeInsert", "Lift.BeaconDeposit.HistSafeNode",
+    "Lift.BeaconDeposit.HistSafePubkeyRoot", "Lift.BeaconDeposit.HistSafeSignatureRoot",
+    "Lift.BeaconDeposit.HistSafeWorld", "Lift.BeaconDeposit.HistoricalSeam", "Lift.BeaconDeposit.Init",
+    "Lift.BeaconDeposit.Jumps", "Lift.BeaconDeposit.Ladder", "Lift.BeaconDeposit.Layout",
+    "Lift.BeaconDeposit.Lift", "Lift.BeaconDeposit.LittleEndian", "Lift.BeaconDeposit.Liveness",
+    "Lift.BeaconDeposit.Prog", "Lift.BeaconDeposit.Refines", "Lift.BeaconDeposit.RootLoop",
+    "Lift.BeaconDeposit.RootView", "Lift.BeaconDeposit.Safe",
+    "Lift.BeaconDeposit.SafeDecoder", "Lift.BeaconDeposit.SafeDispatch", "Lift.BeaconDeposit.SafeEvent",
+    "Lift.BeaconDeposit.SafeGuards",
+    "Lift.BeaconDeposit.SafeLittleEndian",
+    "Lift.BeaconDeposit.SafeViews", "Lift.BeaconDeposit.Views",
+]
+# Contract-neutral modules the deployed-bytes deposit family uses, restored with it from the archive
+# tag (receipt and log projections, historical SHA-256 walks, static-only In-frames).
+SHARED += [
+    "ExecutionBlockLogs",
+    "ExecutionRetainedLogMembership", "ExecutionTransactionLogProjection",
+    "Lift.HistPackedShaSize", "Lift.HistShaWalk", "Lift.PackedShaSize", "Lift.StaticOnlyFramesIn",
+    "TransactionAdmissionProjection", "TransactionHistoricalForward",
+]
+
+# Shared declarations the deployed-bytes deposit family uses that left main with earlier releases,
+# restored beside the modules whose vocabulary they extend (protocol-contract-corpus-v1).
+SHARED += ["Lift.WalkKitSupport", "ExecutionHistorySupport", "TransactionForwardSupport"]
+
 # Explicit semantic ownership, not the union of existing imports. Abstract token
 # interfaces do not add WETH9/USDC to PairToken/PairTwoToken; concrete instances
 # do. Single-family token adapters and Curve replay adapters stay narrow. The

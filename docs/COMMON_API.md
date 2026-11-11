@@ -4588,6 +4588,35 @@ admission can take the weaker structural premise.
 by `clearIfEmpty`. A balance write can clear an unprotected storage-only
 account, so its full-account equation must retain that normalization.
 
+For the admission stages, the transaction's logs and its historical refund rules:
+
+- [`Blanc/TransactionAdmissionProjection.lean`](../Blanc/TransactionAdmissionProjection.lean)
+  exposes the actual successful checker stages through `checkTransaction_admission_parts`;
+  `checkTransactionSenderAccountFor_code_empty`, `_funds`, and
+  `checkTransactionGasLimits_room` project disabled-delegation code emptiness,
+  the admitted fee/value balance bound, and no-state-gas block capacity. These are
+  facts about the pinned executable checker.
+- [`Blanc/ExecutionTransactionLogProjection.lean`](../Blanc/ExecutionTransactionLogProjection.lean)
+  provides `TransactionTrace.logs_receipt`: selected settlement appends the exact
+  retained message logs and inserts its exact typed receipt at the actual index.
+  `ApplyTransactionsTrace.messageLogs` and
+  `.blockLogs_eq_messageLogs` preserve the exact ordered concatenation through the list wrapper.
+- [`Blanc/ExecutionRetainedLogMembership.lean`](../Blanc/ExecutionRetainedLogMembership.lean)
+  provides `MessageCallTrace.retained_log_mem`, `TransactionTrace.retained_log_mem`
+  and `ApplyTransactionsTrace.retained_log_mem`: a canonical log of a retained
+  frame belongs to that same message or transaction fold's output.
+- For historical refund and sweep rules, use
+  [`Blanc/TransactionHistoricalForward.lean`](../Blanc/TransactionHistoricalForward.lean).
+  `processTransaction_of_stages_selected_receipts` consumes the same actual validation,
+  admission, debit, preparation and message-call stages under `stateGas = none` and
+  `bal = none`; `selectedTxGasUsed` retains the selected refund quotient.
+- [`Blanc/TransactionForwardSupport.lean`](../Blanc/TransactionForwardSupport.lean)
+  collects the machine, codec and transaction-forward lemmas these consumers share:
+  storage-access projections of `afterSstore`, concrete RLP receipt-key separation
+  (`RlpConcrete.receipt_key_ne_of_small`), `processMessage_ok_of_exec`,
+  `directCreateMessageOutputOf`, `validateTransaction_ok_of_noInitcodeLimit` and
+  `processMessageCall_create_of_message`.
+
 ### T4. The wrapper is a message call and I must see through delegation
 
 
@@ -4972,6 +5001,20 @@ the consumer instead of adding a premise that assumes the new semantics away.
 **Selected-domain history facts.**
 
 - [`Blanc/ExecutionHistoryInFrameEnv.lean`](../Blanc/ExecutionHistoryInFrameEnv.lean): `precompileReadyH`: frame-environment facts over selected-domain histories.
+
+For the logs of an original selected-domain block and the history lemmas its consumers share:
+
+- [`Blanc/ExecutionBlockLogs.lean`](../Blanc/ExecutionBlockLogs.lean): `RequestStageTrace.blockLogs_eq`
+  keeps the block logs through request processing, and
+  `StagedBodyTrace.blockLogs_eq_transactionBout` transports the transaction fold's logs through
+  actual withdrawals, requests and finalization.
+- [`Blanc/ExecutionHistorySupport.lean`](../Blanc/ExecutionHistorySupport.lean):
+  `ConfiguredHistoryTraceIn.rewardCreditsFunded`, `settledFrames_append`, the system-opening
+  transports (`SystemCodeAtOpenings_append`, `ForksSatisfy_append`,
+  `systemCodeAtOpenings_of_preCancun`, `pragueNoAuthorityAt_of_prePrague`), the receipt read
+  `TransactionTrace.receipt_of_settledRoots_after_later_indices`, and the frame-environment facts
+  `not_mem_systemTargets_of_size`, `ConfiguredHistoryTrace.rawFrames_system_or_tx` and
+  `ConfiguredHistoryTrace.txRawFrames_warm` (with their transaction, list and body forms).
 
 ### T7. I must construct a configured block forward from its parts
 
@@ -6607,6 +6650,31 @@ shapes a trigger could match.
 - [`Blanc/Lift/LinearRuntimeSafety.lean`](../Blanc/Lift/LinearRuntimeSafety.lean): `selfdestructFreeCheck`: no instruction start of a code holds `SELFDESTRUCT`.
 - [`Blanc/Lift/WriteSiteMapping.lean`](../Blanc/Lift/WriteSiteMapping.lean): `BalancePath`: how a balance-table row reads its site.
 - [`Blanc/Lift/CodeImage.lean`](../Blanc/Lift/CodeImage.lean): `CodeSem.ofBytes`: the code semantics that records only which bytes a frame runs.
+
+For historical (pre-Shanghai) walks, the size-optimized packed-SHA site and static-only In-frames:
+
+- The historical SHA-256 `STATICCALL` kit (`ShaReadyRules`, `ShaReady.toRules`,
+  `ri_staticcall_shaH_of_delegation`; the solc packed-SHA site `ric_shaCallH_of_delegation`,
+  `ric_copy_shaH_of_delegation`, `ric_pack_shaH_of_delegation`) is in
+  [`Blanc/Lift/HistShaWalk.lean`](../Blanc/Lift/HistShaWalk.lean).
+- The packed-SHA site as solc emits it under its size-favouring constant optimiser
+  (`mcpyTreeN`, `mergeTreeN`, `copy_shaN_gen`, `copy_shaN`, `packed_sha_pairN`) is in
+  [`Blanc/Lift/PackedShaSize.lean`](../Blanc/Lift/PackedShaSize.lean), and its form under actual
+  Muir Glacier rules (`staticcall_sha_stepMuir`, `copy_shaNMuir_gen`, `copy_shaNMuir`,
+  `packed_sha_pairNMuir`) in
+  [`Blanc/Lift/HistPackedShaSize.lean`](../Blanc/Lift/HistPackedShaSize.lean).
+- The selected-domain static-only frame facts are in
+  [`Blanc/Lift/StaticOnlyFramesIn.lean`](../Blanc/Lift/StaticOnlyFramesIn.lean):
+  `parentPrefix_exec_staticcall_of_cert_noStateGas` uses a frame's neutral gas schedule, and
+  `Exec.staticOnly_descendantFrames_flatMap_eq_nilIn` carries the selected fork predicate through
+  actual child environments.
+- [`Blanc/Lift/WalkKitSupport.lean`](../Blanc/Lift/WalkKitSupport.lean) collects the walk-kit
+  lemmas these consumers share: `BaseRel.trans`, `rxc_callRet`, `rx_exp'`, `ric_jumpCut`,
+  `ric_undefined`, `ri_byte`, `ri_log1`, `SFunc.RunP.not_halted_entry`, the quiet-function facts
+  (`SFunc.quiet`, `QuietSet`, `Burn.world`, `SFunc.Run.world_of_quietH`), the historical
+  access facts `afterSloadH_accessedAddresses` and `afterSstoreH_getCode`, `lift_sound`,
+  `cursor_of_parentPrefix`, `Xinst.isStaticcall`, `parentPrefix_exec_staticcall_of_cert` and
+  `liftCreate_ok`.
 
 ## Common-library-first workflow
 

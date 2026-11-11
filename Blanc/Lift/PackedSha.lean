@@ -480,7 +480,7 @@ theorem copy_sha_gen {img : Bytes} {n s d : Nat} {w1 w2 x1 x3 x4 : B256} {X : SF
     (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ b.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hG : G + 246 < 2 ^ 256) :
     ∃ b' M', ShaCallPost b b' (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes ∧
       Mem.Wf M' ∧ Mem.Reads M' (shaImg img d w1 w2) ∧ M'.size = max n (d + 96) ∧
@@ -626,7 +626,7 @@ theorem copy_sha {img : Bytes} {n s d : Nat} {w1 w2 x1 x3 x4 : B256}
     (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ b.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hG : G + 246 < 2 ^ 256) :
     ∃ b' M' img', ShaCallPost b b' (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes ∧
       Mem.Wf M' ∧ Mem.Reads M' img' ∧ M'.size = d + 96 ∧
@@ -662,7 +662,7 @@ theorem packed_sha_pair {img : Bytes} {n f : Nat} {a bw : B256}
     (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ b.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hG : G + 246 < 2 ^ 256) :
     ∃ b' M' img', ShaCallPost b b' (hashPairBytes a bw) ∧ Mem.Wf M' ∧
       Mem.Reads M' img' ∧ M'.size = f + 192 ∧
@@ -807,7 +807,7 @@ theorem pair_mem_sha {img : Bytes} {n f : Nat} {h1 h2 : B256} {X : SFunc}
     (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ b.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hG : G + 246 < 2 ^ 256) :
     ∃ b' M', ShaCallPost b b' (Bytes.sha256 (h1.toBytes ++ h2.toBytes)).toBytes ∧
       Mem.Wf M' ∧ Mem.Reads M' (pairMemImg img f h1 h2) ∧ M'.size = max n (f + 192) ∧

@@ -3,21 +3,21 @@
  "digest": "sha256",
  "verdict": "roots.tsv only; constants.tsv, boundary.tsv and these counts are diagnostic",
  "pin_key": "label (thm:/iff:/eq:/stmt:/uses:/anon); a repeated label gets #<statement digest prefix>",
- "pins": 146,
- "entries": 4382,
+ "pins": 155,
+ "entries": 4539,
  "kinds": {
-  "block": 173,
-  "boundary": 601,
-  "ctor": 370,
-  "def": 2739,
-  "inductive": 173,
-  "pin": 146,
-  "rec": 68,
-  "theorem": 258
+  "block": 177,
+  "boundary": 605,
+  "ctor": 379,
+  "def": 2836,
+  "inductive": 177,
+  "pin": 155,
+  "rec": 69,
+  "theorem": 296
  },
  "hashed_constants": {
-  "blanc": 696,
-  "jaune": 2909,
+  "blanc": 841,
+  "jaune": 2913,
   "local": 3
  },
  "boundary_identities": {

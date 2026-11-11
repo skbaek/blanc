@@ -141,6 +141,10 @@ theorem afterSstoreH_logs (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstoreH sevm base key value).logs = base.logs :=
   (storageAccessH_state sevm base key).2.1
 
+theorem afterSstoreH_output (sevm : Sevm) (base : Devm) (key value : B256) :
+    (afterSstoreH sevm base key value).output = base.output :=
+  (storageAccessH_state sevm base key).2.2.1
+
 theorem afterSstoreH_error (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstoreH sevm base key value).error = base.error :=
   (storageAccessH_state sevm base key).2.2.2.1
@@ -148,6 +152,10 @@ theorem afterSstoreH_error (sevm : Sevm) (base : Devm) (key value : B256) :
 theorem afterSstoreH_createdAccounts (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstoreH sevm base key value).createdAccounts = base.createdAccounts :=
   (storageAccessH_state sevm base key).2.2.2.2.1
+
+theorem afterSstoreH_accessedAddresses (sevm : Sevm) (base : Devm) (key value : B256) :
+    (afterSstoreH sevm base key value).accessedAddresses = base.accessedAddresses :=
+  (storageAccessH_state sevm base key).2.2.2.2.2.1
 
 theorem afterSstoreH_stateGas (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstoreH sevm base key value).stateGas = base.stateGas :=
@@ -185,6 +193,13 @@ theorem afterSloadH_stateGas (sevm : Sevm) (base : Devm) (key : B256) :
   unfold afterSloadH
   split
   · simp only [afterSload_stateGas]
+  · rfl
+
+theorem afterSloadH_output (sevm : Sevm) (base : Devm) (key : B256) :
+    (afterSloadH sevm base key).output = base.output := by
+  unfold afterSloadH
+  split
+  · exact afterSload_output sevm base key
   · rfl
 
 /-- `StorStep.sload` under the actual access schedule. -/
