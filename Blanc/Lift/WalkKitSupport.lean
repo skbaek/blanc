@@ -403,11 +403,6 @@ namespace Blanc.Lift
 
 open Jaune
 
-/-- The external-instruction restriction: only `STATICCALL`. -/
-def Xinst.isStaticcall : Xinst → Bool
-  | .staticcall => true
-  | _ => false
-
 /-- A checked certificate whose functions execute only `STATICCALL` permits only
 `STATICCALL` at every actual same-frame location, including internal jumps and
 returns, of a frame entered at pc `0` of the certified bytes. -/
