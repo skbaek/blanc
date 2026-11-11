@@ -54,7 +54,7 @@ theorem system_body_inv (fork : ShanghaiOnwards sevm.benvStat.fork) : sysPath.Bo
     show Bytes.toB256 [1] = 1 from rfl, show Bytes.toB256 [2] = 2 from rfl, show Bytes.toB256 [3] = 3 from rfl,
     show Bytes.toB256 [20] = 20 from rfl, show Bytes.toB256 [32] = 32 from rfl,
     show (Bytes.toB256 [96]).toNat = 96 by decide] at run
-  exact ⟨_, _, by simp only [RequestFee.afterSload_state], run.uncut⟩
+  exact ⟨_, _, by simp only [RequestFee.afterSload_state], by simp only [afterSload_logs], run.uncut⟩
 
 /-- **The excess arm, inverted**: the plain arm with target 1. -/
 theorem system_excessInv (fork : ShanghaiOnwards sevm.benvStat.fork) : sysPath.ExcessInv sevm := by
@@ -76,9 +76,9 @@ theorem exec_system_frame (hcode : sevm.code = consolidationRequestCode) (fork :
     (stack : pre.stack = []) (wf : Mem.Wf pre.memory) (caller : sevm.caller = systemAddress)
     (exec : Exec 0 sevm pre (.ok post)) :
     sevm.isStatic = false ∧ post.state = sysState sysShape pre.state sevm.currentTarget ∧
-      post.output = drained (pre.getStorVal sevm.currentTarget) := by
-  obtain ⟨static, hstate, hout⟩ := SysPath.exec_frame_inv (k := sysPath) (system_body_inv fork.shanghaiOnwards)
+      post.output = drained (pre.getStorVal sevm.currentTarget) ∧ post.logs = pre.logs := by
+  obtain ⟨static, hstate, hout, hlogs⟩ := SysPath.exec_frame_inv (k := sysPath) (system_body_inv fork.shanghaiOnwards)
     (system_excessInv fork.shanghaiOnwards) hcode fork caller stack exec
-  exact ⟨static, hstate, hout.trans (sysOutput.frame_inv_output sevm pre wf)⟩
+  exact ⟨static, hstate, hout.trans (sysOutput.frame_inv_output sevm pre wf), hlogs⟩
 
 end Blanc.Lift.ConsolidationRequest

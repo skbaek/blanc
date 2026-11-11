@@ -22,12 +22,8 @@ open RequestSystem
 balance-silent trees. The lift holds on any fork, since no node is call-family. -/
 theorem frame_keeps_balances {code : ByteArray} {c : Cert} {S : List Nat} (hc : Cert.check code c = true)
     (hno : ProgNoExec c.prog) (closed : BalSilentSet c.prog S = true) (root : 0 ∈ S) {sevm : Sevm} {pre post : Devm}
-    (hcode : sevm.code = code) (exec : Exec 0 sevm pre (.ok post)) : post.getBal = pre.getBal := by
-  obtain ⟨f, hf, run⟩ := lift_sound_noExec hc hcode hno exec
-  have hat := List.all_eq_true.mp closed 0 root
-  rw [hf] at hat
-  simp only [Bool.and_eq_true] at hat
-  exact SFunc.RunP.getBal_of_balSilent (fun h => h) closed hat.1 hat.2 run
+    (hcode : sevm.code = code) (exec : Exec 0 sevm pre (.ok post)) : post.getBal = pre.getBal :=
+  Blanc.Lift.frame_keeps_balances hc hno closed root hcode exec
 
 variable {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E t : Adr} {chainId : UInt64} {prio maxFee i f : Nat}
 

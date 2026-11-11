@@ -1398,6 +1398,11 @@ The same module splits a list at an index it holds (`Blanc.List.eq_take_cons_dro
 pointwise `Forall₂` relation alike (`Blanc.List.forall₂_split`), and follows a queue entry drained
 at a fixed rate along a list to where it is drained (`Blanc.List.drain_position`: entry `q` of the
 queue at index `j` is entry `q % cap` of what index `j + q / cap` drains).
+For a joint run over an empty pre-history (`RingJoint`, with ring-contract header, timestamp and number bounds
+`ObservedPreTip`, `HistoryTimestampsFit`, `HistoryNumbersFit`) or a typed request feed across a `JointRun`
+(`JointFeed.stepRequests`, `JointFeed.feed`, `JointFeed.feedPosition`, `exists_feed_position`, `feedPosition_inj`),
+use [`Blanc/JointFeed.lean`](../Blanc/JointFeed.lean), which also bridges `JointRun` steps directly to `KeptHistory`
+(`JointRun.kept_toExec`, `kept_take_pre`, `kept_take_add`, `kept_getElem?`).
 
 For consensus SSZ byte equations, use
 [`Blanc/ConsensusSsz.lean`](../Blanc/ConsensusSsz.lean):
@@ -2503,6 +2508,14 @@ a bare set-membership goal does not identify this execution-specific route.
   (same parents, blocks, forks and outputs), `ConfiguredHistoryTrace.keptHistory`, `ConfiguredHistoryTrace.splice`,
   `KeptHistory.append`; the kept carrier is determined by its start and blocks (`KeptStep.unique`,
   `KeptHistory.unique`, `ConfiguredHistoryTrace.kept_unique`), so frames read off it do not depend on the derivation.
+  For the pre-execution system calls of a kept step (EIP-4788 beacon roots and EIP-2935 history storage, header
+  parent/number/timestamp/block-hash links, and prefix/suffix/tip/step splits of `KeptHistory`), use
+  [`Blanc/ExecutionKeptPreCalls.lean`](../Blanc/ExecutionKeptPreCalls.lean) (`KeptStep.beaconRoots_frames`,
+  `KeptStep.beaconRoots_stor`, `KeptStep.historyStorage_frames`, `KeptStep.historyStorage_stor`,
+  `KeptStep.lastBlockHash`, `KeptStep.parentBeaconRoot`, `KeptHistory.split_at`, `KeptHistory.tip_snoc`,
+  `KeptHistory.step_adj`, `KeptHistory.number_add`, `KeptHistory.timestamp_lt`); `KeptHistory.mainnet_covered` in
+  [`Blanc/ExecutionKeptClean.lean`](../Blanc/ExecutionKeptClean.lean) supplies `CoveredFork` along a `mainnetConfig`
+  kept history from Prague activation.
 - Reentrancy-lock exclusion over the all-outcome frame tree:
   [`Blanc/LockExclusion.lean`](../Blanc/LockExclusion.lean).
   `LockSpec.locked_core` keeps the lock cell fixed, slot-addressed owner
@@ -6273,6 +6286,12 @@ address, type byte, `record?` and a `Step` for each kept user frame and for its 
 `Chain`, pushing what `record?` reads, outputting the blocks' requests of the type, whole records per block, with the
 SYSTEM_ADDRESS exclusion discharged from no code, sender, authority or creation there), `covered_request_root` (a
 covered-fork request step at a system contract is one kept root with the system caller) and `chunks_flatMap`.
+To lift a `DrainLinked` canonical request contract from `Link.history_chain` to per-submission FIFO ordering, exact
+draining block index, fate trichotomy (already emitted with a latency bound or still at an exact stored queue slot)
+and block-latency bound over any `KeptHistory`, use
+[`Blanc/Lift/RequestQueue/Occurrence.lean`](../Blanc/Lift/RequestQueue/Occurrence.lean) (`storedQueue`, `submissions`,
+`emissions`, `remainingQueue`, `BlockSteps`, `Premises`, `history_fifo`, `history_block`, `history_fate`,
+`history_latency`).
 The builder family's user frames are walked once over a fork's `StorageSteps` (`FeePath.lean`), with
 `coveredSteps` and `amsterdamSteps` (`UserFrameAmsterdam.lean`) as its instances: only `SLOAD` and `SSTORE`
 differ between them, and those certificates have no call-family node, so `lift_sound_noExec` lifts on any fork.
@@ -6300,12 +6319,13 @@ excess arm (no latch; the inhibitor counts as zero) is `plainShape` in
 `SysPath.frame_prefix` and `SysPath.prefix_le`, is `Blanc/Lift/BuilderRequest/Latch.lean`. The builder family's
 statements over a given list of frames (`Contract`, `Frame`, `Chain`, the queue model `step`/`replay`/`chunks`) are
 `Blanc/Lift/BuilderRequest/Delivery.lean`, family-local; word and natural request fee at fraction 17, through excess
-2892 and not at 2893, are `Blanc/RequestFeeWordDomain.lean`. The fee loop's run, length (at most 462, tight at 2892) and value on that domain, its linear bound above, are `Blanc/RequestFeeWordBound.lean`.
+2892 and not at 2893, are `Blanc/RequestFeeWordDomain.lean` (with total fee helpers `specFee`, `wordFee`, `quotedFee`,
+`quoted_run` and `quotedFee_eq_spec_iff` in `Blanc/RequestFeeWord.lean`). The fee loop's run, length (at most 462, tight at 2892) and value on that domain, its linear bound above (`quotedFee_eq_spec_of_le`, `quotedFee_lt_spec_2893`), are `Blanc/RequestFeeWordBound.lean`.
 The converse, every *successful* system-arm run from any storage, memory, calldata and gas on a covered
 fork, is [`Blanc/Lift/RequestSystem/PathInv.lean`](../Blanc/Lift/RequestSystem/PathInv.lean): the trees inverted
 node by node (`dispatch_system_inv`, `setup_inv`, `header_inv`, `book_inv`, `final_inv`, and `over_inv`/`excess_inv`
 for the plain arm), the loop by induction on the count (`SysPath.loop_inv`, over a runtime's `SysPath.BodyInv`), and
-the frame: `SysPath.frame_inv`/`SysPath.exec_frame_inv` (non-static, post state `sysState`, the return window over
+the frame: `SysPath.frame_inv`/`SysPath.exec_frame_inv` (non-static, post state `sysState`, unchanged `.logs`, the return window over
 `SysPath.memFold`) with `SysOutput.frame_inv_output` (on well-formed memory that window is `drained`, whatever the
 memory held). A runtime supplies `BodyInv` for its record body and `ExcessInv` (from `excess_inv` for the plain
 arm).
@@ -6535,6 +6555,10 @@ an `Exec` at any system-caller `Sevm`, not only the phase's message), and `SysOu
   `SFunc.RunP.balance_deletion_frame_of_balSilent` also preserves both
   deletion-tracking sets through the same induction, with the old balance
   theorem as a projection; no fork or installed-code premise is added.
+  `Blanc.Lift.frame_keeps_balances` lifts `BalSilentSet` to a successful frame over any `CodeSem`, and
+  [`Blanc/ExecutionKeptBalSilent.lean`](../Blanc/ExecutionKeptBalSilent.lean) lifts it to `KeptValueAt` and
+  `KeptHistory.systemContract_bal_covers` (including precompile exclusion for canonical system contracts and
+  `sum_map_filter_le` for withdrawal slices).
   [`Blanc/Lift/Quiet.lean`](../Blanc/Lift/Quiet.lean) proves that a static
   frame on a covered fork keeps its log list on every successful outcome, committing or
   not (`Exec.logs_eq_of_static_ok`; committed form `Exec.logs_committedPost_eq_of_static`).

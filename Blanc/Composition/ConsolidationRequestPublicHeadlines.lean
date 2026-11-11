@@ -274,7 +274,7 @@ theorem exec_succeeded {sevm : Sevm} {pre post : Devm} (target : sevm.currentTar
     (exec : Exec 0 sevm pre (.ok post)) :
     Succeeded sevm pre post := by
   by_cases caller : sevm.caller = systemAddress
-  · obtain ⟨-, hstate, hout⟩ :=
+  · obtain ⟨-, hstate, hout, -⟩ :=
       Lift.ConsolidationRequest.exec_system_frame hcode fork fresh.stack fresh.wf caller exec
     refine .dequeue caller (by rw [hstate, target]) fun ordered => ?_
     rw [hout, target]

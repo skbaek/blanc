@@ -152,4 +152,48 @@ theorem noWrap_of_check {numerator fuel counter accumulator sum : Nat}
       obtain ⟨iterations, output, run, safe⟩ := ih h4
       exact ⟨_, _, .step ha run, .step (active := ha) h1 h2 h3 safe⟩
 
+/-- The natural EIP fee at excess `excess`: `fake_exponential(1, excess, 17)`. -/
+def specFee (excess : B256) : Nat := fakeExp 1 excess.toNat 17
+
+/-- The fee word the bytecode loop quotes at `excess`: the unique word-recurrence output divided by 17. -/
+noncomputable def wordFee (excess : B256) : B256 :=
+  (Classical.choose (Blanc.WordFakeExponential.run_exists_unique excess 17 1 17 0).exists).2 / (17 : B256)
+
+/-- The fee the bytecode loop quotes at `excess`, as a natural number (`(wordFee excess).toNat`). -/
+noncomputable def quotedFee (excess : B256) : Nat :=
+  ((Classical.choose (Blanc.WordFakeExponential.run_exists_unique excess 17 1 17 0).exists).2 /
+    (17 : B256)).toNat
+
+/-- The iteration count of the unique word-recurrence run at `excess`. -/
+noncomputable def quotedIterations (excess : B256) : Nat :=
+  (Classical.choose (Blanc.WordFakeExponential.run_exists_unique excess 17 1 17 0).exists).1
+
+theorem quotedFee_eq_toNat (excess : B256) : quotedFee excess = (wordFee excess).toNat := rfl
+
+/-- The chosen word-recurrence run backing `wordFee`, `quotedFee`, and `quotedIterations`. -/
+theorem quoted_run (excess : B256) :
+    WordFakeExponential.Run excess 17 1 17 0 (quotedIterations excess)
+      (Classical.choose (Blanc.WordFakeExponential.run_exists_unique excess 17 1 17 0).exists).2 :=
+  (Classical.choose_spec (Blanc.WordFakeExponential.run_exists_unique excess 17 1 17 0).exists)
+
+/-- Any executed word run at `excess` agrees with `wordFee`, `quotedFee`, and `quotedIterations`. -/
+theorem wordFee_of_run {excess : B256} {iterations : Nat} {output : B256}
+    (run : WordFakeExponential.Run excess 17 1 17 0 iterations output) :
+    wordFee excess = output / (17 : B256) ∧
+      quotedFee excess = (output / (17 : B256)).toNat ∧
+      quotedIterations excess = iterations := by
+  obtain ⟨hi, ho⟩ := (quoted_run excess).deterministic run
+  unfold wordFee quotedFee quotedIterations at *
+  rw [ho, hi]
+  exact ⟨rfl, rfl, rfl⟩
+
+/-- At every excess, `quotedFee` never exceeds `specFee`. -/
+theorem quotedFee_le_spec (excess : B256) : quotedFee excess ≤ specFee excess :=
+  word_fee_le (quoted_run excess)
+
+/-- `quotedFee` equals `specFee` if and only if `excess` lies in `NoWrapDomain`. -/
+theorem quotedFee_eq_spec_iff (excess : B256) :
+    quotedFee excess = specFee excess ↔ NoWrapDomain excess (quotedIterations excess) :=
+  word_fee_eq_iff (quoted_run excess)
+
 end Blanc.RequestFeeWord

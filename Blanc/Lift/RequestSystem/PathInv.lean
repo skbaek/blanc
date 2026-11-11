@@ -66,7 +66,7 @@ theorem dispatch_system_inv {dest : PushWord} {user system : SFunc} {b : Devm} {
 theorem setup_inv (p : SysShape) {body : SFunc} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
     (fork : ShanghaiOnwards sevm.benvStat.fork) (h2 : fs[p.entryIdx]? = some (sysEntry p body))
     (run : SFunc.Run fs sevm (St b [] M G) (sysSetup p body) o) :
-    ∃ b' G', b'.state = b.state ∧ SFunc.Run fs sevm
+    ∃ b' G', b'.state = b.state ∧ b'.logs = b.logs ∧ SFunc.Run fs sevm
       (St b' [0, drainCount p.cap.word (b.getStorVal sevm.currentTarget 2) (b.getStorVal sevm.currentTarget 3),
         b.getStorVal sevm.currentTarget 2, b.getStorVal sevm.currentTarget 3] M G') (sysHeader p body) o := by
   have run := run.cut
@@ -84,6 +84,8 @@ theorem setup_inv (p : SysShape) {body : SFunc} {b : Devm} {M : Mem} {G : Nat} {
     show Bytes.toB256 [0x03] = 3 from rfl] at run
   have hst : (afterSload sevm (afterSload sevm b 3) 2).state = b.state := by
     rw [RequestFee.afterSload_state, RequestFee.afterSload_state]
+  have hlogs : (afterSload sevm (afterSload sevm b 3) 2).logs = b.logs := by
+    rw [afterSload_logs, afterSload_logs]
   generalize b.getStorVal sevm.currentTarget 2 = h at run ⊢
   generalize b.getStorVal sevm.currentTarget 3 = t at run ⊢
   rcases ric_branchTo List.not_mem_nil h2 run with ⟨flag, _, run⟩ | ⟨flag, _, run⟩
@@ -97,7 +99,7 @@ theorem setup_inv (p : SysShape) {body : SFunc} {b : Devm} {M : Mem} {G : Nat} {
       intro hgt
       simp only [B256.gtCheck, hgt, ite_true] at flag
       exact absurd flag (by decide)
-    exact ⟨_, _, hst, by rw [hdc]; exact run.uncut⟩
+    exact ⟨_, _, hst, hlogs, by rw [hdc]; exact run.uncut⟩
   · have flag : B256.gtCheck p.cap.word (t - h) ≠ 0 := flag
     unfold sysEntry at run
     winv 2 at run
@@ -106,7 +108,7 @@ theorem setup_inv (p : SysShape) {body : SFunc} {b : Devm} {M : Mem} {G : Nat} {
       rw [ite_eq_left]
       by_contra hgt
       exact flag (by simp only [B256.gtCheck, hgt, ite_false])
-    exact ⟨_, _, hst, by rw [hdc]; exact run.uncut⟩
+    exact ⟨_, _, hst, hlogs, by rw [hdc]; exact run.uncut⟩
 
 /-- A successful header run either leaves the loop (index at the count) or runs the body. -/
 theorem header_inv (p : SysShape) {body : SFunc} {b : Devm} {M : Mem} {G : Nat} {i c h t : B256}
@@ -138,7 +140,7 @@ theorem book_inv (p : SysShape) (fork : CoveredFork sevm.benvStat.fork) {q : Dev
     {G : Nat} {o : Outcome} (h3 : fs[p.excessIdx]? = some p.excessTree)
     (run : SFunc.Run fs sevm (St q [c, c, h, t] M G) (sysBook p) o) :
     sevm.isStatic = false ∧ ∃ q' G', q'.state = bookState q.state sevm.currentTarget h c t ∧
-      SFunc.Run fs sevm (St q' [c] M G') p.excessTree o := by
+      q'.logs = q.logs ∧ SFunc.Run fs sevm (St q' [c] M G') p.excessTree o := by
   have run := run.cut
   unfold sysBook at run
   winv
@@ -156,7 +158,7 @@ theorem book_inv (p : SysShape) (fork : CoveredFork sevm.benvStat.fork) {q : Dev
       obtain ⟨_, hd, run⟩ := ric_next run
       obtain ⟨_, rfl⟩ := ri_sstore fork.shanghaiOnwards hd
       clear hd
-      refine ⟨static, _, _, ?_, run.uncut⟩
+      refine ⟨static, _, _, ?_, by rw [afterSstore_logs, afterSstore_logs], run.uncut⟩
       rw [afterSstore_state, afterSstore_state]
       simp only [bookState, emptied, ite_true]
       rfl
@@ -169,7 +171,7 @@ theorem book_inv (p : SysShape) (fork : CoveredFork sevm.benvStat.fork) {q : Dev
       clear hd
       winv at run
       obtain ⟨_, run⟩ := ric_jump List.not_mem_nil h3 run
-      refine ⟨static, _, _, ?_, run.uncut⟩
+      refine ⟨static, _, _, ?_, afterSstore_logs _ _ _ _, run.uncut⟩
       rw [afterSstore_state]
       simp only [bookState, emptied, ite_false]
       rfl
@@ -178,11 +180,11 @@ theorem book_inv (p : SysShape) (fork : CoveredFork sevm.benvStat.fork) {q : Dev
       exact absurd rfl flag
 
 /-- A successful final run stores the excess and clears the count; it returns the window of `len` bytes per
-drained record. -/
+drained record and emits no logs. -/
 theorem final_inv (len : PushWord) (fork : ShanghaiOnwards sevm.benvStat.fork) {d post : Devm} {e c : B256}
     {M : Mem} {G : Nat} (run : SFunc.Run fs sevm (St d [e, c] M G) (sysFinal len) (.halted post)) :
     post.state = (d.state.setStorVal sevm.currentTarget 0 e).setStorVal sevm.currentTarget 1 0 ∧
-      post.output = (M.read 0 (len.word * c).toNat).1 := by
+      post.output = (M.read 0 (len.word * c).toNat).1 ∧ post.logs = d.logs := by
   have run := run.cut
   unfold sysFinal at run
   winv
@@ -196,9 +198,10 @@ theorem final_inv (len : PushWord) (fork : ShanghaiOnwards sevm.benvStat.fork) {
   winv
   cases run with
   | last hret =>
-    refine ⟨?_, (ri_return hret).1⟩
-    rw [ri_return_state hret, afterSstore_state, afterSstore_state]
-    rfl
+    refine ⟨?_, (ri_return hret).1, ?_⟩
+    · rw [ri_return_state hret, afterSstore_state, afterSstore_state]
+      rfl
+    · rw [(ri_return hret).2.2, afterSstore_logs, afterSstore_logs]
 
 section Plain
 
@@ -208,7 +211,7 @@ variable (p : PlainWords)
 theorem over_inv (fork : ShanghaiOnwards sevm.benvStat.fork) {d : Devm} {e c : B256} {M : Mem} {G : Nat}
     {o : Outcome} (hfinal : fs[p.finalIdx]? = some (sysFinal p.len))
     (run : SFunc.Run fs sevm (St d [e, c] M G) (plainOver p) o) :
-    ∃ d' G', d'.state = d.state ∧ SFunc.Run fs sevm
+    ∃ d' G', d'.state = d.state ∧ d'.logs = d.logs ∧ SFunc.Run fs sevm
       (St d' [if d.getStorVal sevm.currentTarget 1 + e > p.target.word then
           (d.getStorVal sevm.currentTarget 1 + e) - p.target.word else 0, c] M G') (sysFinal p.len) o := by
   have run := run.cut
@@ -220,6 +223,7 @@ theorem over_inv (fork : ShanghaiOnwards sevm.benvStat.fork) {d : Devm} {e c : B
   winv
   rw [show Bytes.toB256 [0x01] = 1 from rfl] at run
   have hst : (afterSload sevm d 1).state = d.state := RequestFee.afterSload_state _ _ _
+  have hlogs : (afterSload sevm d 1).logs = d.logs := afterSload_logs _ _ _
   generalize d.getStorVal sevm.currentTarget 1 = n at run ⊢
   by_cases hgt : n + e > p.target.word
   · rw [ite_eq_left hgt]
@@ -228,13 +232,13 @@ theorem over_inv (fork : ShanghaiOnwards sevm.benvStat.fork) {d : Devm} {e c : B
       exact absurd flag (by decide)
     · unfold plainCarry at run
       winv 5 at run
-      exact ⟨_, _, hst, run.uncut⟩
+      exact ⟨_, _, hst, hlogs, run.uncut⟩
   · rw [ite_eq_right hgt]
     rcases ric_branch run with ⟨_, _, run⟩ | ⟨flag, _, _⟩
     · unfold plainNoCarry at run
       winv at run
       obtain ⟨_, run⟩ := ric_jump List.not_mem_nil hfinal run
-      exact ⟨_, _, hst, run.uncut⟩
+      exact ⟨_, _, hst, hlogs, run.uncut⟩
     · simp only [B256.gtCheck, hgt, ite_false] at flag
       exact absurd rfl flag
 
@@ -243,7 +247,7 @@ theorem excess_inv (fork : ShanghaiOnwards sevm.benvStat.fork) {d : Devm} {c : B
     {o : Outcome} (hover : fs[p.overIdx]? = some (plainOver p))
     (hfinal : fs[p.finalIdx]? = some (sysFinal p.len))
     (run : SFunc.Run fs sevm (St d [c] M G) (plainExcess p) o) :
-    ∃ d' G', d'.state = d.state ∧ SFunc.Run fs sevm
+    ∃ d' G', d'.state = d.state ∧ d'.logs = d.logs ∧ SFunc.Run fs sevm
       (St d' [plainNext p.target.word (d.getStorVal sevm.currentTarget 0)
         (d.getStorVal sevm.currentTarget 1), c] M G') (sysFinal p.len) o := by
   have run := run.cut
@@ -255,16 +259,17 @@ theorem excess_inv (fork : ShanghaiOnwards sevm.benvStat.fork) {d : Devm} {c : B
   winv
   rw [show Bytes.toB256 [] = 0 from rfl, inhibitor_push] at run
   have hst : (afterSload sevm d 0).state = d.state := RequestFee.afterSload_state _ _ _
+  have hlogs : (afterSload sevm d 0).logs = d.logs := afterSload_logs _ _ _
   have hn : (afterSload sevm d 0).getStorVal sevm.currentTarget 1 = d.getStorVal sevm.currentTarget 1 :=
     afterSload_getStorVal _ _ _ _ _
   generalize he : d.getStorVal sevm.currentTarget 0 = e at run ⊢
   have finish : ∀ {G'}, SFunc.Run fs sevm (St (afterSload sevm d 0) [plainBase e, c] M G') (plainOver p) o →
-      ∃ d' G', d'.state = d.state ∧ SFunc.Run fs sevm
+      ∃ d' G', d'.state = d.state ∧ d'.logs = d.logs ∧ SFunc.Run fs sevm
         (St d' [plainNext p.target.word e (d.getStorVal sevm.currentTarget 1), c] M G') (sysFinal p.len) o := by
     intro G' r
-    obtain ⟨d', G'', hst', r⟩ := over_inv p fork hfinal r
+    obtain ⟨d', G'', hst', hlogs', r⟩ := over_inv p fork hfinal r
     rw [hn] at r
-    exact ⟨d', G'', hst'.trans hst, r⟩
+    exact ⟨d', G'', hst'.trans hst, hlogs'.trans hlogs, r⟩
   rcases ric_branchTo List.not_mem_nil hover run with ⟨flag, _, run⟩ | ⟨flag, _, run⟩
   · have hinh : B256.max = e := by
       by_contra hne
@@ -301,30 +306,30 @@ theorem fold_memory (sevm : Sevm) (h : B256) (index n : Nat) (b : Devm) (M : Mem
     rw [ih, readsBase_getStorVal]
     rfl
 
-/-- A runtime's record body, inverted: a successful run from the body keeps the world state, writes the
+/-- A runtime's record body, inverted: a successful run from the body keeps the world state and logs, writes the
 record's stage over the storage it read, and re-enters the header at the next index. -/
 def BodyInv (sevm : Sevm) : Prop :=
   ∀ {b : Devm} {M : Mem} {G : Nat} {i c h t : B256} {o : Outcome},
     SFunc.Run k.cert.prog sevm (St b [i, c, h, t] M G) k.body o →
-    ∃ b' G', b'.state = b.state ∧ SFunc.Run k.cert.prog sevm
+    ∃ b' G', b'.state = b.state ∧ b'.logs = b.logs ∧ SFunc.Run k.cert.prog sevm
       (St b' [(1 : B256) + i, c, h, t] ((k.stage (b.getStorVal sevm.currentTarget) h i).applyMemory M) G')
       (sysHeader k.shape k.body) o
 
-/-- A runtime's excess arm, inverted: a successful run keeps the world state and enters the final stores on
+/-- A runtime's excess arm, inverted: a successful run keeps the world state and logs and enters the final stores on
 the shape's stored excess. -/
 def ExcessInv (sevm : Sevm) : Prop :=
   ∀ {d : Devm} {M : Mem} {G : Nat} {c : B256} {o : Outcome},
     SFunc.Run k.cert.prog sevm (St d [c] M G) k.shape.excessTree o →
-    ∃ d' G', d'.state = d.state ∧ SFunc.Run k.cert.prog sevm
+    ∃ d' G', d'.state = d.state ∧ d'.logs = d.logs ∧ SFunc.Run k.cert.prog sevm
       (St d' [k.shape.next (d.getStorVal sevm.currentTarget 0) (d.getStorVal sevm.currentTarget 1), c] M G')
       (sysFinal k.shape.len) o
 
 /-- **The loop, inverted**, by induction on the remaining count: a successful run from the header at `index`
-reaches the bookkeeping on the same world state, with the remaining records' writes applied. -/
+reaches the bookkeeping on the same world state and logs, with the remaining records' writes applied. -/
 theorem loop_inv (bodyInv : k.BodyInv sevm) {h t c : B256} (n : Nat) {index : Nat} {b : Devm} {M : Mem}
     {G : Nat} {o : Outcome} (bound : index + n = c.toNat)
     (run : SFunc.Run k.cert.prog sevm (St b [index.toB256, c, h, t] M G) (sysHeader k.shape k.body) o) :
-    ∃ b' G', b'.state = b.state ∧ SFunc.Run k.cert.prog sevm
+    ∃ b' G', b'.state = b.state ∧ b'.logs = b.logs ∧ SFunc.Run k.cert.prog sevm
       (St b' [c, c, h, t] (k.memFold (b.getStorVal sevm.currentTarget) h index n M) G') (sysBook k.shape) o := by
   induction n generalizing index b M G with
   | zero =>
@@ -332,7 +337,7 @@ theorem loop_inv (bodyInv : k.BodyInv sevm) {h t c : B256} (n : Nat) {index : Na
       rw [show index = c.toNat by omega, toB256_toNat]
     obtain ⟨G', run⟩ := header_inv k.shape run
     rw [ite_eq_left same, same] at run
-    exact ⟨b, G', rfl, run⟩
+    exact ⟨b, G', rfl, rfl, run⟩
   | succ n ih =>
     have different : index.toB256 ≠ c := by
       intro eq
@@ -341,46 +346,47 @@ theorem loop_inv (bodyInv : k.BodyInv sevm) {h t c : B256} (n : Nat) {index : Na
       omega
     obtain ⟨G', run⟩ := header_inv k.shape run
     rw [ite_eq_right different] at run
-    obtain ⟨b', G'', hst, run⟩ := bodyInv run
+    obtain ⟨b', G'', hst, hlogs, run⟩ := bodyInv run
     rw [show (1 : B256) = Bytes.toB256 [0x01] from rfl,
       one_add_toB256 (by have := B256.toNat_lt c; omega)] at run
-    obtain ⟨b'', G''', hst', run⟩ := ih (index := index + 1) (by omega) run
+    obtain ⟨b'', G''', hst', hlogs', run⟩ := ih (index := index + 1) (by omega) run
     rw [getStorVal_eq_of_state hst] at run
-    exact ⟨b'', G''', hst'.trans hst, run⟩
+    exact ⟨b'', G''', hst'.trans hst, hlogs'.trans hlogs, run⟩
 
 variable {k}
 
 /-- **The system arm, inverted.** A successful run of a runtime's dispatch at the system caller, from any
-storage, memory and gas, on a covered fork: the frame is non-static, the post state is `sysState`, and the
-output is the window of `len` bytes per drained record over the loop's memory. -/
+storage, memory and gas, on a covered fork: the frame is non-static, the post state is `sysState`, the output
+is the window of `len` bytes per drained record over the loop's memory, and logs are unchanged. -/
 theorem frame_inv (bodyInv : k.BodyInv sevm) (excessInv : k.ExcessInv sevm)
     (fork : CoveredFork sevm.benvStat.fork) (caller : sevm.caller = systemAddress) {b post : Devm} {M : Mem}
     {G : Nat} (run : SFunc.Run k.cert.prog sevm (St b [] M G)
       (dispatchTree k.systemDest k.user (sysSetup k.shape k.body)) (.halted post)) :
     sevm.isStatic = false ∧ post.state = sysState k.shape b.state sevm.currentTarget ∧
       post.output = ((k.memFold (rd sevm b) (rd sevm b 2) 0 (k.count sevm b).toNat M).read 0
-        (k.outLen sevm b).toNat).1 := by
+        (k.outLen sevm b).toNat).1 ∧ post.logs = b.logs := by
   obtain ⟨_, run⟩ := dispatch_system_inv caller run
-  obtain ⟨b1, _, hst1, run⟩ := setup_inv k.shape fork.shanghaiOnwards k.entry run
-  obtain ⟨b2, _, hst2, run⟩ := k.loop_inv bodyInv (k.count sevm b).toNat (index := 0) (Nat.zero_add _) run
+  obtain ⟨b1, _, hst1, hlogs1, run⟩ := setup_inv k.shape fork.shanghaiOnwards k.entry run
+  obtain ⟨b2, _, hst2, hlogs2, run⟩ := k.loop_inv bodyInv (k.count sevm b).toNat (index := 0) (Nat.zero_add _) run
   rw [getStorVal_eq_of_state hst1] at run
-  obtain ⟨static, b3, _, hst3, run⟩ := book_inv k.shape fork k.excessEntry run
-  obtain ⟨b4, _, hst4, run⟩ := excessInv run
-  obtain ⟨hstate, hout⟩ := final_inv k.shape.len fork.shanghaiOnwards run
-  refine ⟨static, ?_, hout⟩
-  have h01 : ∀ key : B256, key.toNat ≤ 1 →
-      b3.getStorVal sevm.currentTarget key = b.getStorVal sevm.currentTarget key := by
-    intro key hkey
-    rw [SysPath.getStorVal_of_state hst3, hst2, hst1, bookState]
-    have hne : ∀ x : B256, 2 ≤ x.toNat → x ≠ key := fun x hx e => by rw [e] at hx; omega
-    split
-    · rw [State.getStor_setStorVal_self, Stor.get_set_ite, ite_eq_right (hne 3 (by decide)),
-        State.getStor_setStorVal_self, Stor.get_set_ite, ite_eq_right (hne 2 (by decide))]
-      rfl
-    · rw [State.getStor_setStorVal_self, Stor.get_set_ite, ite_eq_right (hne 2 (by decide))]
-      rfl
-  rw [hstate, hst4, hst3, hst2, hst1, h01 0 (by decide), h01 1 (by decide)]
-  rfl
+  obtain ⟨static, b3, _, hst3, hlogs3, run⟩ := book_inv k.shape fork k.excessEntry run
+  obtain ⟨b4, _, hst4, hlogs4, run⟩ := excessInv run
+  obtain ⟨hstate, hout, hlogs⟩ := final_inv k.shape.len fork.shanghaiOnwards run
+  refine ⟨static, ?_, hout, ?_⟩
+  · have h01 : ∀ key : B256, key.toNat ≤ 1 →
+        b3.getStorVal sevm.currentTarget key = b.getStorVal sevm.currentTarget key := by
+      intro key hkey
+      rw [SysPath.getStorVal_of_state hst3, hst2, hst1, bookState]
+      have hne : ∀ x : B256, 2 ≤ x.toNat → x ≠ key := fun x hx e => by rw [e] at hx; omega
+      split
+      · rw [State.getStor_setStorVal_self, Stor.get_set_ite, ite_eq_right (hne 3 (by decide)),
+          State.getStor_setStorVal_self, Stor.get_set_ite, ite_eq_right (hne 2 (by decide))]
+        rfl
+      · rw [State.getStor_setStorVal_self, Stor.get_set_ite, ite_eq_right (hne 2 (by decide))]
+        rfl
+    rw [hstate, hst4, hst3, hst2, hst1, h01 0 (by decide), h01 1 (by decide)]
+    rfl
+  · exact hlogs.trans (hlogs4.trans (hlogs3.trans (hlogs2.trans hlogs1)))
 
 /-- **Any successful execution of a system-path runtime's bytes at the system caller**, from an empty
 stack, ends as `frame_inv` says. -/
@@ -390,7 +396,7 @@ theorem exec_frame_inv (bodyInv : k.BodyInv sevm) (excessInv : k.ExcessInv sevm)
     (exec : Exec 0 sevm pre (.ok post)) :
     sevm.isStatic = false ∧ post.state = sysState k.shape pre.state sevm.currentTarget ∧
       post.output = ((k.memFold (rd sevm pre) (rd sevm pre 2) 0 (k.count sevm pre).toNat pre.memory).read 0
-        (k.outLen sevm pre).toNat).1 := by
+        (k.outLen sevm pre).toNat).1 ∧ post.logs = pre.logs := by
   obtain ⟨f, hf, run⟩ := lift_sound_noExec k.check hcode k.noExec exec
   rw [k.root] at hf
   cases hf

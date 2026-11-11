@@ -23,4 +23,15 @@ structure HistoryClean (blocks : List KeptBlock) : Prop where
   /-- No kept block creates it. -/
   creates : ∀ b ∈ blocks, NoCreateAt systemAddress b.run.roots
 
+/-- Mainnet's schedule names no Amsterdam activation, so every kept mainnet block is at a covered fork. -/
+theorem KeptHistory.mainnet_covered {checkpoint final : BlockChain} {blocks : List KeptBlock}
+    (history : KeptHistory mainnetChainConfig checkpoint blocks final) : ∀ b ∈ blocks, CoveredFork b.fork := by
+  intro b hb
+  obtain ⟨_, step⟩ := history.mem_step b hb
+  rcases step.kept with covered | amsterdam
+  · exact covered
+  · have mem := ChainConfig.forkAt_mem step.forkAt
+    rw [amsterdam] at mem
+    exact absurd mem (by decide +kernel)
+
 end Blanc

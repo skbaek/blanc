@@ -211,21 +211,21 @@ theorem history_pointers {cfg : ChainConfig} {checkpoint final : BlockChain} {bl
 
 /-- Mainnet's schedule names no Amsterdam activation, so a kept mainnet block is at a covered fork. -/
 theorem mainnet_covered {checkpoint final : BlockChain} {blocks : List KeptBlock}
-    (history : KeptHistory mainnetChainConfig checkpoint blocks final) : ∀ b ∈ blocks, CoveredFork b.fork := by
-  intro b hb
-  obtain ⟨next, step⟩ := history.mem_step b hb
-  rcases step.kept with covered | amsterdam
-  · exact covered
-  · have mem := ChainConfig.forkAt_mem step.forkAt
-    rw [amsterdam] at mem
-    exact absurd mem (by decide +kernel)
+    (history : KeptHistory mainnetChainConfig checkpoint blocks final) : ∀ b ∈ blocks, CoveredFork b.fork :=
+  history.mainnet_covered
 
 /-- The observation gives the start. -/
 theorem ConsolidationCheckpointObservation.start {checkpoint : BlockChain}
     (obs : ConsolidationCheckpointObservation checkpoint) : CheckpointStart checkpoint.state :=
   ⟨obs.code, obs.excess, obs.count, obs.head, obs.tail, obs.systemEmpty⟩
 
-/-- **C4 at mainnet.** From the observed pre-Prague checkpoint 22,431,083, for every kept mainnet history after it. -/
+/-- **C4 at mainnet.**
+
+From the observed pre-Prague checkpoint 22,431,083 (`ConsolidationCheckpointObservation`),
+for every kept mainnet history after it without `SYSTEM_ADDRESS` senders, authorities, or creations
+and within the `2 ^ 253` submission bound, the committed submissions equal the published consolidation
+records followed by the remaining stored queue (`Fifo blocks final.state`), delegating covered-fork
+membership to `KeptHistory.mainnet_covered`. -/
 theorem history_fifo_mainnet {checkpoint final : BlockChain} {blocks : List KeptBlock}
     (history : KeptHistory mainnetChainConfig checkpoint blocks final)
     (obs : ConsolidationCheckpointObservation checkpoint)

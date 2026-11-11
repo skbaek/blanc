@@ -1,4 +1,5 @@
 import Blanc.Lift.Silent
+import Blanc.Lift.Sound
 
 /-!
 # Balance-silent synthetic trees
@@ -201,5 +202,18 @@ theorem SFunc.RunP.getBal_of_balSilent {P : Sevm → Devm → Ninst → Devm →
     (run : SFunc.RunP P fs sevm devm f o) :
     (Outcome.devm o).getBal = devm.getBal :=
   congrArg Prod.fst (SFunc.RunP.balance_deletion_frame_of_balSilent hP hS hf hrefs run)
+
+/-- **No successful frame at certified code with no ether-moving node changes a balance**, for any
+caller, depth and fork: the certificate's jump closure `S` holds only balance-silent trees. The
+lift holds on any fork, since no node is call-family. -/
+theorem frame_keeps_balances {code : ByteArray} {c : Cert} {S : List Nat} (hc : Cert.check code c = true)
+    (hno : ProgNoExec c.prog) (closed : BalSilentSet c.prog S = true) (root : 0 ∈ S) {sevm : Sevm}
+    {pre post : Devm} (hcode : sevm.code = code) (exec : Exec 0 sevm pre (.ok post)) :
+    post.getBal = pre.getBal := by
+  obtain ⟨f, hf, run⟩ := lift_sound_noExec hc hcode hno exec
+  have hat := List.all_eq_true.mp closed 0 root
+  rw [hf] at hat
+  simp only [Bool.and_eq_true] at hat
+  exact SFunc.RunP.getBal_of_balSilent (fun h => h) closed hat.1 hat.2 run
 
 end Blanc.Lift

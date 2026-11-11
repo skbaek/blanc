@@ -86,4 +86,20 @@ theorem fakeExp_pos (e : Nat) : 1 ≤ fakeExp 1 e 17 := by
   have := FakeExponential.factor_mul_pow_le 1 e 17 0 0 (by decide) (by simp only [Nat.mul_zero, Nat.zero_le])
   simpa only [Nat.pow_zero, Nat.mul_one] using this
 
+/-- Through excess 2892, `quotedFee` equals `specFee`, `wordFee` is `(specFee e).toB256`, and `quotedIterations ≤ 462`. -/
+theorem quotedFee_eq_spec_of_le {e : B256} (he : e.toNat ≤ 2892) :
+    quotedFee e = specFee e ∧ wordFee e = (specFee e).toB256 ∧ quotedIterations e ≤ 462 := by
+  obtain ⟨n, out, hle, run, hv, hq⟩ := fee_run he
+  obtain ⟨hw, hqf, hqi⟩ := wordFee_of_run run
+  exact ⟨hqf.trans hv, hw.trans hq, hqi ▸ hle⟩
+
+/-- At excess 2893, `quotedFee` is strictly below `specFee`. -/
+theorem quotedFee_lt_spec_2893 : quotedFee (2893 : Nat).toB256 < specFee (2893 : Nat).toB256 := by
+  have hle := quotedFee_le_spec (2893 : Nat).toB256
+  have hne := word_fee_ne_natural_2893 (quoted_run (2893 : Nat).toB256)
+  unfold specFee at hle ⊢
+  rw [B256.toNat_toB256_of_lt (by decide)] at hle ⊢
+  change quotedFee (2893 : Nat).toB256 ≠ fakeExp 1 2893 17 at hne
+  omega
+
 end Blanc.RequestFeeWord

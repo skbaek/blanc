@@ -595,6 +595,9 @@ CONTRACTS.setdefault("consolidation-request", []).extend(["Lift.ConsolidationReq
 # `HistoryClean`, the per-block SYSTEM_ADDRESS premises, hoisted from the builder family's public observers.
 SHARED += ["Lift.RequestSystem.PathInv", "ExecutionKeptClean"]
 CONTRACTS.setdefault("consolidation-request", []).extend(["Lift.ConsolidationRequest.SystemFrame"])
+# Protocol-contract corpus G2 shared hoists: balance-silent kept-value bridge, kept-history pre-execution
+# system-call connections, generic request-queue occurrence/latency laws, and joint-run ring/feed helpers.
+SHARED += ["ExecutionKeptBalSilent", "ExecutionKeptPreCalls", "Lift.RequestQueue.Occurrence", "JointFeed"]
 CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Code", "Lift.BuilderRequest.Deposit.Cert",
     "Lift.BuilderRequest.Deposit.Check", "Lift.BuilderRequest.Deposit.Jumps",
