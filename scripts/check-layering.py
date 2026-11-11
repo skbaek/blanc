@@ -642,6 +642,7 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.ValueKept",
     "Lift.BuilderRequest.Deposit.Properties", "Lift.BuilderRequest.Exit.Properties",
     "Lift.BuilderRequest.LoadBound", "Lift.BuilderRequest.Accepts",
+    "Lift.BuilderRequest.WordFees",
     "Lift.BuilderRequest.RevertCovered", "Lift.BuilderRequest.Progress",
     "Lift.BuilderRequest.CallerCovered",
 ]
@@ -805,6 +806,7 @@ COMPOSITION.update({
     "Composition.DepositConsensusOutcomes": ("beacon-deposit",),
     "Composition.DepositPendingPass": ("beacon-deposit",),
     "Composition.BuilderRequestApplicability.Checks": ("builder-request",),
+    "Composition.BuilderRequestActualFeeBounds": ("builder-request", "withdrawal-request"),
 })
 
 SHARED += ["ConcreteRunKept"]

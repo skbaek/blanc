@@ -30,6 +30,7 @@ import Blanc.CompiledStackSafety
 import Blanc.CompiledWalkInversion
 import Blanc.Composition.BeaconRootsRetention
 import Blanc.Composition.BeaconRootsSlotControl
+import Blanc.Composition.BuilderRequestActualFeeBounds
 import Blanc.Composition.BuilderRequestApplicability.Checks
 import Blanc.Composition.BuilderRequestApplicabilityCalls
 import Blanc.Composition.BuilderRequestCarrier
@@ -475,6 +476,7 @@ import Blanc.Lift.BuilderRequest.TransactionWitness
 import Blanc.Lift.BuilderRequest.UserFrame
 import Blanc.Lift.BuilderRequest.UserFrameAmsterdam
 import Blanc.Lift.BuilderRequest.ValueKept
+import Blanc.Lift.BuilderRequest.WordFees
 import Blanc.Lift.CallChildren
 import Blanc.Lift.CallEffects
 import Blanc.Lift.CallMessageFacts
