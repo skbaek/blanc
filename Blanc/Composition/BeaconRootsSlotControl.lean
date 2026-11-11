@@ -1,4 +1,4 @@
-import Blanc.Corpus.Proofs.RingHistory
+import Blanc.Composition.Corpus.Proofs.RingHistory
 import Batteries.Tactic.OpenPrivate
 
 namespace Blanc.Composition.BeaconRootsSlotControl
@@ -6,7 +6,7 @@ namespace Blanc.Composition.BeaconRootsSlotControl
 open Jaune Blanc.Corpus.Freeze Blanc.Corpus.Freeze.BeaconRoots
 
 open private Blanc.Corpus.Proofs.RingHistory.R.root_time_ne
-  from Blanc.Corpus.Proofs.RingHistory
+  from Blanc.Composition.Corpus.Proofs.RingHistory
 
 /-- On any positive slot grid, the write 8191 slots later replaces the original timestamp tag. -/
 theorem slot_grid_control : Blanc.Corpus.Freeze.BeaconRoots.R_S8_slot_control := by

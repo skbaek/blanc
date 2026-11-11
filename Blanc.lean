@@ -28,6 +28,8 @@ import Blanc.Compiled
 import Blanc.CompiledFixedInvariance
 import Blanc.CompiledStackSafety
 import Blanc.CompiledWalkInversion
+import Blanc.Composition.BeaconRootsRetention
+import Blanc.Composition.BeaconRootsSlotControl
 import Blanc.Composition.BuilderRequestCarrier
 import Blanc.Composition.BuilderRequestClassification
 import Blanc.Composition.BuilderRequestCodesKept

@@ -742,6 +742,8 @@ CONTRACTS["beacon-deposit"].extend([
 # Each entry is a nonempty tuple of distinct CONTRACTS keys. Adding a composition
 # declares its boundary here; no default family or production exception exists.
 COMPOSITION = {
+    "Composition.BeaconRootsRetention": ('beacon-roots', 'history-storage'),
+    "Composition.BeaconRootsSlotControl": ('beacon-roots', 'history-storage'),
     "Composition.Corpus.Proofs.RingHistory": ('beacon-roots', 'history-storage'),
     "Composition.Corpus.Proofs.RingValue": ('beacon-roots', 'history-storage'),
     "Composition.Corpus.Freeze.ConsolidationExecution": ('consolidation-request',),

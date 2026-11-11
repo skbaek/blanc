@@ -1,4 +1,4 @@
-import Blanc.Corpus.Proofs.RingHistory
+import Blanc.Composition.Corpus.Proofs.RingHistory
 
 namespace Blanc.Composition.BeaconRootsRetention
 
