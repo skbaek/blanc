@@ -806,6 +806,11 @@ COMPOSITION.update({
     "Composition.BuilderRequestApplicability.Checks": ("builder-request",),
 })
 
+SHARED += ["ConcreteRunKept"]
+COMPOSITION.update({
+    "Composition.BuilderRequestApplicabilityCalls": ("builder-request", "withdrawal-request"),
+})
+
 ROOTS = ["Blanc", "Main"]
 
 def composition_declaration_failures(declarations, contracts):

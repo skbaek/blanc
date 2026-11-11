@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-583 shared modules, 555 with a module summary.
+584 shared modules, 556 with a module summary.
 
 ## `Blanc/`
 
@@ -35,6 +35,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`CompiledStackSafety.lean`](../Blanc/CompiledStackSafety.lean) | Local stack certificates for actual decoded execution, including arbitrary terminal outcomes and parent resumption. | [E5](COMMON_API.md#e5-i-need-to-inspect-what-happened-in-an-exec), [E9](COMMON_API.md#e9-i-need-to-rule-out-an-operand-stack-fault-over-an-actual-walk) |
 | [`CompiledWalkInversion.lean`](../Blanc/CompiledWalkInversion.lean) | **Contract-neutral inversion of compiled function walks.** The `Func.RunCompiledTo` relation is inductive in the construction direction, but consumers that inspect an already-built walk need the corresponding small inversion lemmas. | [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term) |
 | [`ConcreteRun.lean`](../Blanc/ConcreteRun.lean) | Concrete stepping glue for kernel-checked existential executions. | [C9.2](COMMON_API.md#c92-i-need-to-connect-a-real-execution-with-a-lifted-run) |
+| [`ConcreteRunKept.lean`](../Blanc/ConcreteRunKept.lean) | Continuing prefixes do not add retained frames. | [C9.2](COMMON_API.md#c92-i-need-to-connect-a-real-execution-with-a-lifted-run) |
 | [`ConsensusSsz.lean`](../Blanc/ConsensusSsz.lean) | **SSZ serialization facts for consensus containers.** Contract-neutral equations for Jaune's consensus SSZ: little-endian `uint64` bytes against Jaune's big-endian `UInt64.toBytes`, the byte vector, lists of fixed-size elements, and the electra withdrawal request. | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
 | [`ContractAdmission.lean`](../Blanc/ContractAdmission.lean) | **Contract preservation with trace-local frame admission.** This module extends the ordinary `ContractSpec` ladder with positive entry conditions attached to the concrete execution's actual target-frame roots. | [T2a](COMMON_API.md#t2a-i-need-a-frame-invariant-under-trace-local-entry-premises) |
 | [`ContractAdmissionSem.lean`](../Blanc/ContractAdmissionSem.lean) | **Contract preservation with trace-local frame admission.** This module extends the ordinary `ContractSpec` ladder with positive entry conditions attached to the concrete execution's actual target-frame roots. | [C9.13](COMMON_API.md#c913-i-need-a-whole-contract-property-without-per-path-walks) |

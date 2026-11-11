@@ -5461,6 +5461,11 @@ every shared module with its own summary and the branches that cite it.
 - Concrete runs checked by kernel evaluation of Jaune's own `Evm.step`:
   `ConcreteRun.stepN` (at most `n` continuing steps) and `stepN_add`, in
   [`Blanc/ConcreteRun.lean`](../Blanc/ConcreteRun.lean).
+- For retained frames after a concrete continuing prefix, use
+  [`Blanc/ConcreteRunKept.lean`](../Blanc/ConcreteRunKept.lean)'s
+  `ConcreteRun.Exec.keptAt_ofStepN`. It relates the original gas-bearing
+  `stepN`/`Exec.ofStepN` derivation to the same supplied actual tail,
+  preserving `Exec.keptAt` at any observed address on any outcome.
 - A concrete frame run over a lifted certificate, as a gas-exact `SProg.RunExact`
   (an executable witness: liveness from one start state, by kernel evaluation): the
   interpreter `Witness.wrun` over the certificate's decoded tree, its single step
