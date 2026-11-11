@@ -17,23 +17,23 @@ section Walk
 variable {fs : List SFunc} {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome} {v ret pB : B256}
   {rest : List B256} {M : Mem} {S : Nat} {C : List Nat} {r : Seg}
 
-theorem ri_lePrefix {K : SFunc} {img : Bytes}
+/-- The original prefix copies its actual modular-CALLDATASIZE seed. -/
+theorem ri_lePrefix_any_data {K : SFunc} {img : Bytes}
     (hr : Mem.Reads M img)
     (hn32 : M.size % 32 = 0) (hn96 : 96 ≤ M.size)
     (hfp : Bytes.toB256 (img.sliceD 64 32 0) = pB) (hp32 : pB.toNat % 32 = 0)
-    (hp : pB.toNat + 64 < 2 ^ 256) (hcd : sevm.data.length < 2 ^ 256)
+    (hp : pB.toNat + 64 < 2 ^ 256)
     (run : SFunc.RunCut fs sevm C (St b (v :: ret :: rest) M G) (lePrefix K) r) :
     ∃ G', SFunc.RunCut fs sevm C
       (St b ((v <<< 192) :: pB :: v :: ret :: rest)
         (((M.write pB.toNat (Bytes.toB256 [0x08]).toBytes).write 64
-          (Bytes.toB256 [0x40] + pB).toBytes).write (pB.toNat + 32) (List.replicate 8 0)) G') K r := by
+          (Bytes.toB256 [0x40] + pB).toBytes).write (pB.toNat + 32)
+            (sevm.data.sliceD (Nat.toB256 sevm.data.length).toNat 8 0)) G') K r := by
   set p := pB.toNat with hp_def
   have h64 : (Bytes.toB256 [0x40]).toNat = 64 := by decide
   have ha : (pB + Bytes.toB256 [0x20]).toNat = p + 32 := by
     rw [B256.toNat_add, show (Bytes.toB256 [0x20]).toNat = 32 by decide,
       Nat.lo_eq_of_lt (by omega)]
-  have hsi : (Nat.toB256 sevm.data.length).toNat = sevm.data.length :=
-    B256.toNat_toB256_of_lt hcd
   unfold lePrefix at run
   winv 4
   have hmload_fst : Bytes.toB256 (M.read (Bytes.toB256 [0x40]).toNat 32).1 = pB := by
@@ -47,10 +47,7 @@ theorem ri_lePrefix {K : SFunc} {img : Bytes}
   winv 9
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_calldatacopy s
   have hcc_addr : (pB + Bytes.toB256 [0x20]).toNat = p + 32 := ha
-  have hcc_bytes : sevm.data.sliceD (Nat.toB256 sevm.data.length).toNat (Bytes.toB256 [0x08]).toNat 0 =
-      List.replicate 8 0 := by
-    rw [hsi, show (Bytes.toB256 [0x08]).toNat = 8 by decide, sliceD_length_self]
-  rw [hcc_addr, hcc_bytes] at run
+  rw [hcc_addr, show (Bytes.toB256 [0x08]).toNat = 8 by decide] at run
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_add s
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_swap (n := 0) rfl s
   winv 2
@@ -62,6 +59,19 @@ theorem ri_lePrefix {K : SFunc} {img : Bytes}
   have hshl : (Bytes.toB256 [0xc0]).toNat = 192 := by decide
   rw [hshl] at run
   exact ⟨G34, run⟩
+
+theorem ri_lePrefix {K : SFunc} {img : Bytes}
+    (hr : Mem.Reads M img)
+    (hn32 : M.size % 32 = 0) (hn96 : 96 ≤ M.size)
+    (hfp : Bytes.toB256 (img.sliceD 64 32 0) = pB) (hp32 : pB.toNat % 32 = 0)
+    (hp : pB.toNat + 64 < 2 ^ 256) (hcd : sevm.data.length < 2 ^ 256)
+    (run : SFunc.RunCut fs sevm C (St b (v :: ret :: rest) M G) (lePrefix K) r) :
+    ∃ G', SFunc.RunCut fs sevm C
+      (St b ((v <<< 192) :: pB :: v :: ret :: rest)
+        (((M.write pB.toNat (Bytes.toB256 [0x08]).toBytes).write 64
+          (Bytes.toB256 [0x40] + pB).toBytes).write (pB.toNat + 32) (List.replicate 8 0)) G') K r := by
+  have general := ri_lePrefix_any_data hr hn32 hn96 hfp hp32 hp run
+  rwa [B256.toNat_toB256_of_lt hcd, sliceD_length_self] at general
 
 theorem ri_leStep {c ib d0 d1 : UInt8} {K : SFunc} {i : Nat} {imgM : Bytes} (hi : i < 8)
     (hc : (Bytes.toB256 [c]).toNat = 7 - i) (hib : (Bytes.toB256 [ib]).toNat = i)
@@ -132,9 +142,8 @@ end Walk
 Converse of `to_little_endian_64_run`: from any successful synthetic run of entry 25's tree
 `t_14ba_c25`, the run returns `pB :: rest` over a memory reading as `leImg`: length `8` at `pB`,
 free pointer `pB + 64`, and `le64 v` at `pB + 32`. -/
-theorem safe_to_little_endian_64 {sevm : Sevm} {b : Devm} {G : Nat} {v ret pB : B256}
+theorem safe_to_little_endian_64_any_data {sevm : Sevm} {b : Devm} {G : Nat} {v ret pB : B256}
     {rest : List B256} {M : Mem} {img : Bytes} {o : Outcome}
-    (hcd : sevm.data.length < 2 ^ 256)
     (hwf : Mem.Wf M) (hr : Mem.Reads M img)
     (hn32 : M.size % 32 = 0) (hn96 : 96 ≤ M.size)
     (hfp : Bytes.toB256 (img.sliceD 64 32 0) = pB) (hp32 : pB.toNat % 32 = 0)
@@ -152,18 +161,17 @@ theorem safe_to_little_endian_64 {sevm : Sevm} {b : Devm} {G : Nat} {v ret pB : 
   have ha : (pB + Bytes.toB256 [0x20]).toNat = p + 32 := by
     rw [B256.toNat_add, show (Bytes.toB256 [0x20]).toNat = 32 by decide,
       Nat.lo_eq_of_lt (by omega)]
-  have hsi : (Nat.toB256 sevm.data.length).toNat = sevm.data.length :=
-    B256.toNat_toB256_of_lt hcd
+  set seed := sevm.data.sliceD (Nat.toB256 sevm.data.length).toNat 8 0 with seed_eq
+  have width : seed.length = 8 := by simp only [seed, List.sliceD, List.takeD_length]
   set M1 := M.write p (Bytes.toB256 [0x08]).toBytes with hM1
   set M2 := M1.write 64 (Bytes.toB256 [0x40] + pB).toBytes with hM2
-  set M3 := M2.write (p + 32) (List.replicate 8 0) with hM3
+  set M3 := M2.write (p + 32) seed with hM3
   have hs1 : M1.size = max n (p + 32) := Mem.size_write_word_aligned hn32 hp32
   have hs2 : M2.size = max n (p + 32) := by
     rw [Mem.size_write_word_aligned (by rw [hs1]; omega) (by decide), hs1]; omega
   have hs3 : M3.size = max n (p + 64) := by
-    show (M2.write (p + 32) (0 :: List.replicate 7 0)).size = _
-    rw [Mem.size_write_cons, hs2]
-    simp only [List.length_cons, List.length_replicate]
+    change (M2.write (p + 32) seed).size = _
+    rw [Mem.size_write_of_length width (by decide), hs2]
     split_ifs with h
     · omega
     · unfold ceil32
@@ -171,9 +179,9 @@ theorem safe_to_little_endian_64 {sevm : Sevm} {b : Devm} {G : Nat} {v ret pB : 
   set Z := Bytes.writeAt (Bytes.writeAt img p (Bytes.toB256 [0x08]).toBytes) 64
     (Bytes.toB256 [0x40] + pB).toBytes with hZ
   have hwf3 : Mem.Wf M3 := ((hwf.write _ _).write _ _).write _ _
-  have hr3 : Mem.Reads M3 (Bytes.writeAt Z (p + 32) (List.replicate 8 0)) :=
+  have hr3 : Mem.Reads M3 (Bytes.writeAt Z (p + 32) seed) :=
     ((hr.write hwf _ _).write (hwf.write _ _) _ _).write ((hwf.write _ _).write _ _) _ _
-  have h80 : (Bytes.writeAt Z (p + 32) (List.replicate 8 0)).sliceD p 32 0 =
+  have h80 : (Bytes.writeAt Z (p + 32) seed).sliceD p 32 0 =
       (8 : B256).toBytes := by
     rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega),
       Bytes.sliceD_writeAt_after _ _ _ _ _ (by rw [B256.length_toBytes]; omega), h8]
@@ -181,11 +189,11 @@ theorem safe_to_little_endian_64 {sevm : Sevm} {b : Devm} {G : Nat} {v ret pB : 
     rwa [B256.length_toBytes] at this
   have hS32 : max n (p + 64) % 32 = 0 := by omega
   have inv : ∀ i, i ≤ 8 → LeInv (leMem M3 (p + 32) v i)
-      (leBytes (Bytes.writeAt Z (p + 32) (List.replicate 8 0)) (p + 32) v i) (max n (p + 64)) p :=
+      (leBytes (Bytes.writeAt Z (p + 32) seed) (p + 32) v i) (max n (p + 64)) p :=
     LeInv.leMem ⟨hwf3, hr3, hs3, h80⟩ (by omega)
   obtain run := run.cut
   rw [t_14ba_eq] at run
-  obtain ⟨G0, run⟩ := ri_lePrefix hr hn32 hn96 hfp hp32 hp hcd run
+  obtain ⟨G0, run⟩ := ri_lePrefix_any_data hr hn32 hn96 hfp hp32 hp run
   obtain ⟨G1, run⟩ := ri_leStep (i := 0) (by decide) (by decide) (by decide)
     (inv 0 (by omega)).2.1 (inv 0 (by omega)).2.2.2 (inv 0 (by omega)).2.2.1 hS32 (by omega) hp run
   obtain ⟨G2, run⟩ := ri_leStep (i := 1) (by decide) (by decide) (by decide)
@@ -206,7 +214,36 @@ theorem safe_to_little_endian_64 {sevm : Sevm} {b : Devm} {G : Nat} {v ret pB : 
   injection hr with ho
   refine ⟨leMem M3 (p + 32) v 8, Gf, ho, (inv 8 le_rfl).1, ?_, (inv 8 le_rfl).2.2.1⟩
   have := (inv 8 le_rfl).2.1
-  rwa [leBytes_zeros, hZ, h8, hfpv] at this
+  rwa [leBytes_seed _ _ _ _ width, hZ, h8, hfpv] at this
+
+/-- Compatibility projection retaining the original bounded statement. -/
+theorem safe_to_little_endian_64 {sevm : Sevm} {b : Devm} {G : Nat} {v ret pB : B256}
+    {rest : List B256} {M : Mem} {img : Bytes} {o : Outcome}
+    (hcd : sevm.data.length < 2 ^ 256)
+    (hwf : Mem.Wf M) (hr : Mem.Reads M img)
+    (hn32 : M.size % 32 = 0) (hn96 : 96 ≤ M.size)
+    (hfp : Bytes.toB256 (img.sliceD 64 32 0) = pB) (hp32 : pB.toNat % 32 = 0)
+    (hp96 : 96 ≤ pB.toNat) (hp : pB.toNat + 64 < 2 ^ 256)
+    (run : SFunc.Run prog sevm (St b (v :: ret :: rest) M G) t_14ba_c25 o) :
+    ∃ M' G', o = .returned (St b (pB :: rest) M' G') ∧
+      Mem.Wf M' ∧ Mem.Reads M' (leImg img pB v) ∧ M'.size = max M.size (pB.toNat + 64) := by
+  exact (fun _ : sevm.data.length < 2 ^ 256 =>
+    safe_to_little_endian_64_any_data hwf hr hn32 hn96 hfp hp32 hp96 hp run) hcd
+
+/-- Returning form of the same original inversion, for arbitrary calldata. -/
+theorem safe_to_little_endian_64_returned_any_data {sevm : Sevm} {b : Devm} {G : Nat} {v ret pB : B256}
+    {rest : List B256} {M : Mem} {img : Bytes} {D : Devm}
+    (hwf : Mem.Wf M) (hr : Mem.Reads M img)
+    (hn32 : M.size % 32 = 0) (hn96 : 96 ≤ M.size)
+    (hfp : Bytes.toB256 (img.sliceD 64 32 0) = pB) (hp32 : pB.toNat % 32 = 0)
+    (hp96 : 96 ≤ pB.toNat) (hp : pB.toNat + 64 < 2 ^ 256)
+    (run : SFunc.Run prog sevm (St b (v :: ret :: rest) M G) t_14ba_c25 (.returned D)) :
+    ∃ M' G', D = St b (pB :: rest) M' G' ∧
+      Mem.Wf M' ∧ Mem.Reads M' (leImg img pB v) ∧ M'.size = max M.size (pB.toNat + 64) := by
+  obtain ⟨M', G', ho, hwf', hr', hs'⟩ :=
+    safe_to_little_endian_64_any_data hwf hr hn32 hn96 hfp hp32 hp96 hp run
+  cases ho
+  exact ⟨M', G', rfl, hwf', hr', hs'⟩
 
 /-- Converse of `to_little_endian_64_run` specialized to returning runs. -/
 theorem safe_to_little_endian_64_returned {sevm : Sevm} {b : Devm} {G : Nat} {v ret pB : B256}
@@ -219,10 +256,20 @@ theorem safe_to_little_endian_64_returned {sevm : Sevm} {b : Devm} {G : Nat} {v 
     (run : SFunc.Run prog sevm (St b (v :: ret :: rest) M G) t_14ba_c25 (.returned D)) :
     ∃ M' G', D = St b (pB :: rest) M' G' ∧
       Mem.Wf M' ∧ Mem.Reads M' (leImg img pB v) ∧ M'.size = max M.size (pB.toNat + 64) := by
-  obtain ⟨M', G', ho, hwf', hr', hs'⟩ :=
-    safe_to_little_endian_64 hcd hwf hr hn32 hn96 hfp hp32 hp96 hp run
+  exact (fun _ : sevm.data.length < 2 ^ 256 =>
+    safe_to_little_endian_64_returned_any_data hwf hr hn32 hn96 hfp hp32 hp96 hp run) hcd
+
+/-- Entry 25 cannot halt, independently of the calldata length. -/
+theorem safe_to_little_endian_64_not_halted_any_data {sevm : Sevm} {b : Devm} {G : Nat} {v ret pB : B256}
+    {rest : List B256} {M : Mem} {img : Bytes} {D : Devm}
+    (hwf : Mem.Wf M) (hr : Mem.Reads M img)
+    (hn32 : M.size % 32 = 0) (hn96 : 96 ≤ M.size)
+    (hfp : Bytes.toB256 (img.sliceD 64 32 0) = pB) (hp32 : pB.toNat % 32 = 0)
+    (hp96 : 96 ≤ pB.toNat) (hp : pB.toNat + 64 < 2 ^ 256)
+    (run : SFunc.Run prog sevm (St b (v :: ret :: rest) M G) t_14ba_c25 (.halted D)) : False := by
+  obtain ⟨M', G', ho, -⟩ :=
+    safe_to_little_endian_64_any_data hwf hr hn32 hn96 hfp hp32 hp96 hp run
   cases ho
-  exact ⟨M', G', rfl, hwf', hr', hs'⟩
 
 /-- Entry 25 has no halted run. -/
 theorem safe_to_little_endian_64_not_halted {sevm : Sevm} {b : Devm} {G : Nat} {v ret pB : B256}
@@ -233,8 +280,7 @@ theorem safe_to_little_endian_64_not_halted {sevm : Sevm} {b : Devm} {G : Nat} {
     (hfp : Bytes.toB256 (img.sliceD 64 32 0) = pB) (hp32 : pB.toNat % 32 = 0)
     (hp96 : 96 ≤ pB.toNat) (hp : pB.toNat + 64 < 2 ^ 256)
     (run : SFunc.Run prog sevm (St b (v :: ret :: rest) M G) t_14ba_c25 (.halted D)) : False := by
-  obtain ⟨M', G', ho, -⟩ :=
-    safe_to_little_endian_64 hcd hwf hr hn32 hn96 hfp hp32 hp96 hp run
-  cases ho
+  exact (fun _ : sevm.data.length < 2 ^ 256 =>
+    safe_to_little_endian_64_not_halted_any_data hwf hr hn32 hn96 hfp hp32 hp96 hp run) hcd
 
 end Blanc.Lift.BeaconDeposit

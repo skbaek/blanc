@@ -260,12 +260,30 @@ theorem LeInv.leMem {M : Mem} {img : Bytes} {S p : Nat} {v : B256} (h : LeInv M 
   | 0, _ => h
   | i + 1, hi => (LeInv.leMem h hS i (by omega)).write (by omega) (by omega) _
 
-theorem leBytes_zeros (Z : Bytes) (q : Nat) (v : B256) :
-    leBytes (Bytes.writeAt Z q (List.replicate 8 0)) q v 8 =
+/-- All eight seed bytes are overwritten; the whole surrounding image is retained. -/
+theorem leBytes_seed (Z seed : Bytes) (q : Nat) (v : B256) (width : seed.length = 8) :
+    leBytes (Bytes.writeAt Z q seed) q v 8 =
       Bytes.writeAt Z q (Blanc.BeaconDeposit.le64 v.toNat) := by
   simp only [leBytes]
-  repeat rw [Bytes.writeAt_writeAt_set _ _ _ _ _ (by simp only [List.reduceReplicate, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.ofNat_pos, List.getD_eq_getElem?_getD, List.set_cons_zero, Nat.one_lt_ofNat, List.set_cons_succ, Nat.reduceLT, Nat.lt_add_one])]
+  repeat rw [Bytes.writeAt_writeAt_set _ _ _ _ _ (by
+    simp only [List.length_set, width]
+    omega)]
   congr 1
+  apply List.ext_get
+  · simp only [List.length_set, width, BeaconDeposit.le64, List.length_cons, List.length_nil]
+  · intro i hi hj
+    have bound : i < 8 := by simpa only [List.length_set, width] using hi
+    rcases i with _ | _ | _ | _ | _ | _ | _ | _ | i
+    all_goals first
+      | omega
+      | simp only [List.get_eq_getElem, List.getElem_set, List.getD_eq_getElem?_getD,
+          Nat.reduceEqDiff, Nat.reduceAdd, ↓reduceIte,
+          List.getElem?_eq_getElem hj, Option.getD_some]
+
+theorem leBytes_zeros (Z : Bytes) (q : Nat) (v : B256) :
+    leBytes (Bytes.writeAt Z q (List.replicate 8 0)) q v 8 =
+      Bytes.writeAt Z q (Blanc.BeaconDeposit.le64 v.toNat) :=
+  leBytes_seed Z _ q v (List.length_replicate ..)
 
 /-! ## `to_little_endian_64` -/
 
