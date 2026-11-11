@@ -64,7 +64,15 @@
     },
     {
       "id": "W-S3",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Lift.WithdrawalRequest.block_word_fifo",
+          "pin": "thm:Blanc.Lift.WithdrawalRequest.block_word_fifo"
+        }
+      ]
     },
     {
       "id": "C-S3",
@@ -88,7 +96,15 @@
     },
     {
       "id": "W-S4",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Lift.WithdrawalRequest.deploy_mainnet",
+          "pin": "thm:Blanc.Lift.WithdrawalRequest.deploy_mainnet"
+        }
+      ]
     },
     {
       "id": "C-S4",
@@ -100,7 +116,15 @@
     },
     {
       "id": "W-S5",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "fee-domain"
+          ],
+          "theorem": "Blanc.Lift.WithdrawalRequest.fee_eq_spec_iff",
+          "pin": "thm:Blanc.Lift.WithdrawalRequest.fee_eq_spec_iff"
+        }
+      ]
     },
     {
       "id": "C-S5",
@@ -124,7 +148,15 @@
     },
     {
       "id": "W-S6",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Lift.WithdrawalRequest.history_payments_mainnet",
+          "pin": "thm:Blanc.Lift.WithdrawalRequest.history_payments_mainnet"
+        }
+      ]
     },
     {
       "id": "C-S6",
@@ -172,7 +204,15 @@
     },
     {
       "id": "W-S8",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Lift.WithdrawalRequest.history_delivery_mainnet",
+          "pin": "thm:Blanc.Lift.WithdrawalRequest.history_delivery_mainnet"
+        }
+      ]
     },
     {
       "id": "C-S8",
