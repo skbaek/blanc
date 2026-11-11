@@ -1,0 +1,234 @@
+{
+  "schema": 1,
+  "goal_revision": 4,
+  "cells": [
+    {
+      "id": "D-S1",
+      "bindings": []
+    },
+    {
+      "id": "R-S1",
+      "bindings": []
+    },
+    {
+      "id": "H-S1",
+      "bindings": []
+    },
+    {
+      "id": "W-S1",
+      "bindings": []
+    },
+    {
+      "id": "C-S1",
+      "bindings": []
+    },
+    {
+      "id": "B-S1",
+      "bindings": []
+    },
+    {
+      "id": "D-S2",
+      "bindings": []
+    },
+    {
+      "id": "R-S2",
+      "bindings": []
+    },
+    {
+      "id": "H-S2",
+      "bindings": []
+    },
+    {
+      "id": "W-S2",
+      "bindings": []
+    },
+    {
+      "id": "C-S2",
+      "bindings": []
+    },
+    {
+      "id": "B-S2",
+      "bindings": []
+    },
+    {
+      "id": "D-S3",
+      "bindings": []
+    },
+    {
+      "id": "R-S3",
+      "bindings": []
+    },
+    {
+      "id": "H-S3",
+      "bindings": []
+    },
+    {
+      "id": "W-S3",
+      "bindings": []
+    },
+    {
+      "id": "C-S3",
+      "bindings": []
+    },
+    {
+      "id": "B-S3",
+      "bindings": []
+    },
+    {
+      "id": "D-S4",
+      "bindings": []
+    },
+    {
+      "id": "R-S4",
+      "bindings": []
+    },
+    {
+      "id": "H-S4",
+      "bindings": []
+    },
+    {
+      "id": "W-S4",
+      "bindings": []
+    },
+    {
+      "id": "C-S4",
+      "bindings": []
+    },
+    {
+      "id": "B-S4",
+      "bindings": []
+    },
+    {
+      "id": "W-S5",
+      "bindings": []
+    },
+    {
+      "id": "C-S5",
+      "bindings": []
+    },
+    {
+      "id": "B-S5",
+      "bindings": []
+    },
+    {
+      "id": "D-S6",
+      "bindings": []
+    },
+    {
+      "id": "R-S6",
+      "bindings": []
+    },
+    {
+      "id": "H-S6",
+      "bindings": []
+    },
+    {
+      "id": "W-S6",
+      "bindings": []
+    },
+    {
+      "id": "C-S6",
+      "bindings": []
+    },
+    {
+      "id": "B-S6",
+      "bindings": []
+    },
+    {
+      "id": "D-S7",
+      "bindings": []
+    },
+    {
+      "id": "R-S7",
+      "bindings": []
+    },
+    {
+      "id": "H-S7",
+      "bindings": []
+    },
+    {
+      "id": "W-S7",
+      "bindings": []
+    },
+    {
+      "id": "C-S7",
+      "bindings": []
+    },
+    {
+      "id": "B-S7",
+      "bindings": []
+    },
+    {
+      "id": "D-S8",
+      "bindings": []
+    },
+    {
+      "id": "R-S8",
+      "bindings": []
+    },
+    {
+      "id": "H-S8",
+      "bindings": []
+    },
+    {
+      "id": "W-S8",
+      "bindings": []
+    },
+    {
+      "id": "C-S8",
+      "bindings": []
+    },
+    {
+      "id": "B-S8",
+      "bindings": []
+    },
+    {
+      "id": "D-S9",
+      "bindings": []
+    },
+    {
+      "id": "R-S9",
+      "bindings": []
+    },
+    {
+      "id": "H-S9",
+      "bindings": []
+    },
+    {
+      "id": "W-S9",
+      "bindings": []
+    },
+    {
+      "id": "C-S9",
+      "bindings": []
+    },
+    {
+      "id": "B-S9",
+      "bindings": []
+    },
+    {
+      "id": "D-S10",
+      "bindings": []
+    },
+    {
+      "id": "R-S10",
+      "bindings": []
+    },
+    {
+      "id": "H-S10",
+      "bindings": []
+    },
+    {
+      "id": "W-S10",
+      "bindings": []
+    },
+    {
+      "id": "C-S10",
+      "bindings": []
+    },
+    {
+      "id": "B-S10",
+      "bindings": []
+    }
+  ]
+}
