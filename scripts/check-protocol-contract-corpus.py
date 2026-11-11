@@ -244,7 +244,8 @@ def bindings_of(data, auth, roots, errors) -> dict[str, list[dict]]:
                     error(errors, 'frozen', f'{cell}/{component}: requires full frozen type {expected}')
             if frozen is not None and (not isinstance(frozen, str) or frozen not in auth.declared or auth.declared[frozen][1]):
                 error(errors, 'frozen', f'{cell}: unresolved/private frozen definition {frozen!r}')
-            if theorem not in auth.declared or auth.declared[theorem][1]:
+            if (theorem not in auth.declared or auth.declared[theorem][1]
+                    or auth.declared[theorem][0] not in {'theorem', 'lemma'}):
                 error(errors, 'theorem', f'{cell}: unresolved/private theorem {theorem}')
             # Required-pin diagnostics deliberately precede unrelated inventory
             # noise. Header counts are diagnostic in the existing hash format.
@@ -426,9 +427,9 @@ def synthetic_bundle():
             frozen = FROZEN.get((cell, component))
             if frozen:
                 binding['frozen'] = frozen
-                declared[frozen] = ('Blanc/Synthetic.lean', False)
+                declared[frozen] = ('def', False)
             bindings.append(binding)
-            declared[theorem] = ('Blanc/Synthetic.lean', False)
+            declared[theorem] = ('theorem', False)
             sites[theorem] = [('Blanc/Synthetic.lean', 1, 1, 1)]
             roots[pin] = ('1', f'{ordinal:064x}')
         data['cells'].append({'id': cell, 'bindings': bindings})
@@ -477,7 +478,8 @@ def self_test() -> int:
     expect('missing pin', 'missing-pin', lambda a: a[3].pop(a[0]['cells'][0]['bindings'][0]['pin']))
     expect('exact key only', 'pin-identity', lambda a: a[0]['cells'][0]['bindings'][0].update(pin='thm:Blanc.Synthetic.Other'))
     expect('full frozen type', 'frozen', lambda a: entry(a, 'H-S9')['bindings'][0].update(frozen='Blanc.Corpus.Freeze.HistoryStorage.H_S9_joint'))
-    expect('private theorem', 'theorem', lambda a: a[4].declared.update({a[0]['cells'][0]['bindings'][0]['theorem']: ('Blanc/Synthetic.lean', True)}))
+    expect('definition as theorem', 'theorem', lambda a: a[4].declared.update({a[0]['cells'][0]['bindings'][0]['theorem']: ('def', False)}))
+    expect('private theorem', 'theorem', lambda a: a[4].declared.update({a[0]['cells'][0]['bindings'][0]['theorem']: ('theorem', True)}))
     expect('stale citation', 'citation', lambda a: a.__setitem__(1, a[1].replace('Synthetic.lean:1', 'Synthetic.lean:2', 1)))
     expect('missing sentence', 'sentence', lambda a: a.__setitem__(1, a[1].replace('[Synthetic structural sentence.](#d-s1)', '[PENDING](#d-s1)', 1)))
     expect('missing premises', 'premises', lambda a: a.__setitem__(1, a[1].replace('Synthetic premise text.', '', 1)))
