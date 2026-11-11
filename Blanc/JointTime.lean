@@ -105,4 +105,59 @@ theorem processPendingDeposits_genesis_time (ctx : Ctx) (pre post : BeaconState 
     · exact setDepositBalanceToConsume_genesis_time queued post _ h
   exact final_time.trans (queue_time.trans loop_time)
 
+/-- A successful checked millisecond clock has its exact natural-number value. -/
+theorem computeTimeAtSlotMs_nat
+    (cfg : Config) (originMs : U64) (slot : Slot) (timeMs : U64)
+    (h : computeTimeAtSlotMs cfg originMs slot = .ok timeMs) :
+    timeMs.toNat = originMs.toNat + slot.toNat * cfg.SLOT_DURATION_MS := by
+  unfold computeTimeAtSlotMs at h
+  obtain ⟨duration, hduration, h⟩ := bind_eq_ok_iff.mp h
+  obtain ⟨offset, hoffset, htime⟩ := bind_eq_ok_iff.mp h
+  rw [U64.toNat_add? htime, U64.toNat_mul? hoffset, U64.toNat_ofNat? hduration]
+
+/-- Whole-second slots lie on the grid of the actual converted genesis origin. -/
+theorem computeTimeAtSlotOf_grid
+    (cfg : Config) (genesis : U64) (slot : Slot) (time : U64)
+    (whole : cfg.SLOT_DURATION_MS % 1000 = 0)
+    (h : computeTimeAtSlotOf cfg genesis slot = .ok time) :
+    ∃ originMs : U64, secondsToMilliseconds genesis = .ok originMs ∧
+      time.toNat = originMs.toNat / 1000 +
+        (cfg.SLOT_DURATION_MS / 1000) * slot.toNat := by
+  unfold computeTimeAtSlotOf at h
+  obtain ⟨originMs, horigin, h⟩ := bind_eq_ok_iff.mp h
+  obtain ⟨timeMs, htimeMs, h⟩ := bind_eq_ok_iff.mp h
+  unfold millisecondsToSeconds at h
+  obtain ⟨thousand, hthousand, hdiv⟩ := bind_eq_ok_iff.mp h
+  refine ⟨originMs, horigin, ?_⟩
+  have time_nat := U64.toNat_div? hdiv
+  rw [U64.toNat_ofNat? hthousand, computeTimeAtSlotMs_nat cfg originMs slot timeMs htimeMs] at time_nat
+  have duration_grid : cfg.SLOT_DURATION_MS / 1000 * 1000 = cfg.SLOT_DURATION_MS := by
+    have := Nat.mod_add_div cfg.SLOT_DURATION_MS 1000
+    omega
+  have offset_grid :
+      cfg.SLOT_DURATION_MS / 1000 * slot.toNat * 1000 =
+        slot.toNat * cfg.SLOT_DURATION_MS := by
+    calc
+      _ = (cfg.SLOT_DURATION_MS / 1000 * 1000) * slot.toNat := by ac_rfl
+      _ = cfg.SLOT_DURATION_MS * slot.toNat := by rw [duration_grid]
+      _ = _ := Nat.mul_comm _ _
+  rw [← offset_grid, Nat.add_mul_div_right _ _ (by decide)] at time_nat
+  exact time_nat
+
+/-- Two successful clocks with the same genesis conversion cancel that origin. -/
+theorem successful_clock_cancel
+    (cfg : Config) (genesis : U64) (slot0 slot1 : Slot) (time0 time1 : U64)
+    (whole : cfg.SLOT_DURATION_MS % 1000 = 0)
+    (h0 : computeTimeAtSlotOf cfg genesis slot0 = .ok time0)
+    (h1 : computeTimeAtSlotOf cfg genesis slot1 = .ok time1) :
+    time0.toNat + (cfg.SLOT_DURATION_MS / 1000) * slot1.toNat =
+      time1.toNat + (cfg.SLOT_DURATION_MS / 1000) * slot0.toNat := by
+  obtain ⟨origin0, h0origin, h0time⟩ := computeTimeAtSlotOf_grid cfg genesis slot0 time0 whole h0
+  obtain ⟨origin1, h1origin, h1time⟩ := computeTimeAtSlotOf_grid cfg genesis slot1 time1 whole h1
+  have same : origin0 = origin1 := by
+    simpa only [Except.ok.injEq] using h0origin.symm.trans h1origin
+  rw [← same] at h1time
+  omega
+
+
 end Blanc
