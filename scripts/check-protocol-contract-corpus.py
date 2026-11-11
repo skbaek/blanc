@@ -41,7 +41,7 @@ FRONT = 'docs/DEPLOYED_BYTECODE_CLAIM_MAP.md'
 PIN_DIRECTORY = 'scripts/claim-pin-hash'
 FAMILIES = ('D', 'R', 'H', 'W', 'C', 'B')
 ROWS = tuple(f'S{i}' for i in range(1, 11))
-# Goal protocol-contract-corpus-v1 revision 4, sections 3, 13 and 14.
+# Goal protocol-contract-corpus-v1 revision 6, sections 3 and 13–16.
 NA = frozenset({'D-S5', 'R-S5', 'H-S5'})
 CELLS = tuple(f'{family}-{row}' for row in ROWS for family in FAMILIES
               if f'{family}-{row}' not in NA)
@@ -189,8 +189,8 @@ def citation_authority(root: Path):
 def bindings_of(data, auth, roots, errors) -> dict[str, list[dict]]:
     if not keys(data, {'schema', 'goal_revision', 'cells'}, set(), errors, DATA):
         return {}
-    if type(data['schema']) is not int or data['schema'] != 1 or type(data['goal_revision']) is not int or data['goal_revision'] != 4:
-        error(errors, 'schema', 'expected binding schema 1, goal_revision 4')
+    if type(data['schema']) is not int or data['schema'] != 1 or type(data['goal_revision']) is not int or data['goal_revision'] != 6:
+        error(errors, 'schema', 'expected binding schema 1, goal_revision 6')
     if not isinstance(data['cells'], list):
         error(errors, 'schema', 'cells must be a list')
         return {}
@@ -413,7 +413,7 @@ def render_page(data, *, draft: bool = False) -> str:
 
 def synthetic_bundle():
     """All invented names/digests stay in this explicitly synthetic self-test."""
-    data = {'schema': 1, 'goal_revision': 4, 'cells': []}
+    data = {'schema': 1, 'goal_revision': 6, 'cells': []}
     roots, declared, sites = {}, {}, {}
     ordinal = 0
     for cell in CELLS:
@@ -452,6 +452,7 @@ def self_test() -> int:
 
     if check_bundle(*base):
         failures.append('positive synthetic structure rejected')
+    expect('stale goal revision', 'schema', lambda a: a[0].update(goal_revision=5))
     expect('missing cell', 'missing-cell', lambda a: a[0]['cells'].pop(0))
     expect('unknown cell', 'cell-id', lambda a: a[0]['cells'].append({'id': 'X-S1', 'bindings': []}))
     expect('duplicate cell', 'duplicate-cell', lambda a: a[0]['cells'].append(deepcopy(a[0]['cells'][0])))
