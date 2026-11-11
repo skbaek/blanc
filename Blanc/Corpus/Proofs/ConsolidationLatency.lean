@@ -15,6 +15,22 @@ open Blanc.Lift.BuilderRequest (QueueState queueBase)
 private theorem queueAtRequests_eq (b : KeptBlock) :
     Lift.RequestQueue.Occurrence.queueAtRequests reading linked b = queueAtRequests b := rfl
 
+private theorem occurrence_blockEmissions (b : KeptBlock) :
+    Lift.RequestQueue.Occurrence.blockEmissions reading linked b = Blanc.Composition.ConsolidationRequestPublic.records116 (Blanc.Composition.ConsolidationRequestPublic.blockConsolidations b) := by
+  rw [Blanc.Composition.ConsolidationRequestPublic.blockConsolidations_eq]
+  rfl
+
+private theorem occurrence_submissions (blocks : List KeptBlock) :
+    Lift.RequestQueue.Occurrence.submissions linked blocks = Blanc.Composition.ConsolidationRequestPublic.submissions blocks := (Blanc.Composition.ConsolidationRequestPublic.submissions_eq blocks).symm
+
+private theorem occurrence_emissions (blocks : List KeptBlock) :
+    Lift.RequestQueue.Occurrence.emissions reading linked blocks = Blanc.Composition.ConsolidationRequestPublic.emissions blocks := by
+  unfold Lift.RequestQueue.Occurrence.emissions Blanc.Composition.ConsolidationRequestPublic.emissions
+  congr 1
+  funext b
+  exact occurrence_blockEmissions b
+
+
 /-- **C-S8.** Every record at a request boundary is published by its exact quotient block,
 at its exact remainder slot, with the frozen prefix and submission-occurrence identities. -/
 theorem c_s8 : C_S8 := by

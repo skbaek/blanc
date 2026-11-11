@@ -1,4 +1,4 @@
-import Blanc.Composition.ConsolidationRequestPublicHistory
+import Blanc.Lift.ConsolidationRequest.Chain
 import Blanc.Lift.RequestQueue.Occurrence
 
 /-! # EIP-7251 adapters for occurrence-indexed queue latency -/
@@ -6,23 +6,27 @@ import Blanc.Lift.RequestQueue.Occurrence
 namespace Blanc.Lift.ConsolidationRequest
 
 open Jaune
-open BuilderRequest (QueueState Represents)
+open BuilderRequest (QueueState Represents queueSlot)
 open RequestQueue
 
 /-- Read the four stored words as the public 116-byte consolidation record. -/
 def reading : RequestQueue.Occurrence.Reading queue where
-  read := Blanc.Composition.ConsolidationRequestPublic.queueRecord
+  read := fun rd i =>
+    (rd (queueSlot 4 i 0)).toAdr.toBytes ++ (rd (queueSlot 4 i 1)).toBytes ++
+      (rd (queueSlot 4 i 2)).toBytes ++ (rd (queueSlot 4 i 3)).toBytes
   size := 116
   size_pos := by decide
-  out_length := Blanc.Composition.ConsolidationRequestPublic.record_out_length
+  out_length := by
+    intro r
+    simp only [Record.out, Adr.toBytes, List.length_append, UInt32.length_toBytes,
+      B128.length_toBytes, r.data_length]
   read_eq := by
     intro rd st rep i hi
     have live := rep.live i hi
-    have w0 : rd (4 + 4 * (st.head + i)).toB256 = st.queue[i].word 0 := live 0 (by decide)
-    have w1 : rd (4 + 4 * (st.head + i) + 1).toB256 = st.queue[i].word 1 := live 1 (by decide)
-    have w2 : rd (4 + 4 * (st.head + i) + 2).toB256 = st.queue[i].word 2 := live 2 (by decide)
-    have w3 : rd (4 + 4 * (st.head + i) + 3).toB256 = st.queue[i].word 3 := live 3 (by decide)
-    unfold Blanc.Composition.ConsolidationRequestPublic.queueRecord
+    have w0 : rd (queueSlot 4 (st.head + i) 0) = st.queue[i].word 0 := live 0 (by decide)
+    have w1 : rd (queueSlot 4 (st.head + i) 1) = st.queue[i].word 1 := live 1 (by decide)
+    have w2 : rd (queueSlot 4 (st.head + i) 2) = st.queue[i].word 2 := live 2 (by decide)
+    have w3 : rd (queueSlot 4 (st.head + i) 3) = st.queue[i].word 3 := live 3 (by decide)
     rw [w0, w1, w2, w3]
     change (st.queue[i].source.toB256).toAdr.toBytes ++ _ ++ _ ++ _ = st.queue[i].out
     rw [toAdr_toB256, List.append_assoc, List.append_assoc, ← List.append_assoc (Record.word _ 1).toBytes]
@@ -71,20 +75,5 @@ theorem drainLinked : RequestQueue.Occurrence.DrainLinked linked where
     obtain ⟨-, rfl⟩ := Prod.mk.inj (Except.ok.inj (run.symm.trans run'))
     rw [ret]
     exact drained_records _
-
-theorem occurrence_blockEmissions (b : KeptBlock) :
-    RequestQueue.Occurrence.blockEmissions reading linked b = Blanc.Composition.ConsolidationRequestPublic.records116 (Blanc.Composition.ConsolidationRequestPublic.blockConsolidations b) := by
-  rw [Blanc.Composition.ConsolidationRequestPublic.blockConsolidations_eq]
-  rfl
-
-theorem occurrence_submissions (blocks : List KeptBlock) :
-    RequestQueue.Occurrence.submissions linked blocks = Blanc.Composition.ConsolidationRequestPublic.submissions blocks := (Blanc.Composition.ConsolidationRequestPublic.submissions_eq blocks).symm
-
-theorem occurrence_emissions (blocks : List KeptBlock) :
-    RequestQueue.Occurrence.emissions reading linked blocks = Blanc.Composition.ConsolidationRequestPublic.emissions blocks := by
-  unfold RequestQueue.Occurrence.emissions Blanc.Composition.ConsolidationRequestPublic.emissions
-  congr 1
-  funext b
-  exact occurrence_blockEmissions b
 
 end Blanc.Lift.ConsolidationRequest
