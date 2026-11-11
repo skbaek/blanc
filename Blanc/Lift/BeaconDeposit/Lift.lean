@@ -30,6 +30,10 @@ theorem cert_execs_staticcall :
     rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   all_goals decide +kernel
 
+/-- The same literal deployed certificate has no SELFDESTRUCT terminal. -/
+theorem cert_noSelfdestruct : cert.noSelfdestruct = true := by
+  decide +kernel
+
 /-- Successful actual bytecode execution, retaining its original StepIn provenance on every rule set. -/
 theorem lift_sound_in_any_rules {sevm : Sevm} {pre post : Devm}
     (hcode : sevm.code = code) (executed : Exec 0 sevm pre (.ok post)) :
