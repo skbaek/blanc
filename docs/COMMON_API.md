@@ -6425,7 +6425,13 @@ plain excess arm in naturals without wrap.
 `SysCall.spec` in `Blanc/Lift/RequestSystem/Call.lean` takes it through the checked system call, with
 `sysState` as the exact post state and a regular-gas bound (`RegularGasWithin`: regular gas, state gas
 excluded); `sysState_getCode` says no
-account's code moves. `SysOutput` and `runRequestContracts_step` in `Blanc/Lift/RequestSystem/Output.lean`
+account's code moves. The pure whole-storage transformer is in
+[`Blanc/Lift/RequestSystem/Storage.lean`](../Blanc/Lift/RequestSystem/Storage.lean):
+`drainStor` and `sysState_getStor` retain their legacy namespace. For the WORD drain count `c`,
+the transformer resets head and tail exactly when `head + c = tail`, otherwise advances head;
+it then writes `shape.next` of the original excess/count to slot 0 and zero to slot 1.
+All arithmetic is WORD arithmetic; every other slot, including stale record storage, is unchanged.
+`SysOutput` and `runRequestContracts_step` in `Blanc/Lift/RequestSystem/Output.lean`
 read the return window and one request-phase step. A record body's segments (`seg_start`, `seg_source`,
 `seg_word`, `seg_last`, `seg_byte`) are `Blanc/Lift/RequestSystem/BodySegs.lean`. The EIP-7002 and EIP-7251
 excess arm (no latch; the inhibitor counts as zero) is `plainShape` in

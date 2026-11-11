@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-577 shared modules, 549 with a module summary.
+578 shared modules, 550 with a module summary.
 
 ## `Blanc/`
 
@@ -594,6 +594,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`PathInv.lean`](../Blanc/Lift/RequestSystem/PathInv.lean) | **A request contract's system path, inverted.** `Path.lean` walks the system path forward from storage it is given. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`PlainExcess.lean`](../Blanc/Lift/RequestSystem/PlainExcess.lean) | **The excess arm of the EIP-7002 and EIP-7251 runtimes.** These runtimes have no calldata latch. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`PrivilegedInv.lean`](../Blanc/Lift/RequestSystem/PrivilegedInv.lean) | A successful request-system prefix, independent of the store gas backend. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+| [`Storage.lean`](../Blanc/Lift/RequestSystem/Storage.lean) | **Whole-storage extraction for request system calls.** The pure storage transformer and its equality with the system call post-state retain their legacy names and namespace. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Stores.lean`](../Blanc/Lift/RequestSystem/Stores.lean) | **A fork's stores, as a request contract's system path takes them.** The system path of a request contract (`Blanc/Lift/RequestSystem/Path.lean`) reads and writes storage, and only its writes differ between the covered forks and Amsterdam: its reads are `rx_sloadA` on any fork … | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 
 ## `Blanc/Lift/StableSwapNewton/`

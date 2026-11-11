@@ -568,6 +568,7 @@ SHARED += ["Lift.AmsterdamWalk", "Lift.ExecCut", "Lift.TransactionAmsterdam", "L
 SHARED += ["Lift.SystemCaller", "MemoryWindows"]
 # The system path all four Amsterdam request contracts share (blanc-eip8282-builder-requests-v1 O9).
 SHARED += ["Lift.RequestSystem.Dispatch", "Lift.RequestSystem.Path", "Lift.RequestSystem.Call",
+           "Lift.RequestSystem.Storage",
            "Lift.RequestSystem.Output", "Lift.RequestSystem.BodySegs", "Lift.RequestSystem.Access",
            "Lift.RequestSystem.PlainExcess", "Lift.SystemExecution.ConsolidationRequest.AmsterdamSystem",
            "Lift.RequestSystem.Effects"]

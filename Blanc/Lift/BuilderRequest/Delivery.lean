@@ -1,3 +1,4 @@
+import Blanc.Lift.RequestSystem.Storage
 import Blanc.Lift.BuilderRequest.Latch
 import Blanc.Lift.BuilderRequest.UserFrameAmsterdam
 import Blanc.RequestFeeWordDomain
@@ -370,22 +371,11 @@ theorem load_replay (cap : Nat) (target : B256) (st : QueueState Record) (es : L
 
 /-! ## A builder contract, as the sequence needs it -/
 
-/-- The storage a builder system call on empty calldata leaves, as a function of the storage before it. -/
-def drainStor (p : SysShape) (s : Stor) : Stor :=
-  let c := drainCount p.cap.word (s.get 2) (s.get 3)
-  let s1 := if s.get 2 + c = s.get 3 then (s.set 2 0).set 3 0 else s.set 2 (s.get 2 + c)
-  (s1.set 0 (p.next (s.get 0) (s.get 1))).set 1 0
-
 /-- The storage a builder system call on nonempty calldata leaves. -/
 def latchStor (p : SysShape) (s : Stor) : Stor :=
   let c := drainCount p.cap.word (s.get 2) (s.get 3)
   let s1 := if s.get 2 + c = s.get 3 then (s.set 2 0).set 3 0 else s.set 2 (s.get 2 + c)
   (s1.set 0 B256.max).set 1 0
-
-theorem sysState_getStor (p : SysShape) (σ : State) (a : Adr) :
-    (sysState p σ a).getStor a = drainStor p (σ.getStor a) := by
-  simp only [sysState, drainStor]
-  split <;> simp only [State.getStor_setStorVal_self]
 
 theorem latchState_getStor (p : SysShape) (σ : State) (a : Adr) :
     (latchState p σ a).getStor a = latchStor p (σ.getStor a) := by

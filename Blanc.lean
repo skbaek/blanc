@@ -636,6 +636,7 @@ import Blanc.Lift.RequestSystem.Path
 import Blanc.Lift.RequestSystem.PathInv
 import Blanc.Lift.RequestSystem.PlainExcess
 import Blanc.Lift.RequestSystem.PrivilegedInv
+import Blanc.Lift.RequestSystem.Storage
 import Blanc.Lift.RequestSystem.Stores
 import Blanc.Lift.RetainedTargetCompleteness
 import Blanc.Lift.ReturnDataBound
