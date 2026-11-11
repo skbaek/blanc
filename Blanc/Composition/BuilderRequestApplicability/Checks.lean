@@ -56,4 +56,34 @@ theorem depositLatchExec {s : Sevm} {b : Devm} {G : Nat}
     BuilderRequest.Deposit.sysPath.jumps code BuilderRequest.Deposit.sysPath.noExec
     ⟨_, BuilderRequest.Deposit.sysPath.root, run⟩
 
+/-- A positive registered system-message run, from any Amsterdam environment.
+The original certificate, gas bound and readiness laws discharge every run premise. -/
+theorem positiveDepositLatch (benv : Benv) (fork : benv.stat.fork = .amsterdam) :
+    let msg := systemCallMsg benv BuilderRequest.Deposit.Creation.address
+      BuilderRequest.Deposit.code [1]
+    let s := initSevm msg
+    let b := systemCallBase msg
+    Nonempty (Exec 0 s b (.ok (BuilderRequest.latchPost BuilderRequest.Deposit.sysPath s b
+      (systemTransactionGas - BuilderRequest.latchCost BuilderRequest.Deposit.sysPath s b)))) := by
+  dsimp only
+  let s := initSevm (systemCallMsg benv BuilderRequest.Deposit.Creation.address
+    BuilderRequest.Deposit.code [1])
+  let b := systemCallBase (systemCallMsg benv BuilderRequest.Deposit.Creation.address
+    BuilderRequest.Deposit.code [1])
+  have bound := BuilderRequest.latchCost_le BuilderRequest.Deposit.sysCall.memory s b
+  have room := BuilderRequest.Deposit.sysCall.room
+  have cap := BuilderRequest.Deposit.sysCall.bound_le
+  have run := depositLatchExec (s := s) (b := b)
+    (G := systemTransactionGas - BuilderRequest.latchCost BuilderRequest.Deposit.sysPath s b)
+    rfl fork rfl rfl (by change (1 : B256) ≠ 0; decide) (SysPath.ready_base (k := BuilderRequest.Deposit.sysPath) (benv := benv)
+      (target := BuilderRequest.Deposit.Creation.address) (data := [1]) fork) (by omega)
+  rw [show systemTransactionGas - BuilderRequest.latchCost BuilderRequest.Deposit.sysPath s b +
+    BuilderRequest.latchCost BuilderRequest.Deposit.sysPath s b = systemTransactionGas by omega,
+    systemCallBase_St] at run
+  exact run
+
+/-- The supported finite fields accept the actual canonical deployment, with BLS enabled. -/
+theorem canonicalCheckpoint : Checkpoint true BuilderRequest.Deposit.code BuilderRequest.Exit.code
+    Stor.empty BuilderRequest.Exit.deployedStorage := ⟨rfl, rfl, rfl, rfl, rfl⟩
+
 end Blanc.Composition.BuilderRequestApplicability.Checks
