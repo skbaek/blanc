@@ -373,12 +373,4 @@ theorem ctor_run_meta {sevm : Sevm} (hmuir : sevm.benvStat.rules = muirGlacierRu
   rw [t_0014_c0_eq]
   exact run
 
-/-- Compatibility projection of the constructor run without metadata. -/
-theorem ctor_run {sevm : Sevm} (hmuir : sevm.benvStat.rules = muirGlacierRules)
-    (hdepth : sevm.depth ≠ 0) (hstatic : sevm.isStatic = false) {b : Devm} (st : CtorStart sevm b)
-    {G : Nat} (hG : need 0 ≤ G) (hGb : G < 2 ^ 64) :
-    ∃ post, SProg.RunExact prog sevm (St b [] Mem.empty (G + 45)) post ∧ Done sevm post := by
-  obtain ⟨post, run, done, -⟩ := ctor_run_meta hmuir hdepth hstatic st hG hGb
-  exact ⟨post, run, done⟩
-
 end Blanc.Lift.BeaconDeposit.Creation.Historical

@@ -6,7 +6,7 @@ import Blanc.Lift.InvWalkOps
 import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.BeaconDeposit.LittleEndian
 import Blanc.Lift.WalkInvKit
-import Blanc.Lift.InvWalkOpsExtra
+import Blanc.Lift.WalkKitSupport
 
 namespace Blanc.Lift.BeaconDeposit
 

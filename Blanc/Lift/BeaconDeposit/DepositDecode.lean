@@ -3,7 +3,7 @@ import Blanc.Lift.BeaconDeposit.DepositArgs
 import Blanc.Lift.BeaconDeposit.CountView
 import Blanc.Lift.ExactWalkOps
 import Jaune.WordFacts
-import Blanc.MachineDataFactsExtra
+import Blanc.TransactionForwardSupport
 
 namespace Blanc.Lift.BeaconDeposit
 

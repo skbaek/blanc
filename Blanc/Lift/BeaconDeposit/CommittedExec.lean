@@ -5,8 +5,7 @@ import Blanc.ExecutionDirectCode
 import Blanc.ExecutionNoninterference
 import Blanc.Lift.StaticOnlyFrames
 import Blanc.StaticStorage
-import Blanc.Lift.StaticOnlyFramesExtra
-import Blanc.Lift.SoundExtra
+import Blanc.Lift.WalkKitSupport
 
 namespace Blanc.Lift.BeaconDeposit
 

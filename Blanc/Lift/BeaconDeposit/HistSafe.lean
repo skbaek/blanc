@@ -10,7 +10,7 @@ import Blanc.Lift.BeaconDeposit.HistSafeInsert
 import Blanc.Lift.BeaconDeposit.HistSafePubkeyRoot
 import Blanc.Lift.BeaconDeposit.HistSafeNode
 import Blanc.Lift.BeaconDeposit.HistSafeSignatureRoot
-import Blanc.Lift.HistAccessWalkFactsExtra
+import Blanc.Lift.WalkKitSupport
 
 /-!
 # The deployed runtime refines the model over a historical frame (B1, safety)

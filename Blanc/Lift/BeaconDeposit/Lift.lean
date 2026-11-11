@@ -1,7 +1,7 @@
 import Blanc.Lift.Sound
 import Blanc.Lift.BeaconDeposit.Check
 import Blanc.Lift.BeaconDeposit.Prog
-import Blanc.Lift.SoundExtra
+import Blanc.Lift.WalkKitSupport
 
 /-!
 # Every successful Jaune execution of the deployed beacon deposit runtime is a synthetic run

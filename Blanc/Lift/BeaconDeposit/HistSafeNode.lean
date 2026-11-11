@@ -5,7 +5,7 @@ import Blanc.Lift.WalkInvKit
 /-!
 # Safety segment B5 over a historical frame: the deposit data node, inverted
 
-`safe_dataNode` and its three SHA sites over `ShaReadyRules`: each site by `ric_copy_shaH_of_delegation` from
+The deposit data node and its three SHA sites over `ShaReadyRules`: each site by `ric_copy_shaH_of_delegation` from
 `rules.stateGas = none`.
 -/
 

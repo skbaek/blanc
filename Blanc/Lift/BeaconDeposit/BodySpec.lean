@@ -26,7 +26,7 @@ This module fixes what the segment statements share:
   separate premise, since at depth `0` the call fails; the segment inversions (`Safe*`) need
   no depth premise.
 * the insertion loop's model quantities (`insertDepth`, `insertNode`) and the body's gas
-  (`deadGas`, `deadRun`, `bodyGas`).
+  (`deadGas`, `deadRun`, `bodyGasOf`).
 
 The segment boundaries, their stacks, memory sizes, free pointers and gas were read off a
 concrete-and-symbolic simulation of the deployed bytes on the success path
@@ -117,17 +117,6 @@ def deadRun (tgt : Adr) (keys : KeySet) (h : Nat) : Nat → Nat
   | 0 => 0
   | m + 1 => deadGas h + sloadCostOfKeys tgt keys (solBranchSlot h) + deadRun tgt keys (h + 1) m
 
-/-- The storing (live) iteration's `SSTORE` of `node` at `solBranchSlot n`, charged against the
-pre-body key set and storage. -/
-def liveStoreCost (sevm : Sevm) (keys : KeySet) (stor : Stor) (n : Nat) (node : B256) : Nat :=
-  (if (⟨sevm.currentTarget, solBranchSlot n⟩ : Adr × B256) ∈ keys then 0 else gasColdSload) +
-    sstoreValueCost (getOrigStorVal sevm sevm.currentTarget (solBranchSlot n))
-      (stor.get (solBranchSlot n)) node
-
-/-- The count's `SSTORE` (the key is warm by then). -/
-def countStoreCost (sevm : Sevm) (w : B256) : Nat :=
-  sstoreValueCost (getOrigStorVal sevm sevm.currentTarget solCountSlot) w (1 + w)
-
 /-- The count word the body reads. -/
 def bodyCount (sevm : Sevm) (b : Devm) : B256 :=
   (Devm.getStor b sevm.currentTarget).get solCountSlot
@@ -142,22 +131,6 @@ def bodyNode (sevm : Sevm) (b : Devm) : B256 :=
   insertNode Bytes.sha256 (solAcc (Devm.getStor b sevm.currentTarget)).branch (bodyDepth sevm b)
     (argRoot sevm)
 
-/-- The storing `SSTORE`'s charge. -/
-def bodyLiveCost (sevm : Sevm) (b : Devm) : Nat :=
-  liveStoreCost sevm b.accessedStorageKeys (Devm.getStor b sevm.currentTarget) (bodyDepth sevm b)
-    (bodyNode sevm b)
-
-/-- The insertion loop's gas from its head: the dead iterations and the storing one (143 and
-its `SSTORE`). -/
-def bodyInsertGas (sevm : Sevm) (b : Devm) : Nat :=
-  deadRun sevm.currentTarget b.accessedStorageKeys 0 (bodyDepth sevm b) + (143 + bodyLiveCost sevm b)
-
-/-- **The body's gas** from `b`: 14551 fixed (segments 1882 + 1104 + 6205 + 2526 + 2553 + 281),
-the first count `SLOAD` (warm or cold), the count `SSTORE`, and the insertion loop. -/
-def bodyGas (sevm : Sevm) (b : Devm) : Nat :=
-  14551 + sloadCostOfKeys sevm.currentTarget b.accessedStorageKeys solCountSlot +
-    countStoreCost sevm (bodyCount sevm b) + bodyInsertGas sevm b
-
 /-- The storage the body leaves at the contract: the count incremented, the node stored. -/
 def bodyStor (sevm : Sevm) (b : Devm) : Stor :=
   ((Devm.getStor b sevm.currentTarget).set solCountSlot (1 + bodyCount sevm b)).set
@@ -168,36 +141,21 @@ def bodyStor (sevm : Sevm) (b : Devm) : Stor :=
 Jaune prices `SSTORE` from the machine read `Devm.getOrigStorVal`, which is `0`
 at accounts created in this transaction and the transaction-start snapshot
 otherwise. The `...Of` variants below price the body's two stores from a
-supplied original word, with `rfl` links back to the snapshot-priced
-definitions above; the P2 liveness headers supply the entry base's machine
+supplied original word; the P2 liveness headers supply the entry base's machine
 reads (Option A, decision blanc-repin-os-optionA-delegation-20261012). -/
 
 /-! ## `...Of` cost variants priced from a supplied original word -/
 
 /-- The storing (live) iteration's `SSTORE`, priced from a supplied original
-word (see `liveStoreCost`). -/
+word. -/
 def liveStoreCostOf (orig : B256) (sevm : Sevm) (keys : KeySet) (stor : Stor)
     (n : Nat) (node : B256) : Nat :=
   (if (⟨sevm.currentTarget, solBranchSlot n⟩ : Adr × B256) ∈ keys then 0 else gasColdSload) +
     sstoreValueCost orig (stor.get (solBranchSlot n)) node
 
-/-- `liveStoreCost` is the `liveStoreCostOf` at the static snapshot read. -/
-theorem liveStoreCost_eq_of (sevm : Sevm) (keys : KeySet) (stor : Stor)
-    (n : Nat) (node : B256) :
-    liveStoreCost sevm keys stor n node =
-      liveStoreCostOf (getOrigStorVal sevm sevm.currentTarget (solBranchSlot n))
-        sevm keys stor n node := rfl
-
-/-- The count's `SSTORE`, priced from a supplied original word
-(see `countStoreCost`). -/
+/-- The count's `SSTORE`, priced from a supplied original word. -/
 def countStoreCostOf (orig : B256) (w : B256) : Nat :=
   sstoreValueCost orig w (1 + w)
-
-/-- `countStoreCost` is the `countStoreCostOf` at the static snapshot read. -/
-theorem countStoreCost_eq_of (sevm : Sevm) (w : B256) :
-    countStoreCost sevm w =
-      countStoreCostOf (getOrigStorVal sevm sevm.currentTarget solCountSlot)
-        w := rfl
 
 /-- `liveStoreCostOf` depends only on the stored cell. -/
 theorem liveStoreCostOf_congr {orig : B256} {sevm : Sevm} {keys : KeySet}
@@ -209,54 +167,23 @@ theorem liveStoreCostOf_congr {orig : B256} {sevm : Sevm} {keys : KeySet}
 
 /-! ## Body-level `...Of` costs -/
 
-/-- The storing `SSTORE`'s charge (`bodyLiveCost`), priced from a supplied original word. -/
+/-- The storing `SSTORE`'s charge, priced from a supplied original word. -/
 def bodyLiveCostOf (orig : B256) (sevm : Sevm) (b : Devm) : Nat :=
   liveStoreCostOf orig sevm b.accessedStorageKeys (Devm.getStor b sevm.currentTarget)
     (bodyDepth sevm b) (bodyNode sevm b)
 
-/-- The insertion loop's gas (`bodyInsertGas`), its `SSTORE` priced from a supplied original
-word. -/
+/-- The insertion loop's gas, its `SSTORE` priced from a supplied original word. -/
 def bodyInsertGasOf (orig : B256) (sevm : Sevm) (b : Devm) : Nat :=
   deadRun sevm.currentTarget b.accessedStorageKeys 0 (bodyDepth sevm b) +
     (143 + bodyLiveCostOf orig sevm b)
 
-/-- The body's gas (`bodyGas`), the storing `SSTORE` priced from `origLive` and the count
+/-- The body's gas, the storing `SSTORE` priced from `origLive` and the count
 `SSTORE` from `origCount`. -/
 def bodyGasOf (origLive origCount : B256) (sevm : Sevm) (b : Devm) : Nat :=
   14551 + sloadCostOfKeys sevm.currentTarget b.accessedStorageKeys solCountSlot +
     countStoreCostOf origCount (bodyCount sevm b) + bodyInsertGasOf origLive sevm b
 
-theorem bodyLiveCost_eq_of (sevm : Sevm) (b : Devm) :
-    bodyLiveCost sevm b =
-      bodyLiveCostOf (getOrigStorVal sevm sevm.currentTarget (solBranchSlot (bodyDepth sevm b)))
-        sevm b := rfl
-
-theorem bodyInsertGas_eq_of (sevm : Sevm) (b : Devm) :
-    bodyInsertGas sevm b =
-      bodyInsertGasOf
-        (getOrigStorVal sevm sevm.currentTarget (solBranchSlot (bodyDepth sevm b))) sevm b := rfl
-
-theorem bodyGas_eq_of (sevm : Sevm) (b : Devm) :
-    bodyGas sevm b =
-      bodyGasOf (getOrigStorVal sevm sevm.currentTarget (solBranchSlot (bodyDepth sevm b)))
-        (getOrigStorVal sevm sevm.currentTarget solCountSlot) sevm b := rfl
-
 /-! ## Machine-read connection -/
-
-/-- `sstoreCost` is the `liveStoreCostOf` at the machine's own storage and key
-set, with the machine original read. -/
-theorem sstoreCost_eq_liveStoreCostOf_self {sevm : Sevm} {b : Devm}
-    {n : Nat} {nd : B256} :
-    sstoreCost sevm b (solBranchSlot n) nd =
-      liveStoreCostOf (b.getOrigStorVal sevm sevm.currentTarget (solBranchSlot n))
-        sevm b.accessedStorageKeys (Devm.getStor b sevm.currentTarget) n nd := by
-  unfold sstoreCost liveStoreCostOf
-  show (if (⟨sevm.currentTarget, solBranchSlot n⟩ : Adr × B256) ∈
-      b.accessedStorageKeys then 0 else gasColdSload) +
-      sstoreValueCost (b.getOrigStorVal sevm sevm.currentTarget (solBranchSlot n))
-        (b.getStorVal sevm.currentTarget (solBranchSlot n)) nd = _
-  show _ = _ + sstoreValueCost _ ((Devm.getStor b sevm.currentTarget).get _) _
-  rfl
 
 /-- `sstoreCost` for the count bump is the `countStoreCostOf` at the machine
 original read, at a warm count key (the body `SLOAD`s the count first). -/

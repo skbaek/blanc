@@ -2,14 +2,13 @@ import Blanc.Lift.BeaconDeposit.BodyShaKit
 import Blanc.Lift.InvWalk
 import Blanc.Lift.BeaconDeposit.HistSafeWorld
 import Blanc.Lift.WalkInvKit
-import Blanc.Lift.InvWalkExtra
-import Blanc.Lift.HistAccessWalkFactsExtra
+import Blanc.Lift.WalkKitSupport
 
 /-!
 # Safety segments L1/L2 over a historical frame: the insertion loop's two passes, inverted
 
-`safe_insertDead` over `ShaReadyRules` (its `SLOAD` by `ri_sloadH`, its packed SHA site by
-`ric_pack_shaH_of_delegation`) and `safe_insertLive` with its `SSTORE` by `ri_sstoreH`; the successors are
+The dead pass over `ShaReadyRules` (its `SLOAD` by `ri_sloadH`, its packed SHA site by
+`ric_pack_shaH_of_delegation`) and the storing pass with its `SSTORE` by `ri_sstoreH`; the successors are
 `afterSloadH`/`afterSstoreH`.
 -/
 

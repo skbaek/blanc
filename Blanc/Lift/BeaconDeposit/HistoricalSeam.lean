@@ -2,7 +2,7 @@ import Blanc.Lift.BeaconDeposit.HistBeaconEnv
 import Blanc.Lift.BeaconDeposit.BeaconEnv
 import Blanc.ExecutionHistoryInSystemOpenings
 import Blanc.ExecutionHistoryInCreateAvoid
-import Blanc.ExecutionHistoryInSystemOpeningsExtra
+import Blanc.ExecutionHistorySupport
 
 /-! Exact historical/modern Beacon seams. The generic join is independent of
 concrete anchor identities, so an empty historical prefix recovers the modern

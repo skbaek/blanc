@@ -1,7 +1,7 @@
 import Blanc.Lift.BeaconDeposit.BodySpec
 import Blanc.Lift.HistAccessWalkFacts
 import Blanc.Lift.HistShaWalk
-import Blanc.Lift.HistAccessWalkFactsExtra
+import Blanc.Lift.WalkKitSupport
 
 /-!
 # The Beacon body's world frames over a historical frame

@@ -40,7 +40,6 @@ theorem muir_gas_sufficient (sender : Adr) :
   have h := muir_allocation_bounds sender
   exact ⟨le_trans (by decide) h.1, lt_of_le_of_lt h.2.1 (by decide)⟩
 
-
 end Blanc.Lift.BeaconDeposit.Creation.HistoricalTx
 
 namespace Blanc.Lift.BeaconDeposit.Creation
@@ -128,18 +127,5 @@ theorem beacon_create_muir_meta (msg : Msg) (hvalue : msg.value = 0) (hcodeAddre
   refine ⟨post, hpost, hcodePost.trans hwin, ?_, herror, hrefund, hlogs, hdeletions⟩
   rw [hstorPost, Acct.clearIfEmpty_stor, ite_eq_right (fun hE => hcode_ne hE.1)]
   exact solInv_of_ctorStor hstor
-
-/-- Compatibility projection of historical creation without settlement metadata. -/
-theorem beacon_create_muir (msg : Msg) (hvalue : msg.value = 0) (hcodeAddress : msg.codeAddress = .none)
-    (hcode : msg.code = code) (hgas : Historical.need 0 + 45 ≤ msg.gas) (hgasb : msg.gas < 2 ^ 64 + 45)
-    (hmuir : msg.benv.stat.rules = muirGlacierRules) (hstatic : msg.isStatic = false)
-    (hdepth : msg.depth ≠ 0) (hmax : 6358 ≤ msg.benv.stat.rules.code.maxCodeSize) :
-    ∃ post, processCreateMessage msg = .ok post ∧
-      (post.getCode msg.currentTarget).toList = Blanc.Lift.BeaconDeposit.code.toList ∧
-      SolInv (Devm.getStor post msg.currentTarget) [] := by
-  obtain ⟨post, run, installed, inv, -⟩ := beacon_create_muir_meta msg hvalue hcodeAddress hcode
-    hgas hgasb hmuir hstatic hdepth hmax
-  exact ⟨post, run, installed, inv⟩
-
 
 end Blanc.Lift.BeaconDeposit.Creation

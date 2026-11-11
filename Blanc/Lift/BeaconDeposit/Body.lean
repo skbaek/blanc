@@ -7,7 +7,7 @@ import Blanc.Lift.BeaconDeposit.BodyCount
 import Blanc.Lift.BeaconDeposit.BodyInsertDead
 import Blanc.Lift.BeaconDeposit.BodyInsertLive
 import Jaune.MulDiv
-import Blanc.ForwardStorageAccessExtra
+import Blanc.TransactionForwardSupport
 
 /-!
 # The deployed `deposit` body: success, composed from its segments
@@ -16,8 +16,6 @@ import Blanc.ForwardStorageAccessExtra
 namespace Blanc.Lift.BeaconDeposit
 
 open Jaune
-
-/-! ## The insertion walk, arithmetically -/
 
 section Walk
 
@@ -318,11 +316,6 @@ theorem deposit_ok_facts {H : Bytes → B256} {s s' : BeaconDeposit.Acc}
 
 theorem t_0f6e_c20_eq : t_0f6e_c20 = t_0f6e_c23 := rfl
 
-theorem liveStoreCost_congr {sevm : Sevm} {keys : KeySet} {s t : Stor} {n : Nat} {nd : B256}
-    (h : s.get (solBranchSlot n) = t.get (solBranchSlot n)) :
-    liveStoreCost sevm keys s n nd = liveStoreCost sevm keys t n nd := by
-  unfold liveStoreCost; rw [h]
-
 theorem argBytes_eq {sevm : Sevm} {i k : Nat} (h : (argBytes sevm i).length = k) :
     argBytes sevm i = sevm.data.sliceD (argPtr sevm i).toNat k 0 ∧ argLen sevm i = Nat.toB256 k := by
   have hl : (argLen sevm i).toNat = k := by
@@ -353,7 +346,7 @@ theorem acc_mk_eq {f g : Nat → B256} {c d : Nat} (h1 : f = g) (h2 : c = d) :
 decoder accepts and a model deposit that succeeds on the arguments it reads (`argBytes`,
 `argRoot`, `CALLVALUE`) from the storage's `solAcc`, the internal function at entry 7 runs from
 the decoder's argument stack over `mem0` and returns to the decoder's tag with exactly `g + 1`
-gas left, having spent `bodyGas`.  Its storage is `bodyStor` (count incremented, one branch slot
+gas left, having spent `bodyGasOf`.  Its storage is `bodyStor` (count incremented, one branch slot
 written), whose `solAcc` is the model's new accumulator; one log, the model event's, is appended;
 every other account's storage, all code, the accessed addresses, output and error are
 unchanged.  Premises: the SHA-256 precompile's (`ShaReady`), a frame not at the maximal call

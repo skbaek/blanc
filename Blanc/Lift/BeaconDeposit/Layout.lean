@@ -13,9 +13,7 @@ The deployed runtime stores the source's state in Solidity's layout (deviation B
 
 `solAcc` reads the pure model's accumulator (`BeaconDeposit.Acc`) out of such a storage, and
 `SolInv` is the storage abstraction the refinement theorems carry: the constructor's zero-hash
-table is intact and the model invariant `BeaconDeposit.Inv` holds for the leaf history.  They
-mirror the port's `accOfStor`, `ZeroHashesCorrect` and `ArtifactInv`
-(`Blanc/BeaconDepositCore.lean`, `Blanc/BeaconDepositBridge.lean`) with this layout's slots.
+table is intact and the model invariant `BeaconDeposit.Inv` holds for the leaf history.
 -/
 
 namespace Blanc.Lift.BeaconDeposit

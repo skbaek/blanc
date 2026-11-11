@@ -1,7 +1,8 @@
 import Blanc.Lift.BeaconDeposit.HistDepositLogs
 import Blanc.Lift.BeaconDeposit.HistoricalSeam
 import Blanc.ExecutionRewardCredits
-import Blanc.ExecutionRewardCreditsExtra
+import Blanc.ExecutionHistorySupport
+import Blanc.ExecutionTransactionPrefixAdmission
 
 /-!
 # The Beacon deposit contract from its actual deployment block

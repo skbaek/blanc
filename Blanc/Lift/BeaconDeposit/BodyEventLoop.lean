@@ -1,6 +1,6 @@
 import Blanc.Lift.BeaconDeposit.BodyEventKit
 import Blanc.Lift.BeaconDeposit.CountView
-import Blanc.Lift.ExactWalkOpsExtra
+import Blanc.Lift.WalkKitSupport
 
 /-!
 # Body segment 2, the two one-word copy loops

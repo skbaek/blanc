@@ -1,6 +1,6 @@
 import Blanc.Lift.BeaconDeposit.Creation.HistoricalDeploy
 import Blanc.Lift.BeaconDeposit.Creation.HistoricalTxRecover
-import Blanc.TransactionForwardExtra
+import Blanc.TransactionForwardSupport
 
 /-! The actual recovered transaction, prepared over a real supplied pre-state.
 This conditional producer establishes no historical state or block inclusion. -/

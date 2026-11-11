@@ -121,10 +121,6 @@ the mix-in cannot truncate while `count ≤ 2^32 - 1`. -/
 def Acc.root (H : Bytes → B256) (s : Acc) : B256 :=
   mixIn H (climb H s.branch 32 0 s.count 0) s.count
 
-/-- `get_deposit_count()` (source lines 97–99). -/
-def Acc.countBytes (s : Acc) : Bytes :=
-  le64 s.count
-
 /-- One storage write `branch[i] := v`, as a function override. -/
 def setSlot (branch : Nat → B256) (i : Nat) (v : B256) : Nat → B256 :=
   fun j => if j = i then v else branch j
@@ -235,12 +231,5 @@ def deposit (H : Bytes → B256) (s : Acc)
       match walk H s.branch 32 0 (s.count + 1) node with
       | some br => .ok (⟨br, s.count + 1⟩, event)
       | none => .error .assert_false
-
-/-- `supportsInterface` (source lines 161–163), over the two 4-byte
-interface identifiers as `Bytes`. The concrete id words
-(`0x01ffc9a7` and the `IDepositContract` XOR) are EVM/ABI-side facts pinned
-by the vector oracle, not computed here. -/
-def supportsInterface (erc165Id idepositId interfaceId : Bytes) : Bool :=
-  interfaceId = erc165Id || interfaceId = idepositId
 
 end Blanc.BeaconDeposit

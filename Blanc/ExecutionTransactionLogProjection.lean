@@ -32,22 +32,6 @@ theorem TransactionTrace.logs_receipt
   rw [← eq.2] at logs receipt
   exact ⟨logs, receipt⟩
 
-/-- A successful receipt bound to this actual transaction's output forces this
-same retained message to have succeeded. No external receipt binding is assumed silently. -/
-theorem TransactionTrace.message_success_of_receipt
-    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    {state : State} {bout' : BlockOutput} {receipt : Fin 5 × Receipt}
-    (trace : TransactionTrace benv bout tx index state bout')
-    (hsg : benv.stat.rules.stateGas = none)
-    (hbal : benv.stat.rules.bal = none)
-    (atIndex : bout'.receiptsTrie[BLT.toBytes (.bytes index.toBytes)]? = some receipt)
-    (success : receipt.2.succeeded = true) : trace.messageOut.error = none := by
-  have receiptEq := Option.some.inj (atIndex.symm.trans (trace.logs_receipt hsg hbal).2)
-  have succeeded := congrArg (fun r : Fin 5 × Receipt => r.2.succeeded) receiptEq
-  change receipt.2.succeeded = trace.messageOut.error.isNone at succeeded
-  rw [success] at succeeded
-  exact Option.isNone_iff_eq_none.mp succeeded.symm
-
 /-- The exact concatenation of message-output logs in this retained transaction list. -/
 def ApplyTransactionsTrace.messageLogs
     {txs : List (Nat × Tx)} {benv : Benv} {bout : BlockOutput}

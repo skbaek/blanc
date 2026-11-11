@@ -7,26 +7,21 @@ import Blanc.Lift.WalkInvKit
 # Historical SHA-256 `STATICCALL` inversion kit
 
 The exact-walk SHA kit (`Blanc/Lift/InvWalkSha.lean`, `ShaReady` in
-`Blanc/Lift/ExactWalkCutOps.lean`) takes `CoveredFork`, which fixes the
+`Blanc/Lift/ExactWalkCutOps.lean`) takes a fork predicate, which fixes the
 EIP-2929 access schedule and enabled delegation. This module proves the same
 steps from the rule facts a historical frame carries:
 
 * `ShaReadyRules` — the SHA-256 precompile premises with `stateGas = none` and
   `bal = none` in place of the fork, nondelegation required only when delegation is enabled
   (`ShaReadyRules.of_eq`, `ShaReady.toRules`);
-* `meta_of_processMessage_sha256_64_clean_noStateGas` (`InvWalkSha.lean`) — the clean-child
-  meta projection over `stateGas = none` alone;
-* `ri_staticcall_shaH` — `STATICCALL` of SHA-256 over a 64-byte window,
+* `ri_staticcall_shaH_of_delegation` — `STATICCALL` of SHA-256 over a 64-byte window,
   cased once on the access schedule and the delegation flag to a single
   prefix form, then the charged tail `ri_staticcall_sha_of_charge`;
-* `ric_shaCallH`, `ric_copy_shaH`, `ric_pack_shaH` — the solc packed-SHA site
-  (call, copy and pack) over the same premises;
-* `ri_staticcall_shaH_covered` — the out-and-back check recovering the
-  modern statement on a covered fork.
+* `ric_shaCallH_of_delegation`, `ric_copy_shaH_of_delegation`, `ric_pack_shaH_of_delegation`
+  — the solc packed-SHA site (call, copy and pack) over the same premises.
 
 `hnodeleg` is used only in the enabled-delegation branch and `hwarm` only in
 the EIP-2929 branch; the `_of_delegation` forms require nondelegation only when the flag is enabled.
-The original theorem signatures remain compatibility interfaces;
 `ShaReadyRules` packages the conditional premise for historical consumers. Gas is existential, so pricing
 never appears in any conclusion.
 
@@ -59,18 +54,6 @@ no access list. -/
 theorem ShaReady.toRules {sevm : Sevm} {b : Devm} (h : ShaReady sevm b) :
     ShaReadyRules sevm b :=
   ⟨fun _ => h.nodeleg, h.warm, h.pre, h.fork.rules_stateGas_none, h.fork.rules_bal_none⟩
-
-/-- With delegation disabled, no observation of the code at address 2 is needed. -/
-theorem ShaReadyRules.of_disabled {sevm : Sevm} {b : Devm}
-    (disabled : sevm.benvStat.rules.delegationEnabled = false)
-    (warm : (2 : Adr) ∈ b.accessedAddresses)
-    (pre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (sg : sevm.benvStat.rules.stateGas = none)
-    (bal : sevm.benvStat.rules.bal = none) : ShaReadyRules sevm b := by
-  refine ⟨?_, warm, pre, sg, bal⟩
-  intro enabled
-  rw [disabled] at enabled
-  cases enabled
 
 /-! ## `STATICCALL` of SHA-256 over a historical frame -/
 
@@ -210,36 +193,6 @@ theorem ri_staticcall_shaH_of_delegation {sevm : Sevm} {b : Devm} {S : List B256
       | simp only [ForkRules.accessDelegation_enabled hdel, hA, hAD hdel] at h_run
     exact ri_staticcall_sha_of_charge _ hpre hsg h_run
 
-/-- Compatibility form with unconditional nondelegation. -/
-theorem ri_staticcall_shaH {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-    {g ii oi : B256} {d : Devm}
-    (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
-    (hwarm : (2 : Adr) ∈ b.accessedAddresses)
-    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (h : Ninst.Run sevm (St b (g :: 2 :: ii :: 64 :: oi :: 32 :: S) M G) (.exec .staticcall) d) :
-    d.stack = 0 :: S ∨
-      ∃ b' G', ShaCallPost b b' (Bytes.sha256 (M.read ii.toNat 64).1).toBytes ∧
-        d = St b' (1 :: S) ((M.extends [⟨ii.toNat, 64⟩, ⟨oi.toNat, 32⟩]).write oi.toNat
-          (Bytes.sha256 (M.read ii.toNat 64).1).toBytes) G' :=
-  ri_staticcall_shaH_of_delegation (fun _ => hnodeleg) hwarm hpre hsg h
-
-/-- `ri_staticcall_shaH` recovers the modern `ri_staticcall_sha` statement on a covered fork. -/
-theorem ri_staticcall_shaH_covered {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-    {g ii oi : B256} {d : Devm}
-    (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
-    (hwarm : (2 : Adr) ∈ b.accessedAddresses)
-    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (h : Ninst.Run sevm (St b (g :: 2 :: ii :: 64 :: oi :: 32 :: S) M G) (.exec .staticcall) d) :
-    d.stack = 0 :: S ∨
-      ∃ b' G', ShaCallPost b b' (Bytes.sha256 (M.read ii.toNat 64).1).toBytes ∧
-        d = St b' (1 :: S) ((M.extends [⟨ii.toNat, 64⟩, ⟨oi.toNat, 32⟩]).write oi.toNat
-          (Bytes.sha256 (M.read ii.toNat 64).1).toBytes) G' :=
-  ri_staticcall_shaH hnodeleg hwarm hpre hfork.rules_stateGas_none h
-
-/-! ## The solc packed-SHA site over a historical frame -/
-
 section CopyH
 
 variable {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {r : Seg}
@@ -316,26 +269,6 @@ theorem ric_shaCallH_of_delegation {img : Bytes} {n d : Nat} {x1 x3 x4 : B256} {
   rcases ric_branch run with ⟨hw, -⟩ | ⟨-, G37, run⟩
   · exact absurd hw (by decide)
   exact ⟨b', G37, hpost, run⟩
-
-/-- Compatibility form with unconditional nondelegation. -/
-theorem ric_shaCallH {img : Bytes} {n d : Nat} {x1 x3 x4 : B256} {c0 c1 v0 v1 : UInt8}
-    {fail1 fail2 : SFunc}
-    (hf1 : fail1.noOk = true)
-    (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = n) (hn : n % 32 = 0)
-    (hdn : d + 64 ≤ n) (hd96 : 96 ≤ d) (hd32 : d % 32 = 0) (hdb : d + 64 < 2 ^ 256)
-    (hfp : img.sliceD 64 32 0 = (Nat.toB256 d).toBytes)
-    (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
-    (hwarm : (2 : Adr) ∈ b.accessedAddresses)
-    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (run : SFunc.RunCut fs sevm C
-      (St b (Bytes.toB256 [0x20] :: Nat.toB256 64 :: x1 :: Nat.toB256 d :: x3 :: x4 :: 2 :: R)
-        M G) (shaCallTree c0 c1 v0 v1 fail1 fail2 T) r) :
-    ∃ b' G', ShaCallPost b b' (Bytes.sha256 (M.read d 64).1).toBytes ∧
-      SFunc.RunCut fs sevm C (St b' (Nat.toB256 32 :: Nat.toB256 d :: R)
-        (M.write d (Bytes.sha256 (M.read d 64).1).toBytes) G') T r :=
-  ric_shaCallH_of_delegation hf1 hwf hr hs hn hdn hd96 hd32 hdb hfp
-    (fun _ => hnodeleg) hwarm hpre hsg run
 
 /-- **Copy, merge and call, inverted, over a historical frame** (the converse of `copy_sha_gen`): from the copy loop's
 head with the two words `w1`, `w2` at `s` and `s + 0x20` to be copied to the free pointer
@@ -414,29 +347,6 @@ theorem ric_copy_shaH_of_delegation {img : Bytes} {n s d : Nat} {w1 w2 x1 x3 x4 
   exact ⟨b', _, G5, hpost, hwf7.write _ _, hr7.write hwf7 d _,
     by rw [Mem.size_write_word_aligned (by omega) (by omega), hs7]; omega, run⟩
 
-/-- Compatibility form with unconditional nondelegation. -/
-theorem ric_copy_shaH {img : Bytes} {n s d : Nat} {w1 w2 x1 x3 x4 : B256}
-    {c0 c1 v0 v1 : UInt8} {fail1 fail2 : SFunc}
-    (hk : fs[k]? = some (mcpyTree e0 e1 r0 r1 k
-      (mergeTree (shaCallTree c0 c1 v0 v1 fail1 fail2 T))))
-    (hkC : k ∉ C) (hf1 : fail1.noOk = true)
-    (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = n) (hn : n % 32 = 0)
-    (hdn : d ≤ n) (hsd : s + 64 = d) (hd32 : d % 32 = 0) (hd96 : 96 ≤ s)
-    (hdb : n + 1000 < 2 ^ 256) (hfp : img.sliceD 64 32 0 = (Nat.toB256 d).toBytes)
-    (hw1 : img.sliceD s 32 0 = w1.toBytes) (hw2 : img.sliceD (s + 32) 32 0 = w2.toBytes)
-    (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
-    (hwarm : (2 : Adr) ∈ b.accessedAddresses)
-    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (run : SFunc.RunCut fs sevm C
-      (St b (Nat.toB256 s :: Nat.toB256 d :: Nat.toB256 64 :: Nat.toB256 64 :: x1 ::
-        Nat.toB256 d :: x3 :: x4 :: 2 :: R) M G) (mcpyTree e0 e1 r0 r1 k X) r) :
-    ∃ b' M' G', ShaCallPost b b' (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes ∧
-      Mem.Wf M' ∧ Mem.Reads M' (shaImg img d w1 w2) ∧ M'.size = max n (d + 96) ∧
-      SFunc.RunCut fs sevm C (St b' (Nat.toB256 32 :: Nat.toB256 d :: R) M' G') T r :=
-  ric_copy_shaH_of_delegation hk hkC hf1 hwf hr hs hn hdn hsd hd32 hd96 hdb hfp hw1 hw2
-    (fun _ => hnodeleg) hwarm hpre hsg run
-
 end CopyH
 
 section PackH
@@ -447,7 +357,7 @@ variable {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {r : Seg}
 /-- **Pack two words, copy, merge and call, inverted, over a historical frame** (the converse of `packed_sha_pair`):
 from `bw :: a :: 2` over the free pointer `f`, every successful cut run stores `a`, `bw` at
 `f + 0x20`, `f + 0x40` with the length at `f` and the free pointer `f + 0x60`, then makes the
-copy site of `ric_copy_shaH`, continuing with `T` over the digest `sha256 (a ‖ bw)`. -/
+copy site of `ric_copy_shaH_of_delegation`, continuing with `T` over the digest `sha256 (a ‖ bw)`. -/
 theorem ric_pack_shaH_of_delegation {img : Bytes} {n f : Nat} {a bw : B256}
     {c0 c1 v0 v1 : UInt8} {fail1 fail2 : SFunc}
     (hk : fs[k]? = some (mcpyTree e0 e1 r0 r1 k
@@ -542,28 +452,6 @@ theorem ric_pack_shaH_of_delegation {img : Bytes} {n f : Nat} {a bw : B256}
     (by rw [show f + 32 + 32 = f + 64 by omega]; exact packImg_b hf96)
     hnodeleg hwarm hpre hsg run
   exact ⟨b', M', G', hpost, hwf', hr', by rw [hs']; omega, run⟩
-
-/-- Compatibility form with unconditional nondelegation. -/
-theorem ric_pack_shaH {img : Bytes} {n f : Nat} {a bw : B256}
-    {c0 c1 v0 v1 : UInt8} {fail1 fail2 : SFunc}
-    (hk : fs[k]? = some (mcpyTree e0 e1 r0 r1 k
-      (mergeTree (shaCallTree c0 c1 v0 v1 fail1 fail2 T))))
-    (hkC : k ∉ C) (hf1 : fail1.noOk = true)
-    (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = n) (hn : n % 32 = 0)
-    (h96 : 96 ≤ n) (hnf : n ≤ f + 96) (hf32 : f % 32 = 0) (hf96 : 96 ≤ f)
-    (hfb : f + 2000 < 2 ^ 256) (hfp : img.sliceD 64 32 0 = (Nat.toB256 f).toBytes)
-    (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
-    (hwarm : (2 : Adr) ∈ b.accessedAddresses)
-    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (run : SFunc.RunCut fs sevm C (St b (bw :: a :: 2 :: R) M G)
-      (pack2Tree (mcpyTree e0 e1 r0 r1 k X)) r) :
-    ∃ b' M' G', ShaCallPost b b' (Bytes.sha256 (a.toBytes ++ bw.toBytes)).toBytes ∧
-      Mem.Wf M' ∧ Mem.Reads M' (shaImg (packImg img f a bw) (f + 96) a bw) ∧
-      M'.size = f + 192 ∧
-      SFunc.RunCut fs sevm C (St b' (Nat.toB256 32 :: Nat.toB256 (f + 96) :: R) M' G') T r :=
-  ric_pack_shaH_of_delegation hk hkC hf1 hwf hr hs hn h96 hnf hf32 hf96 hfb hfp
-    (fun _ => hnodeleg) hwarm hpre hsg run
 
 end PackH
 

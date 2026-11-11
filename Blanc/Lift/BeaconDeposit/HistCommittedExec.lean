@@ -1,7 +1,7 @@
 import Blanc.Lift.BeaconDeposit.HistLadder
 import Blanc.Lift.BeaconDeposit.CommittedExec
 import Blanc.Lift.StaticOnlyFramesIn
-import Blanc.Lift.StaticOnlyFramesExtra
+import Blanc.Lift.WalkKitSupport
 
 /-! Exact observations of a historical Beacon frame and its retained descendants. -/
 
@@ -54,24 +54,6 @@ theorem target_committedFrameNodesH_of_entry {entry : Sevm → Devm → Prop} {c
   simp only [Exec.committedFrames, dite_eq_left committed, List.flatMap_cons,
     descendants, List.append_nil, committedFrameNodes, Exec.Frame.ofRun]
   simp only [ite_eq_left target]
-
-/-- Compatibility form for the original fresh Beacon entry. -/
-theorem target_committedFrameNodesH {ca : Adr} {sevm : Sevm} {pre post : Devm}
-    (run : Exec 0 sevm pre (.ok post))
-    (committed : Execution.commits (.ok post) = true)
-    (hcode : sevm.code = code) (target : sevm.currentTarget = ca)
-    (installed : beaconSem.At ca 0 sevm pre)
-    (fork : HistFork sevm.benvStat.fork)
-    (admitted : Exec.FrameAdmitted ca beaconFrameEntry run)
-    (deeper : ∀ {pc : Nat} {s : Sevm} {d : Devm} {out : Execution}
-      (child : Exec pc s d out) (_committed : Execution.commits out = true),
-      HistFork s.benvStat.fork → s.depth < sevm.depth →
-      beaconSem.At ca pc s d → Exec.FrameAdmitted ca beaconFrameEntry child →
-      s.isStatic = true →
-      (Exec.committedFrames child).flatMap (committedFrameNodes ca) = []) :
-    (Exec.committedFrames run).flatMap (committedFrameNodes ca) =
-      frameAccepted sevm :=
-  target_committedFrameNodesH_of_entry run committed hcode target installed fork admitted deeper
 
 end Blanc.Lift.BeaconDeposit
 

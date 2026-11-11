@@ -1,7 +1,7 @@
 import Blanc.Lift.BeaconDeposit.LittleEndian
 import Blanc.BeaconDepositEncoding
 import Blanc.Lift.ExactMustRun
-import Blanc.Lift.ExactWalkOpsExtra
+import Blanc.Lift.WalkKitSupport
 
 /-!
 # `get_deposit_count()` on the deployed beacon deposit contract: liveness with exact gas

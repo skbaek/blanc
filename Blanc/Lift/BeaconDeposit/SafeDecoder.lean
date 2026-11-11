@@ -3,8 +3,7 @@ import Blanc.Lift.BeaconDeposit.DepositDecode
 import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.Quiet
 import Blanc.Lift.WalkInvKit
-import Blanc.Lift.QuietExtra
-import Blanc.Lift.InvWalkWorldExtra
+import Blanc.Lift.WalkKitSupport
 
 namespace Blanc.Lift.BeaconDeposit
 

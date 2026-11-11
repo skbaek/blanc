@@ -1,6 +1,6 @@
 import Blanc.Lift.StaticOnlyFrames
 import Blanc.LockExclusion
-import Blanc.Lift.StaticOnlyFramesExtra
+import Blanc.Lift.WalkKitSupport
 
 /-! Static-only descendant accounting under a selected historical fork domain.
 The certificate restriction needs only stateGas = none; child domains inherit

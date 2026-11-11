@@ -4,7 +4,7 @@ import Blanc.ExecutionHistoryInWarmth
 import Blanc.ExecutionHistoryInCodeAt
 import Blanc.ExecutionStagedFrameEnv
 import Blanc.ExecutionHistoryInCreateAvoid
-import Blanc.ExecutionTraceWarmthExtra
+import Blanc.ExecutionHistorySupport
 import Blanc.ExecutionNoDelHistory
 
 /-! Historical committed-history headlines with derived frame environments.

@@ -64,16 +64,4 @@ theorem ApplyTransactionsTrace.retained_log_mem
         exact List.mem_append_left _ (head.retained_log_mem hsg hbal inHead logged)
       · exact ih hsg hbal inTail
 
-/-- Request processing preserves transaction logs while computing request bytes. -/
-theorem RequestsTrace.blockLogs_eq
-    {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
-    (trace : RequestsTrace benv bout state bout') : bout'.blockLogs = bout.blockLogs := by
-  have run := trace.run
-  unfold processGeneralPurposeRequests processGeneralPurposeRequestsAt at run
-  obtain ⟨_, _, run⟩ := Except.bind_eq_ok run
-  dsimp only at run
-  obtain ⟨_, _, run⟩ := Except.bind_eq_ok run
-  cases run
-  rfl
-
 end Blanc.ExecutionTrace

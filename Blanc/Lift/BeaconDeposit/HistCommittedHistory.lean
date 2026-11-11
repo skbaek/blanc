@@ -3,7 +3,7 @@ import Blanc.ExecutionAccountingHistoryIn
 import Blanc.ExecutionAccountingCoreIn
 import Blanc.ExecutionHistoryInAppend
 import Blanc.ExecutionImmutableCode
-import Blanc.ExecutionHistoryInAppendExtra
+import Blanc.ExecutionHistorySupport
 import Blanc.ExecutionNoDelHistory
 
 /-! Exact ordered settlement-retained Beacon extraction over HistFork.
@@ -92,17 +92,6 @@ theorem beaconInstalledCertH : InstalledCert code where
     rw [empty] at length
     cases length
 
-/-- Transport the original transaction admission to selected-rule readiness on the same roots. -/
-theorem transactionListIn_beaconEntry_toRules
-    {ca : Adr} {txs : List (Nat × Tx)} {benv finalBenv : Benv}
-    {bout finalBout : BlockOutput}
-    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
-    (admitted : trace.FrameAdmitted ca beaconEntry) :
-    trace.FrameAdmitted ca beaconEntryRules := by
-  rw [trace.frameAdmitted_iff_rawFrames] at admitted ⊢
-  intro root member target
-  exact beaconEntry_toRules (admitted root member target)
-
 /-- The actual transaction suffix preserves installed code and the exact extracted history.
 This intermediate exposes admission; its entry invariant belongs to the supplied initial state. -/
 theorem transactionListIn_code_solInv_admitted_of_rules
@@ -131,24 +120,6 @@ theorem transactionListIn_code_solInv_admitted_of_rules
   change nodes = trace.settledFrames.flatMap (committedFrameNodes ca) at observed
   rw [observed] at replay
   exact ⟨bytes_eq_of_image final.state.code, replay initialHistory invariant⟩
-
-/-- Compatibility form for the original transaction admission. -/
-theorem transactionListIn_code_solInv_admitted
-    {ca : Adr} {txs : List (Nat × Tx)} {benv finalBenv : Benv}
-    {bout finalBout : BlockOutput} {initialHistory : List B256}
-    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
-    (admitted : trace.FrameAdmitted ca beaconEntry)
-    (installed : benv.state.getCode ca = code)
-    (invariant : SolInv (benv.state.getStor ca) initialHistory)
-    (notCreated : ca ∉ benv.createdAccounts)
-    (sumNof : sum benv.state.bal < 2 ^ 256)
-    (fork : HistFork benv.stat.fork) (blockIndex : Nat) :
-    finalBenv.state.getCode ca = code ∧
-      SolInv (finalBenv.state.getStor ca)
-        (initialHistory ++ trace.settledFrames.flatMap (committedFrameNodes ca)) :=
-  transactionListIn_code_solInv_admitted_of_rules trace
-    (transactionListIn_beaconEntry_toRules trace admitted) installed invariant
-    notCreated sumNof fork blockIndex
 
 /-- The historical admitted core extracts precisely the ordered committed nodes.
 Only this intermediate theorem exposes frame admission. -/

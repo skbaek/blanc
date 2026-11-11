@@ -7,7 +7,7 @@ import Blanc.Lift.WalkInvKit
 # Safety segment B6 over a historical frame: the root check, the cap guard and the count
 increment, inverted
 
-`safe_countBump` with its `SLOAD`s inverted by `ri_sloadH` (`rules.bal = none`) and its
+The count-bump segment with its `SLOAD`s inverted by `ri_sloadH` (`rules.bal = none`) and its
 `SSTORE` by `ri_sstoreH` (`rules.stateGas = none`, `rules.bal = none`); the successor is
 `afterSstoreH` of the frame's actual access schedule and refund regime.
 -/

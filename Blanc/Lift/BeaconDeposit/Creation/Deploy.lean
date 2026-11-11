@@ -2,7 +2,7 @@ import Blanc.Lift.BeaconDeposit.Creation.Check
 import Blanc.Lift.BeaconDeposit.Creation.Walk
 import Blanc.Lift.Deploy
 import Blanc.ForkUniform
-import Blanc.Lift.DeployExtra
+import Blanc.Lift.WalkKitSupport
 
 /-!
 # Deploying the Beacon deposit contract from its actual creation input

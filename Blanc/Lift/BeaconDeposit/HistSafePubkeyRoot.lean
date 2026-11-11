@@ -1,12 +1,12 @@
 import Blanc.Lift.BeaconDeposit.BodyShaKit
 import Blanc.Lift.BeaconDeposit.HistSafeWorld
 import Blanc.Lift.WalkInvKit
-import Blanc.Lift.InvWalkWorldExtra
+import Blanc.Lift.WalkKitSupport
 
 /-!
 # Safety segment B3 over a historical frame: the pubkey root, inverted
 
-`safe_pubkeyRoot` over `ShaReadyRules`: its packed SHA site by `ric_copy_shaH_of_delegation` from
+The pubkey root over `ShaReadyRules`: its packed SHA site by `ric_copy_shaH_of_delegation` from
 `rules.stateGas = none`.
 -/
 

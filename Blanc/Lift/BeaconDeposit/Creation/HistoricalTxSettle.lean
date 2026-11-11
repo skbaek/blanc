@@ -1,8 +1,7 @@
 import Blanc.Lift.BeaconDeposit.Creation.HistoricalTxInput
 import Blanc.TransactionHistoricalForward
 import Blanc.ExecutionInCellProvenance
-import Blanc.TransactionForwardHExtra
-import Blanc.DeploymentMessageExtra
+import Blanc.TransactionForwardSupport
 
 /-! The actual recovered Beacon CREATE through Muir message and transaction settlement.
 The real pre-state, carried output and transaction index remain arbitrary inputs. -/
@@ -14,9 +13,6 @@ open Jaune Blanc.BeaconDeposit ExecutionTrace
 /-- Muir's actual refund cap, retained even though this constructor refunds zero. -/
 def muirGasUsed (post : Devm) : Nat :=
   selectedTxGasUsed 2 tx.gas 0 post.gasLeft 0
-
-theorem muirGasUsed_eq (post : Devm) : muirGasUsed post = tx.gas - post.gasLeft := by
-  simp only [muirGasUsed, selectedTxGasUsed, Nat.min_zero, Nat.sub_zero, Nat.max_zero]
 
 /-- The actual Muir sweep after the sender's gas refund and coinbase's fee credit. -/
 def muirSettledState (benv : Benv) (post : Devm) : State :=

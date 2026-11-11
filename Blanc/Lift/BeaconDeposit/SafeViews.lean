@@ -1,6 +1,6 @@
 import Blanc.Lift.Quiet
 import Blanc.Lift.BeaconDeposit.Prog
-import Blanc.Lift.QuietExtra
+import Blanc.Lift.WalkKitSupport
 
 /-!
 # The view wrappers are quiet

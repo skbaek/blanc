@@ -5,8 +5,7 @@ import Blanc.ExecutionTraceSystem
 import Blanc.ExecutionTraceCalldata
 import Blanc.ExecutionTraceSystemCode
 import Blanc.ExecutionTraceFrameEnv
-import Blanc.ExecutionTraceFrameEnvExtra
-import Blanc.ExecutionTraceWarmthExtra
+import Blanc.ExecutionHistorySupport
 
 /-!
 # The Beacon committed-history headlines without per-frame environment premises

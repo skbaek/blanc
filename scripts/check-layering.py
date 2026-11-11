@@ -683,26 +683,24 @@ CONTRACTS["beacon-deposit"] = [
     "Lift.BeaconDeposit.Jumps", "Lift.BeaconDeposit.Ladder", "Lift.BeaconDeposit.Layout",
     "Lift.BeaconDeposit.Lift", "Lift.BeaconDeposit.LittleEndian", "Lift.BeaconDeposit.Liveness",
     "Lift.BeaconDeposit.Prog", "Lift.BeaconDeposit.Refines", "Lift.BeaconDeposit.RootLoop",
-    "Lift.BeaconDeposit.RootView", "Lift.BeaconDeposit.Safe", "Lift.BeaconDeposit.SafeCount",
+    "Lift.BeaconDeposit.RootView", "Lift.BeaconDeposit.Safe",
     "Lift.BeaconDeposit.SafeDecoder", "Lift.BeaconDeposit.SafeDispatch", "Lift.BeaconDeposit.SafeEvent",
-    "Lift.BeaconDeposit.SafeGuards", "Lift.BeaconDeposit.SafeInsertDead",
-    "Lift.BeaconDeposit.SafeInsertLive", "Lift.BeaconDeposit.SafeLittleEndian",
-    "Lift.BeaconDeposit.SafeNode", "Lift.BeaconDeposit.SafePubkeyRoot",
-    "Lift.BeaconDeposit.SafeSignatureRoot", "Lift.BeaconDeposit.SafeViews", "Lift.BeaconDeposit.Views",
+    "Lift.BeaconDeposit.SafeGuards",
+    "Lift.BeaconDeposit.SafeLittleEndian",
+    "Lift.BeaconDeposit.SafeViews", "Lift.BeaconDeposit.Views",
 ]
 # Contract-neutral modules the deployed-bytes deposit family uses, restored with it from the archive
 # tag (receipt and log projections, historical SHA-256 walks, static-only In-frames).
 SHARED += [
-    "ExecutionBlockCommitments", "ExecutionBlockLogExclusion", "ExecutionBlockLogs",
-    "ExecutionHistoryReceiptLogs", "ExecutionIndexedReceipts", "ExecutionReceiptRanges",
-    "ExecutionRetainedLogMembership", "ExecutionTransactionLogProjection", "Lift.HistAccessFacts",
+    "ExecutionBlockLogs",
+    "ExecutionRetainedLogMembership", "ExecutionTransactionLogProjection",
     "Lift.HistPackedShaSize", "Lift.HistShaWalk", "Lift.PackedShaSize", "Lift.StaticOnlyFramesIn",
     "TransactionAdmissionProjection", "TransactionHistoricalForward",
 ]
 
-# STAGING-EXTRA
-SHARED += ['DeploymentMessageExtra', 'ExecutionHistoryCommittedCutsExtra', 'ExecutionHistoryExtra', 'ExecutionHistoryInAppendExtra', 'ExecutionHistoryInSystemOpeningsExtra', 'ExecutionRewardCreditsExtra', 'ExecutionSettledReceiptLogsExtra', 'ExecutionTraceFrameEnvExtra', 'ExecutionTraceWarmthExtra', 'ForwardStorageAccessExtra', 'Lift.CursorExtra', 'Lift.DeployExtra', 'Lift.ExactWalkCutOpsExtra', 'Lift.ExactWalkOpsExtra', 'Lift.HistAccessWalkFactsExtra', 'Lift.InvWalkExtra', 'Lift.InvWalkOpsExtra', 'Lift.InvWalkWorldExtra', 'Lift.QuietExtra', 'Lift.SoundExtra', 'Lift.StaticOnlyFramesExtra', 'MachineDataFactsExtra', 'RlpBytesInjectiveExtra', 'RlpConcreteExtra', 'TransactionForwardExtra', 'TransactionForwardHExtra']
-# END-STAGING-EXTRA
+# Shared declarations the deployed-bytes deposit family uses that left main with earlier releases,
+# restored beside the modules whose vocabulary they extend (protocol-contract-corpus-v1).
+SHARED += ["Lift.WalkKitSupport", "ExecutionHistorySupport", "TransactionForwardSupport"]
 
 # Explicit semantic ownership, not the union of existing imports. Abstract token
 # interfaces do not add WETH9/USDC to PairToken/PairTwoToken; concrete instances

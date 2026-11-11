@@ -1,6 +1,6 @@
 import Blanc.Lift.BeaconDeposit.RootLoop
 import Blanc.Lift.BeaconDeposit.CountView
-import Blanc.Lift.ExactWalkCutOpsExtra
+import Blanc.Lift.WalkKitSupport
 
 /-!
 # `get_deposit_root()` on the deployed beacon deposit contract: liveness with exact gas

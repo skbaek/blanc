@@ -2,7 +2,7 @@ import Blanc.Lift.PackedSha
 import Blanc.Lift.BeaconDeposit.Prog
 import Blanc.Lift.BeaconDeposit.Layout
 import Blanc.WordArithmetic
-import Blanc.Lift.ExactWalkCutOpsExtra
+import Blanc.Lift.WalkKitSupport
 
 /-!
 # One iteration of `get_deposit_root`'s Merkle loop on the deployed contract

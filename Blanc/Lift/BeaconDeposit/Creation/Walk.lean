@@ -3,7 +3,7 @@ import Blanc.Lift.BeaconDeposit.Init
 import Blanc.Lift.PackedShaSize
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.Deploy
-import Blanc.ForwardStorageAccessExtra
+import Blanc.TransactionForwardSupport
 
 /-!
 # The Beacon deposit constructor, walked

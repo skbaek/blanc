@@ -5,7 +5,7 @@ import Blanc.Lift.WalkInvKit
 /-!
 # Safety segment B4 over a historical frame: the signature root, inverted
 
-`safe_signatureRoot` and its three SHA sites over `ShaReadyRules` (each by `ric_copy_shaH_of_delegation` from
+The signature root and its three SHA sites over `ShaReadyRules` (each by `ric_copy_shaH_of_delegation` from
 `rules.stateGas = none`), reusing the fork-free slice helpers `ri_slice13`/`ric_slice13`.
 -/
 

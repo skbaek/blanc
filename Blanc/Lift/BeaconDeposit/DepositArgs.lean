@@ -19,8 +19,7 @@ wrapper's `STOP`.
 * head: `CDS - 4 ≥ 0x80`;
 * for each tail: `off ≤ 2^32`; `(4 + off) + 32 ≤ CDS`; `len ≤ 2^32`; `(36 + off) + len ≤ CDS`.
 
-This is the deployed code's own boundary, not the port's `DepositAbiDecodable` (which the port
-compares with the deployed decoder only on a finite matrix, deviation BD-3).
+This is the deployed code's own boundary.
 -/
 
 namespace Blanc.Lift.BeaconDeposit

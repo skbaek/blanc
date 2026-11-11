@@ -5,7 +5,7 @@ import Blanc.ExecutionCellProvenance
 import Blanc.ExecutionHistoryInWarmth
 import Blanc.ExecutionStagedFrameEnv
 import Blanc.Lift.BeaconDeposit.Creation.HistoricalTxTrace
-import Blanc.ExecutionSettledReceiptLogsExtra
+import Blanc.ExecutionHistorySupport
 
 /-! Each extracted deposit node produces a target log in the same actual transaction/block output. -/
 
@@ -132,70 +132,6 @@ theorem muirBlock_suffix_solInv_of_empty_logs_admitted_of_rules
   · exact ⟨finalCode, finalInv⟩
   · rw [Blanc.payRewards_getCode, Blanc.payRewards_getStor _ _ _ _ _ nonempty]
     exact ⟨finalCode, finalInv⟩
-
-/-- Compatibility form for the original Beacon admission. -/
-theorem transactionListIn_node_block_log
-    {ca : Adr} {txs : List (Nat × Tx)} {benv finalBenv : Benv}
-    {bout finalBout : BlockOutput} {initialHistory : List B256}
-    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
-    (admitted : trace.FrameAdmitted ca beaconEntry)
-    (installed : benv.state.getCode ca = code)
-    (invariant : SolInv (benv.state.getStor ca) initialHistory)
-    (notCreated : ca ∉ benv.createdAccounts)
-    (sumNof : sum benv.state.bal < 2 ^ 256)
-    (fork : HistFork benv.stat.fork) (blockIndex : Nat)
-    {node : B256} (accepted : node ∈ trace.settledFrames.flatMap (committedFrameNodes ca)) :
-    ∃ log ∈ finalBout.blockLogs, log.address = ca :=
-  transactionListIn_node_block_log_of_rules trace
-    (transactionListIn_beaconEntry_toRules trace admitted) installed invariant notCreated sumNof fork blockIndex accepted
-
-/-- Compatibility form for the original Beacon admission. -/
-theorem transactionListIn_nodes_eq_nil_of_empty_logs
-    {ca : Adr} {txs : List (Nat × Tx)} {benv finalBenv : Benv}
-    {bout finalBout : BlockOutput} {initialHistory : List B256}
-    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
-    (admitted : trace.FrameAdmitted ca beaconEntry)
-    (installed : benv.state.getCode ca = code)
-    (invariant : SolInv (benv.state.getStor ca) initialHistory)
-    (notCreated : ca ∉ benv.createdAccounts)
-    (sumNof : sum benv.state.bal < 2 ^ 256)
-    (fork : HistFork benv.stat.fork) (blockIndex : Nat)
-    (emptyLogs : finalBout.blockLogs.filter (fun log => log.address == ca) = []) :
-    trace.settledFrames.flatMap (committedFrameNodes ca) = [] :=
-  transactionListIn_nodes_eq_nil_of_empty_logs_of_rules trace
-    (transactionListIn_beaconEntry_toRules trace admitted) installed invariant notCreated sumNof fork blockIndex emptyLogs
-
-/-- Compatibility form for the original Beacon admission. -/
-theorem configuredBlockIn_suffix_no_deposit_of_empty_logs
-    {ca : Adr} {cfg : ChainConfig} {pre post : BlockChain} {i : Nat}
-    {initialHistory : List B256}
-    (block : ConfiguredBlockTraceIn HistFork cfg pre post)
-    (cut : block.bodyTrace.transactions.TxSplit i)
-    (admitted : cut.after.FrameAdmitted ca beaconEntry)
-    (installed : cut.afterBenv.state.getCode ca = code)
-    (invariant : SolInv (cut.afterBenv.state.getStor ca) initialHistory)
-    (emptyLogs : block.blockOutput.blockLogs.filter (fun log => log.address == ca) = []) :
-    cut.after.settledFrames.flatMap (committedFrameNodes ca) = [] ∧
-      block.bodyTrace.transactionBenv.state.getCode ca = code ∧
-      SolInv (block.bodyTrace.transactionBenv.state.getStor ca) initialHistory :=
-  configuredBlockIn_suffix_no_deposit_of_empty_logs_of_rules block cut
-    (transactionListIn_beaconEntry_toRules cut.after admitted) installed invariant emptyLogs
-
-/-- Compatibility form for the original Beacon admission. -/
-theorem muirBlock_suffix_solInv_of_empty_logs_admitted
-    {ca : Adr} {cfg : ChainConfig} {pre post : BlockChain} {i : Nat}
-    {initialHistory : List B256}
-    (block : ConfiguredBlockTraceIn HistFork cfg pre post)
-    (cut : block.bodyTrace.transactions.TxSplit i)
-    (muir : block.fork = .muirGlacier)
-    (admitted : cut.after.FrameAdmitted ca beaconEntry)
-    (installed : cut.afterBenv.state.getCode ca = code)
-    (invariant : SolInv (cut.afterBenv.state.getStor ca) initialHistory)
-    (emptyLogs : block.blockOutput.blockLogs.filter (fun log => log.address == ca) = []) :
-    cut.after.settledFrames.flatMap (committedFrameNodes ca) = [] ∧
-      post.state.getCode ca = code ∧ SolInv (post.state.getStor ca) initialHistory :=
-  muirBlock_suffix_solInv_of_empty_logs_admitted_of_rules block cut muir
-    (transactionListIn_beaconEntry_toRules cut.after admitted) installed invariant emptyLogs
 
 /-- Every actual suffix frame in a Muir block supplies the selected-rule Beacon entry.
 Calldata and warmth come from the same block; delegation is disabled by its selected fork. -/

@@ -1,5 +1,5 @@
 import Blanc.Lift.BeaconDeposit.BodyShaKit
-import Blanc.Lift.ExactWalkCutOpsExtra
+import Blanc.Lift.WalkKitSupport
 
 /-!
 # Body segment 4: `signature_root`
