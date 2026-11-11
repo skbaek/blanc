@@ -439,6 +439,7 @@ import Blanc.Lift.BuilderRequest.Latch
 import Blanc.Lift.BuilderRequest.LoadBound
 import Blanc.Lift.BuilderRequest.Message
 import Blanc.Lift.BuilderRequest.Occurrence
+import Blanc.Lift.BuilderRequest.PrivilegedFrame
 import Blanc.Lift.BuilderRequest.Progress
 import Blanc.Lift.BuilderRequest.QueueLayout
 import Blanc.Lift.BuilderRequest.RequestCodecG
@@ -632,6 +633,7 @@ import Blanc.Lift.RequestSystem.Output
 import Blanc.Lift.RequestSystem.Path
 import Blanc.Lift.RequestSystem.PathInv
 import Blanc.Lift.RequestSystem.PlainExcess
+import Blanc.Lift.RequestSystem.PrivilegedInv
 import Blanc.Lift.RequestSystem.Stores
 import Blanc.Lift.RetainedTargetCompleteness
 import Blanc.Lift.ReturnDataBound

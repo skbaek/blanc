@@ -593,7 +593,7 @@ CONTRACTS.setdefault("consolidation-request", []).extend(["Lift.ConsolidationReq
 # The system path inverted (blanc-eip7251-consolidation-requests-v1 U5c): every successful system-arm run of a
 # request runtime ends in `sysState` and returns the drained records; the EIP-7251 record body's inversion.
 # `HistoryClean`, the per-block SYSTEM_ADDRESS premises, hoisted from the builder family's public observers.
-SHARED += ["Lift.RequestSystem.PathInv", "ExecutionKeptClean"]
+SHARED += ["Lift.RequestSystem.PathInv", "Lift.RequestSystem.PrivilegedInv", "ExecutionKeptClean"]
 CONTRACTS.setdefault("consolidation-request", []).extend(["Lift.ConsolidationRequest.SystemFrame"])
 # Protocol-contract corpus G2 shared hoists: balance-silent kept-value bridge, kept-history pre-execution
 # system-call connections, generic request-queue occurrence/latency laws, and joint-run ring/feed helpers.
@@ -621,6 +621,7 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Exit.Submission", "Lift.BuilderRequest.Exit.SubmissionAmsterdam",
     "Lift.BuilderRequest.Deposit.SubmissionAmsterdam",
     "Lift.BuilderRequest.UserFrameAmsterdam",
+    "Lift.BuilderRequest.PrivilegedFrame",
     "Lift.BuilderRequest.Deposit.System", "Lift.BuilderRequest.Deposit.SystemCall",
     "Lift.BuilderRequest.Exit.System", "Lift.BuilderRequest.Exit.SystemCall",
     "Lift.BuilderRequest.Exit.Frames", "Lift.BuilderRequest.SystemFrame",

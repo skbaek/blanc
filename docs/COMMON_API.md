@@ -6432,6 +6432,14 @@ the frame: `SysPath.frame_inv`/`SysPath.exec_frame_inv` (non-static, post state 
 `SysPath.memFold`) with `SysOutput.frame_inv_output` (on well-formed memory that window is `drained`, whatever the
 memory held). A runtime supplies `BodyInv` for its record body and `ExcessInv` (from `excess_inv` for the plain
 arm).
+For original successful prefixes over either storage-gas backend, use
+[`Blanc/Lift/RequestSystem/PrivilegedInv.lean`](../Blanc/Lift/RequestSystem/PrivilegedInv.lean).
+`StoreInv` records the effects of an actual successful SSTORE; `setup_access_inv`,
+`book_store_inv`, `final_store_inv` and `SysPath.prefix_inv` consume the selected access
+rules and that callback. The prefix ends at the runtime's own excess tree and reuses
+the existing record-loop inversion. It assumes no ready reservoir, chosen gas,
+fresh storage or empty memory; a consumer must discharge the actual store and body
+callbacks and its own excess arm.
 `Blanc/Lift/RequestSystem/Effects.lean` holds what a call touches and returns: `sysState_getElem_ne` and
 `sysState_getElem_congr` (every other account is unchanged; its own result depends only on its own account),
 `sysFold` with `run_sysFold` and `sysFold_getElem` (a fold of calls, by account), `SysPath.frame_exec` (the walk as

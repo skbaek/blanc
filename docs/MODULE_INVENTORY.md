@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-575 shared modules, 547 with a module summary.
+576 shared modules, 548 with a module summary.
 
 ## `Blanc/`
 
@@ -592,6 +592,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`Path.lean`](../Blanc/Lift/RequestSystem/Path.lean) | **A request contract's system path, under Amsterdam.** All four request contracts of Amsterdam (EIP-7002, EIP-7251, EIP-8282's deposit and exit) share one system path: read tail and head, cap the count, drain the records, move the pointers, update the excess from slots 0 and 1 … | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`PathInv.lean`](../Blanc/Lift/RequestSystem/PathInv.lean) | **A request contract's system path, inverted.** `Path.lean` walks the system path forward from storage it is given. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`PlainExcess.lean`](../Blanc/Lift/RequestSystem/PlainExcess.lean) | **The excess arm of the EIP-7002 and EIP-7251 runtimes.** These runtimes have no calldata latch. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+| [`PrivilegedInv.lean`](../Blanc/Lift/RequestSystem/PrivilegedInv.lean) | A successful request-system prefix, independent of the store gas backend. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Stores.lean`](../Blanc/Lift/RequestSystem/Stores.lean) | **A fork's stores, as a request contract's system path takes them.** The system path of a request contract (`Blanc/Lift/RequestSystem/Path.lean`) reads and writes storage, and only its writes differ between the covered forks and Amsterdam: its reads are `rx_sloadA` on any fork … | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 
 ## `Blanc/Lift/StableSwapNewton/`
