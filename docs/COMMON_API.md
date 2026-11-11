@@ -86,6 +86,10 @@ lines when next changed or relied on, not by a wholesale rewrite.
   [`Blanc/Basic.lean`](../Blanc/Basic.lean). Both are the substrate the
   branches below are stated over, so read the declaration and its module
   documentation there rather than expecting a need-first branch for it.
+- Extend a tail-recursive fold by one final input:
+  [`Blanc/ListFold.lean`](../Blanc/ListFold.lean)'s `fold_snoc_of_equations`
+  derives the snoc equation from the supplied empty-list and cons equations,
+  for arbitrary input and state types.
 - Exact byte-pattern offsets: [`Blanc/BytePattern.lean`](../Blanc/BytePattern.lean)'s
   `BytePattern.occurrences` scans successive suffixes in increasing order.
   Empty patterns yield no offsets. Every byte offset is
@@ -2498,6 +2502,12 @@ a bare set-membership goal does not identify this execution-specific route.
   `Exec.descendantFrames_caller_excluded_neutral`.
   [`Blanc/ExecutionKeptTop.lean`](../Blanc/ExecutionKeptTop.lean): `MessageRoots`, both lanes of `processMessageCall`.
   [`Blanc/ExecutionKeptChain.lean`](../Blanc/ExecutionKeptChain.lean): `TransactionRoots`, `BodyRoots`, `KeptHistory`.
+  For empty entry stack and memory on the actual kept carrier, use
+  [`Blanc/ExecutionKeptFresh.lean`](../Blanc/ExecutionKeptFresh.lean):
+  `Root.keptAt_fresh` transports a supplied fresh root to every kept frame;
+  `BodyRoots.roots_fresh` derives freshness of actual body roots, and
+  `KeptHistory.fresh` derives it for every frame kept at a selected address,
+  without a code, fork or budget premise. Entry output has its separate API below.
   For cleared entry output in a covered-fork kept history, use
   [`Blanc/ExecutionKeptEntered.lean`](../Blanc/ExecutionKeptEntered.lean):
   `KeptHistory.keptAt_output` gives `f.pre.output = []` for every frame actually kept at the selected address.
@@ -6632,6 +6642,13 @@ an `Exec` at any system-caller `Sevm`, not only the phase's message), and `SysOu
   [`Blanc/Lift/Quiet.lean`](../Blanc/Lift/Quiet.lean) proves that a static
   frame on a covered fork keeps its log list on every successful outcome, committing or
   not (`Exec.logs_eq_of_static_ok`; committed form `Exec.logs_committedPost_eq_of_static`).
+  For a lifted tree that can write storage and make static calls while preserving logs,
+  [`Blanc/Lift/LogSilent.lean`](../Blanc/Lift/LogSilent.lean) supplies
+  `Ninst.logSilent`, `SFunc.logSilent`, the reference-closed `LogSilentSet`,
+  `Ninst.logs_of_logSilent` and `SFunc.Run.logs_of_logSilent`.
+  The same original run preserves its entry log list under `CoveredFork` and the checked
+  instruction/reference predicates; the scanner permits SSTORE and STATICCALL,
+  rejects LOG instructions and excludes SELFDESTRUCT terminals.
 - The preservation ladder over a code image instead of `Prog.compile`:
   `CodeSem` (image, run relation, `correct`) in
   [`Blanc/CommonCore.lean`](../Blanc/CommonCore.lean); `ContractSpecSem`, its

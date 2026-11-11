@@ -714,6 +714,7 @@ CONTRACTS["consolidation-request"].extend(["Lift.ConsolidationRequest.Occurrence
 
 # Protocol-contract corpus Mac proof checkpoints: additive shared observers and family leaves.
 SHARED += ["ExecutionKeptEntered", "Lift.EnvironmentInv", "BytesSliceNat"]
+SHARED += ["ListFold", "ExecutionKeptFresh", "Lift.LogSilent"]
 CONTRACTS["beacon-roots"].extend([
     "Corpus.Proofs.BeaconRootsClassification", "Corpus.Proofs.BeaconRootsFrames",
     "Lift.BeaconRoots.Frame", "Lift.BeaconRoots.Read",
@@ -721,7 +722,9 @@ CONTRACTS["beacon-roots"].extend([
 CONTRACTS["history-storage"].extend([
     "Corpus.Proofs.HistoryStorage", "Lift.HistoryStorage.Frame", "Lift.HistoryStorage.Read",
 ])
-CONTRACTS["beacon-deposit"].extend(["Lift.BeaconDeposit.LogCodec"])
+CONTRACTS["beacon-deposit"].extend([
+    "Lift.BeaconDeposit.LogCodec", "Lift.BeaconDeposit.LogOnly", "Corpus.Proofs.DepositLogShape",
+])
 
 # Explicit semantic ownership, not the union of existing imports. Abstract token
 # interfaces do not add WETH9/USDC to PairToken/PairTwoToken; concrete instances
@@ -734,6 +737,7 @@ CONTRACTS["beacon-deposit"].extend(["Lift.BeaconDeposit.LogCodec"])
 # Each entry is a nonempty tuple of distinct CONTRACTS keys. Adding a composition
 # declares its boundary here; no default family or production exception exists.
 COMPOSITION = {
+    "Composition.Corpus.Proofs.RingHistory": ('beacon-roots', 'history-storage'),
     "Composition.Corpus.Proofs.RingValue": ('beacon-roots', 'history-storage'),
     "Composition.Corpus.Freeze.ConsolidationExecution": ('consolidation-request',),
     "Composition.Corpus.Freeze.ConsolidationJoint": ('consolidation-request',),

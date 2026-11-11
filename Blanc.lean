@@ -63,6 +63,7 @@ import Blanc.Composition.Corpus.Freeze.ConsolidationExecution
 import Blanc.Composition.Corpus.Freeze.ConsolidationJoint
 import Blanc.Composition.Corpus.Proofs.ConsolidationExecution
 import Blanc.Composition.Corpus.Proofs.ConsolidationLatency
+import Blanc.Composition.Corpus.Proofs.RingHistory
 import Blanc.Composition.Corpus.Proofs.RingTotality
 import Blanc.Composition.Corpus.Proofs.RingValue
 import Blanc.Composition.RequestPhaseAmsterdam
@@ -83,6 +84,7 @@ import Blanc.Corpus.Freeze.HistoryStorage
 import Blanc.Corpus.Freeze.RingCommon
 import Blanc.Corpus.Proofs.BeaconRootsClassification
 import Blanc.Corpus.Proofs.BeaconRootsFrames
+import Blanc.Corpus.Proofs.DepositLogShape
 import Blanc.Corpus.Proofs.HistoryStorage
 import Blanc.DelegatecallEnvelope
 import Blanc.DeploymentMessage
@@ -170,6 +172,7 @@ import Blanc.ExecutionKeptConfigured
 import Blanc.ExecutionKeptEntered
 import Blanc.ExecutionKeptFacts
 import Blanc.ExecutionKeptFrames
+import Blanc.ExecutionKeptFresh
 import Blanc.ExecutionKeptPreCalls
 import Blanc.ExecutionKeptTop
 import Blanc.ExecutionKeptValue
@@ -347,6 +350,7 @@ import Blanc.Lift.BeaconDeposit.Lift
 import Blanc.Lift.BeaconDeposit.LittleEndian
 import Blanc.Lift.BeaconDeposit.Liveness
 import Blanc.Lift.BeaconDeposit.LogCodec
+import Blanc.Lift.BeaconDeposit.LogOnly
 import Blanc.Lift.BeaconDeposit.Prog
 import Blanc.Lift.BeaconDeposit.Refines
 import Blanc.Lift.BeaconDeposit.RootLoop
@@ -577,6 +581,7 @@ import Blanc.Lift.LinearRuntimeSafety
 import Blanc.Lift.LockCheck
 import Blanc.Lift.LockCheckFlow
 import Blanc.Lift.LockCheckSound
+import Blanc.Lift.LogSilent
 import Blanc.Lift.Loop
 import Blanc.Lift.MapSlot
 import Blanc.Lift.MemGlue
@@ -834,6 +839,7 @@ import Blanc.Lift.WriteSiteTerm
 import Blanc.Lift.WriteSiteZero
 import Blanc.ListChunks
 import Blanc.ListFlatMapPosition
+import Blanc.ListFold
 import Blanc.LockExclusion
 import Blanc.LogBloom
 import Blanc.MachineDataFacts
