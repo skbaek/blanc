@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-563 shared modules, 536 with a module summary.
+566 shared modules, 539 with a module summary.
 
 ## `Blanc/`
 
@@ -273,6 +273,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`StorageRefund.lean`](../Blanc/StorageRefund.lean) | Refund monotonicity for a store to an unchanged original slot. | [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term) |
 | [`SyntheticBpo2Envelope.lean`](../Blanc/SyntheticBpo2Envelope.lean) | Fixed synthetic BPO2-from-genesis chain envelope. | [T7](COMMON_API.md#t7-i-must-construct-a-configured-block-forward-from-its-parts) |
 | [`SyntheticSystemWorld.lean`](../Blanc/SyntheticSystemWorld.lean) | Synthetic four-address system world. | [T7](COMMON_API.md#t7-i-must-construct-a-configured-block-forward-from-its-parts) |
+| [`SystemCallEmpty.lean`](../Blanc/SystemCallEmpty.lean) | The unchecked system-call envelope on empty code. | [T5](COMMON_API.md#t5-the-wrapper-is-a-block-body-and-the-fact-is-about-an-installed-contract) |
 | [`SystemCallForward.lean`](../Blanc/SystemCallForward.lean) | **The forward direction of a successful system call.** Jaune's `processSystemTransaction` wraps the SYSTEM caller's message to a system contract in `processMessageCall`. | [S1](COMMON_API.md#s1-i-need-a-projection-through-one-update), [T5](COMMON_API.md#t5-the-wrapper-is-a-block-body-and-the-fact-is-about-an-installed-contract) |
 | [`SystemContracts.lean`](../Blanc/SystemContracts.lean) | **The canonical system-contract code.** The four contracts a block's system messages call: the EIP-4788 beacon-roots contract, the EIP-2935 history-storage contract, the EIP-7002 withdrawal-request contract and the EIP-7251 consolidation-request contract. | [T2a](COMMON_API.md#t2a-i-need-a-frame-invariant-under-trace-local-entry-premises) |
 | [`Tactics.lean`](../Blanc/Tactics.lean) | **Goal-time proof recipe lookup.** `blanc_suggest` deliberately matches raw declaration names. | [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term), [I1](COMMON_API.md#i1-one-instructionlinefunction-preserves-an-observation) |
@@ -304,6 +305,12 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`Messages.lean`](../Blanc/CommonProofs/Messages.lean) | **Step 7.2 — message-level code-effect masters.** Relational code-preservation over message results. | [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term), [E2](COMMON_API.md#e2-the-walk-crosses-a-child-frame), [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`NoDel.lean`](../Blanc/CommonProofs/NoDel.lean) | §1 AdrSet non-membership helpers | [I1](COMMON_API.md#i1-one-instructionlinefunction-preserves-an-observation), [S2](COMMON_API.md#s2-i-need-a-reusable-composite-projection-cut), [T1](COMMON_API.md#t1-i-have-exec-initevm-msg-and-need-processmessage-msg) |
 | [`Walk.lean`](../Blanc/CommonProofs/Walk.lean) | stack-prefix walk lemmas and value-carrying instruction companions. | [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term), [I1](COMMON_API.md#i1-one-instructionlinefunction-preserves-an-observation), [S6](COMMON_API.md#s6-i-need-a-basic-evm-word-identity) |
+
+## `Blanc/Corpus/Freeze/`
+
+| module | summary | cited in |
+|---|---|---|
+| [`RingCommon.lean`](../Blanc/Corpus/Freeze/RingCommon.lean) | **G0 freeze (protocol-contract-corpus-v1, part rh): vocabulary shared by the R and H cells.** A freeze record, not a landing: this module is deliberately absent from the layering classification and the root. | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
 
 ## `Blanc/Lift/`
 
@@ -557,6 +564,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 |---|---|---|
 | [`Chain.lean`](../Blanc/Lift/RequestQueue/Chain.lean) | **Exact delivery over a given sequence of request-contract frames.** A `Queue` is a request contract's layout: its record type, the slots per record and the word each keeps, a record's returned bytes, and the cap per drain. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Drain.lean`](../Blanc/Lift/RequestQueue/Drain.lean) | **What a request system call leaves on a represented queue, for any excess arm.** The system path of the EIP-7002, EIP-7251 and EIP-8282 request contracts drains the queue the same way and differs only in the excess it stores (`SysShape.next`). | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+| [`DrainLatency.lean`](../Blanc/Lift/RequestQueue/DrainLatency.lean) | **Queue positions under consecutive drains.** If every effect through a destination is a drain, a record at queue position `q` at effect `j` is returned by effect `j + q / cap`, at output position `q % cap`. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Link.lean`](../Blanc/Lift/RequestQueue/Link.lean) | **From a chain's history to a request queue's steps, on the covered forks.** `RequestQueue.Chain` takes a list of steps at a request contract as its input. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Model.lean`](../Blanc/Lift/RequestQueue/Model.lean) | **The request queue model over a list of effects.** What one frame at a request contract does to its queue, in unbounded naturals: it pushes one record, keeps the queue, or drains it, with the excess it stores given as a function of the excess and count it reads. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Occurrence.lean`](../Blanc/Lift/RequestQueue/Occurrence.lean) | **Occurrence-indexed submissions, emissions and queues over a covered-fork kept history.** `RequestQueue.Link` turns a covered-fork kept history at a request contract into a byte-level `Chain` of queue steps. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |

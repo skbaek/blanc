@@ -705,6 +705,13 @@ SHARED += [
 # restored beside the modules whose vocabulary they extend (protocol-contract-corpus-v1).
 SHARED += ["Lift.WalkKitSupport", "ExecutionHistorySupport", "TransactionForwardSupport"]
 
+# Protocol-contract corpus source integration: shared vocabulary and narrow generic controls.
+SHARED += ["Corpus.Freeze.RingCommon", "SystemCallEmpty", "Lift.RequestQueue.DrainLatency"]
+CONTRACTS["beacon-roots"] = ["Corpus.Freeze.BeaconRoots", "Lift.BeaconRoots.Totality"]
+CONTRACTS["history-storage"] = ["Corpus.Freeze.HistoryStorage", "Lift.HistoryStorage.Totality"]
+CONTRACTS["beacon-deposit"].extend(["Corpus.Freeze.DepositCells", "Corpus.Freeze.DepositLedger"])
+CONTRACTS["consolidation-request"].extend(["Lift.ConsolidationRequest.Occurrence"])
+
 # Explicit semantic ownership, not the union of existing imports. Abstract token
 # interfaces do not add WETH9/USDC to PairToken/PairTwoToken; concrete instances
 # do. Single-family token adapters and Curve replay adapters stay narrow. The
@@ -716,6 +723,12 @@ SHARED += ["Lift.WalkKitSupport", "ExecutionHistorySupport", "TransactionForward
 # Each entry is a nonempty tuple of distinct CONTRACTS keys. Adding a composition
 # declares its boundary here; no default family or production exception exists.
 COMPOSITION = {
+    "Composition.Corpus.Freeze.ConsolidationExecution": ('consolidation-request',),
+    "Composition.Corpus.Freeze.ConsolidationJoint": ('consolidation-request',),
+    "Composition.Corpus.Freeze.BuilderRequest": ('builder-request', 'withdrawal-request'),
+    "Composition.Corpus.Proofs.ConsolidationExecution": ('consolidation-request',),
+    "Composition.Corpus.Proofs.ConsolidationLatency": ('consolidation-request',),
+    "Composition.Corpus.Proofs.RingTotality": ('beacon-roots', 'history-storage'),
     "Composition.RequestPhaseAmsterdam": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestCodesKept": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestPublicObservers": ('builder-request', 'withdrawal-request'),

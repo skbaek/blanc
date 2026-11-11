@@ -20,6 +20,8 @@ withdrawal-request = "EIP-7002; its kit is reused by EIP-8282 and EIP-7251"
 builder-request = "EIP-8282 builder request contracts"
 consolidation-request = "EIP-7251 consolidation requests"
 beacon-deposit = "Beacon deposit contract; protocol-contract-corpus-v1"
+beacon-roots = "EIP-4788 beacon roots; protocol-contract-corpus-v1"
+history-storage = "EIP-2935 history storage; protocol-contract-corpus-v1"
 
 # One table per release, written by the release operation:
 # [[released]]

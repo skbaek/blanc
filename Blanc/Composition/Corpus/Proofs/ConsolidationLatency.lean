@@ -1,4 +1,4 @@
-import Blanc.Corpus.Freeze.ConsolidationExecution
+import Blanc.Composition.Corpus.Freeze.ConsolidationExecution
 import Blanc.Lift.ConsolidationRequest.Occurrence
 import Blanc.Lift.RequestQueue.DrainLatency
 

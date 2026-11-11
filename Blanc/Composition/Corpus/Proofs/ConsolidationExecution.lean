@@ -1,4 +1,4 @@
-import Blanc.Corpus.Freeze.ConsolidationExecution
+import Blanc.Composition.Corpus.Freeze.ConsolidationExecution
 import Blanc.ExecutionKeptBalSilent
 
 /-!

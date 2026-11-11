@@ -1398,11 +1398,17 @@ The same module splits a list at an index it holds (`Blanc.List.eq_take_cons_dro
 pointwise `Forall₂` relation alike (`Blanc.List.forall₂_split`), and follows a queue entry drained
 at a fixed rate along a list to where it is drained (`Blanc.List.drain_position`: entry `q` of the
 queue at index `j` is entry `q % cap` of what index `j + q / cap` drains).
-For a joint run over an empty pre-history (`RingJoint`, with ring-contract header, timestamp and number bounds
+For a configured covered-fork pre-history followed by a joint run (`RingJoint`, with ring-contract header, timestamp and number bounds
 `ObservedPreTip`, `HistoryTimestampsFit`, `HistoryNumbersFit`) or a typed request feed across a `JointRun`
 (`JointFeed.stepRequests`, `JointFeed.feed`, `JointFeed.feedPosition`, `exists_feed_position`, `feedPosition_inj`),
 use [`Blanc/JointFeed.lean`](../Blanc/JointFeed.lean), which also bridges `JointRun` steps directly to `KeptHistory`
 (`JointRun.kept_toExec`, `kept_take_pre`, `kept_take_add`, `kept_getElem?`).
+For the stable frozen ring vocabulary, use
+[`Blanc/Corpus/Freeze/RingCommon.lean`](../Blanc/Corpus/Freeze/RingCommon.lean):
+`Blanc.Corpus.Freeze.ring`, `keptAtAddr`, `storOf`, `frameStor`, `ObservedPreTip`,
+`HistoryTimestampsFit`, `HistoryNumbersFit`, `stepTime`, `stepNumber`, `stepSlot` and
+`Blanc.Corpus.Freeze.RingJoint`. This frozen carrier and `Blanc.RingJoint` are distinct nominal types;
+use the carrier required by the statement rather than assuming they are interchangeable.
 
 For consensus SSZ byte equations, use
 [`Blanc/ConsensusSsz.lean`](../Blanc/ConsensusSsz.lean):
@@ -4816,6 +4822,9 @@ EIP-2935 walks `Blanc/Lift/SystemExecution/BeaconRoots/SystemWalk.lean` and
 `processUncheckedSystemTransaction_historyStorage`), and the EIP-7251 empty-queue walk
 `Blanc/Lift/SystemExecution/ConsolidationRequest/SystemWalk.lean`
 (`processCheckedSystemTransaction_consolidationRequest_empty`, via the checked form).
+For an unchecked call with empty installed code away from precompiles on a covered fork, use
+[`Blanc/SystemCallEmpty.lean`](../Blanc/SystemCallEmpty.lean):
+`processUncheckedSystemTransaction_empty` supplies a successful call and identity of the complete state.
 
 **Under Amsterdam** the wrapper takes `processTopLevelAmsterdam`, and the frame starts from
 `systemCallBase` (two read records on `initDevm`), not `initEvm`. Use
@@ -6323,6 +6332,11 @@ the oldest `min(length, cap)` records). For the queue model over a list of frame
 stored-excess function; `run`, `deliveries`, the FIFO `fifo`; `represents_push` for a submission's storage) and
 [`Blanc/Lift/RequestQueue/Chain.lean`](../Blanc/Lift/RequestQueue/Chain.lean) (`Queue`, a `Step` packaging a
 frame with its queue law, `Chain`, `Chain.delivered`, `Chain.drain_delivers`).
+For queue-model delivery under consecutive drains, without storage or kept-history premises, use
+[`Blanc/Lift/RequestQueue/DrainLatency.lean`](../Blanc/Lift/RequestQueue/DrainLatency.lean):
+`deliveries_drain_slot` follows record `cap*k+i`, with `i<cap`, to effect `j+k`;
+`deliveries_drain_position` gives destination `j+q/cap` and slot `q%cap` for `cap>0`.
+Every effect through the destination must be a drain.
 To produce that list from a kept history at covered forks, give a canonical request contract a `Linked` (its
 address, type byte, `record?` and a `Step` for each kept user frame and for its request-phase call) and use
 [`Blanc/Lift/RequestQueue/Link.lean`](../Blanc/Lift/RequestQueue/Link.lean): `history_chain` (the kept frames are a
