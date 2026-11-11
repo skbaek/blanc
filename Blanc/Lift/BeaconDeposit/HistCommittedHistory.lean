@@ -84,13 +84,25 @@ private def beaconAccountingLadderIn (ca : Adr) :
 
 /-- The checked installed runtime supplies historical settlement's no-deletion producer. -/
 theorem beaconInstalledCertH : InstalledCert code where
-  exists_cert := ⟨cert, cert_check, by decide +kernel, by decide +kernel⟩
+  exists_cert := ⟨cert, cert_check, by decide +kernel, cert_noSelfdestruct⟩
   notDelegation := beaconSem.not_delegation rfl
   nonempty := by
     intro empty
     have length := code_toList_length
     rw [empty] at length
     cases length
+
+/-- The same literal checked deposit certificate excludes decoded SELFDESTRUCT
+at every raw node owning its installed account, for all rules and outcomes.
+This is terminal exclusion, not retained deletion-set absence. -/
+theorem raw_terminal_safe_of_installed {wa : Adr} {pc : Nat} {sevm : Sevm}
+    {pre : Devm} {out : Execution} (run : Exec pc sevm pre out)
+    (installed : pre.getCode wa = code)
+    (root : sevm.currentTarget = wa → pc = 0 ∧ sevm.code = code) :
+    ∀ node ∈ Exec.rawNodes run, node.sevm.currentTarget = wa →
+      ¬ Linst.At node.sevm.code node.pc .selfdestruct := by
+  exact Blanc.Exec.safe_of_installedStaticcallCert cert_check cert_execs_staticcall
+    cert_noSelfdestruct beaconInstalledCertH.notDelegation run installed beaconInstalledCertH.nonempty root
 
 /-- The actual transaction suffix preserves installed code and the exact extracted history.
 This intermediate exposes admission; its entry invariant belongs to the supplied initial state. -/
