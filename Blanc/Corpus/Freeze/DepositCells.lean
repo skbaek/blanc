@@ -50,7 +50,7 @@ def depositLogs (logs : List Log) : List Log :=
     log.topics[0]? = some depositEventSignatureHash)
 
 /-- Every kept block of a list ran at a fork satisfying `F`. -/
-def KeptAtForks (F : Fork → Prop) (blocks : List KeptBlock) : Prop := ∀ b ∈ blocks, F b.fork
+def KeptAtForks (F : Jaune.Fork → Prop) (blocks : List KeptBlock) : Prop := ∀ b ∈ blocks, F b.fork
 
 /-- The deposit code at the deposit address, the frame law the value fold needs. -/
 def DepositCodeAt (σ : State) : Prop := σ.getCode depositAddr = code
@@ -61,7 +61,7 @@ def DepositCodeAt (σ : State) : Prop := σ.getCode depositAddr = code
 with the deposit code installed, every deposit-topic log a kept frame at the deposit address
 appended is one Jaune's `extractDepositData` accepts, with a 192-byte record. A safety statement
 about settled frames; no gas is stated. -/
-def LogShape (F : Fork → Prop) : Prop :=
+def LogShape (F : Jaune.Fork → Prop) : Prop :=
   ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock},
     -- the blocks are a kept history from `start`
     KeptHistory cfg start blocks stop →
@@ -88,9 +88,9 @@ bytes are the records of the transactions' kept frames at the deposit address, i
 completeness (one receipt per transaction, at its index key) and attribution (only frames at the
 deposit address, running its code, write logs there) are derived, not assumed. With this,
 `RequestPhaseAmsterdam.request_pass` drops its `parsed` premise (D-S10, `F = (· = .amsterdam)`). -/
-def ParseSucceeds (F : Fork → Prop) : Prop :=
+def ParseSucceeds (F : Jaune.Fork → Prop) : Prop :=
   ∀ (benv : Benv) (txis : List (Nat × Tx)) (bal : BalBuilder) (final : Benv) (out : BlockOutput)
-    (senders : List (Adr × Tx)) (roots : List Root) (wds : List Withdrawal),
+    (senders : List (Adr × Tx)) (roots : List Root) (wds : List Jaune.Withdrawal),
     -- the body's fork is in `F`
     F benv.stat.fork →
     -- the deposit code is installed when the transactions start
@@ -103,17 +103,17 @@ def ParseSucceeds (F : Fork → Prop) : Prop :=
 /-- **D-S1** (Prague to BPO2): the log shape and the parse, at covered forks. -/
 def D1 : Prop := LogShape CoveredFork ∧ ParseSucceeds CoveredFork
 
-/-- **D-S10** (Amsterdam): the log-shape half only, so that `request_pass` drops its parsing
-premise. -/
+/-- **D-S10** (Amsterdam): the log-shape half and the parse, at Amsterdam, so that `request_pass`
+drops its parsing premise. -/
 def D10 : Prop := LogShape (· = .amsterdam) ∧ ParseSucceeds (· = .amsterdam)
 
 /-- **D-S1 / D-S10 control.** A closed runtime at the deposit address that emits one short
 deposit-topic log, with every other premise of `ParseSucceeds` met (correct address, topic,
 existing receipt), makes the parse fail: the CODE premise is needed. Stated at Prague (D-S1) and
 at Amsterdam (D-S10). -/
-def ShortLogControl (F : Fork → Prop) : Prop :=
+def ShortLogControl (F : Jaune.Fork → Prop) : Prop :=
   ∃ (shortCode : ByteArray) (benv : Benv) (txis : List (Nat × Tx)) (bal : BalBuilder) (final : Benv)
-    (out : BlockOutput) (senders : List (Adr × Tx)) (roots : List Root) (wds : List Withdrawal),
+    (out : BlockOutput) (senders : List (Adr × Tx)) (roots : List Root) (wds : List Jaune.Withdrawal),
     F benv.stat.fork ∧ benv.state.getCode depositAddr = shortCode ∧
     TransactionsRoots txis benv { BlockOutput.init with bal := bal } final out senders roots ∧
     (∃ log ∈ out.blockLogs, log.address = depositAddr ∧
@@ -138,10 +138,10 @@ def Classified (fr : Exec.Frame) (history : List B256) : DepositOutcome → Prop
       solAcc (fr.post.getStor depositAddr) = s' ∧
       SolInv (fr.post.getStor depositAddr) (history ++ [frameNode fr.sevm]) ∧
       (∃ h v, h < 32 ∧ fr.post.getStor depositAddr =
-        ((fr.pre.getStor depositAddr).set solCountSlot (history.length + 1)).set (solBranchSlot h) v) ∧
+        ((fr.pre.getStor depositAddr).set solCountSlot (Nat.toB256 (history.length + 1))).set (solBranchSlot h) v) ∧
       (∀ a, a ≠ depositAddr → fr.post.getStor a = fr.pre.getStor a) ∧
       frameLogs fr = [BeaconDeposit.depositEventLog depositAddr ev] ∧
-      fr.post.output = [] ∧ fr.post.getBal depositAddr = fr.pre.getBal depositAddr
+      fr.post.output = fr.pre.output ∧ fr.post.getBal depositAddr = fr.pre.getBal depositAddr
   | .getDepositRoot =>
     Sevm.selector fr.sevm = BeaconDeposit.getDepositRootSelector ∧ fr.sevm.value = 0 ∧
     fr.post.output = (BeaconDeposit.Acc.root Bytes.sha256 (solAcc (fr.pre.getStor depositAddr))).toBytes ∧
@@ -154,9 +154,10 @@ def Classified (fr : Exec.Frame) (history : List B256) : DepositOutcome → Prop
     fr.post.getBal depositAddr = fr.pre.getBal depositAddr
   | .supportsInterface =>
     Sevm.selector fr.sevm = BeaconDeposit.supportsInterfaceSelector ∧ fr.sevm.value = 0 ∧
-    fr.post.output = BeaconDeposit.abiBoolReturn (BeaconDeposit.supportsInterface
-      (BeaconDeposit.erc165InterfaceId.toBytes.take 4) (BeaconDeposit.depositInterfaceId.toBytes.take 4)
-      ((Sevm.dataWord fr.sevm 4).toBytes.take 4)) ∧
+    36 ≤ fr.sevm.data.length ∧
+    fr.post.output = BeaconDeposit.abiBoolReturn (decide
+      (Sevm.argWord fr.sevm 0 >>> 224 = BeaconDeposit.erc165InterfaceId ∨
+        Sevm.argWord fr.sevm 0 >>> 224 = BeaconDeposit.depositInterfaceId)) ∧
     (∀ a, fr.post.getStor a = fr.pre.getStor a) ∧ frameLogs fr = [] ∧
     fr.post.getBal depositAddr = fr.pre.getBal depositAddr
 
@@ -231,7 +232,7 @@ def AnchorLedgerD {P : Preset} {ccfg : Config} {bls : Bool} {anchor final : Join
   AnchorLedger anchor tq₀ ∧
   ∀ n e, (some n, e) ∈ tq₀ → n < v.E₀ ∧
     (committedDepositDataIn v.deployment.trace)[n]? =
-      some (e.pubkey.toArray.toList, e.withdrawal_credentials.toArray.toList,
+      some (e.pubkey.toArray.toList, e.withdrawal_credentials.toBytes,
         e.signature.toArray.toList, e.amount.toNat)
 
 /-! ## D-S9 delivery, and D-S8 -/
@@ -243,7 +244,7 @@ indices from `E₀`, the contract's count at the anchor. -/
 def D9Delivery : Prop :=
   ∀ {P : Preset} {ccfg : Config} {bls : Bool} {anchor final : JointState P}
     (v : DepositJoint (P := P) ccfg bls anchor final),
-    (∀ j (D : JointRunStep (P := P) mainnetChainConfig ccfg bls), v.run.steps[j]? = some D →
+    (∀ (j : Nat) (D : JointRunStep (P := P) mainnetChainConfig ccfg bls), v.run.steps[j]? = some D →
       (stepDepositRequests D).map Ssz.serialize =
         (D.stepTrace.trace.kept.keptAt depositAddr).flatMap frameRecords) ∧
     (runDepositRequests v.run).map (fun dr => dr.index.toNat) =
@@ -255,7 +256,7 @@ deposit frames (when there is one). Nothing about when consensus credits it. -/
 def D8 : Prop :=
   ∀ {P : Preset} {ccfg : Config} {bls : Bool} {anchor final : JointState P}
     (v : DepositJoint (P := P) ccfg bls anchor final),
-    ∀ j (D : JointRunStep (P := P) mainnetChainConfig ccfg bls), v.run.steps[j]? = some D →
+    ∀ (j : Nat) (D : JointRunStep (P := P) mainnetChainConfig ccfg bls), v.run.steps[j]? = some D →
       ∀ fr ∈ D.stepTrace.trace.kept.keptAt depositAddr, ∀ r ∈ frameRecords fr,
         ∃ dr ∈ stepDepositRequests D, Ssz.serialize dr = r
 
@@ -265,7 +266,7 @@ transition, or, under a hash collision, the list comparison). W's `jointStep_rej
 in D's statement form. -/
 def D9DeliveryControl : Prop :=
   ∀ {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {s : JointState P}
-    {b : AnySignedBlock P} {req : NewPayloadRequest P} {f : Jaune.Fork} {post : BlockChain}
+    {b : AnySignedBlock P} {req : NewPayloadRequest P} {f : Jaune.Fork}
     {st : State} {bout : BlockOutput},
     NewPayloadRequest.ofBlock b.2.message = .ok req →
     cfg.forkAt (payloadToBlock req).header.number (payloadToBlock req).header.timestamp = .ok f →
@@ -288,13 +289,13 @@ def D9FateJoined : Prop :=
     (v : DepositJoint (P := P) ccfg true anchor final) (tq₀ : TQueue),
     AnchorLedgerD v tq₀ →
     RunIndicesFresh v.run tq₀ ∧
-    ∀ j (D : JointRunStep (P := P) mainnetChainConfig ccfg true), v.run.steps[j]? = some D →
-      ∀ k dr, (stepDepositRequests D)[k]? = some dr →
+    ∀ (j : Nat) (D : JointRunStep (P := P) mainnetChainConfig ccfg true), v.run.steps[j]? = some D →
+      ∀ (k : Nat) (dr : DepositRequest), (stepDepositRequests D)[k]? = some dr →
         ∃ fr ∈ D.stepTrace.trace.kept.keptAt depositAddr,
           Sevm.selector fr.sevm = BeaconDeposit.depositSelector ∧
           dr.amount.toNat * 10 ^ 9 = fr.sevm.value.toNat ∧
           dr.pubkey.toArray.toList = argBytes fr.sevm 0 ∧
-          dr.withdrawal_credentials.toArray.toList = argBytes fr.sevm 1 ∧
+          dr.withdrawal_credentials.toBytes = argBytes fr.sevm 1 ∧
           dr.signature.toArray.toList = argBytes fr.sevm 2
 
 /-- **D-S9 conservation, joined.** On a valid deposit joint chain with BLS on and D's anchor
