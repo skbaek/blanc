@@ -719,6 +719,7 @@ SHARED += ["ExecutionKeptEntered", "Lift.EnvironmentInv", "BytesSliceNat"]
 SHARED += ["ListFold", "ExecutionKeptFresh", "Lift.LogSilent"]
 SHARED += ["Lift.SystemWordWriter", "RlpReceiptKeys", "ExecutionKeptReceiptLogs"]
 SHARED += ["ExecutionKeptRuntime"]
+SHARED += ["DepositRequestParser"]
 CONTRACTS["beacon-roots"].extend([
     "Corpus.Proofs.BeaconRootsClassification", "Corpus.Proofs.BeaconRootsFrames",
     "Lift.BeaconRoots.Frame", "Lift.BeaconRoots.Read", "Lift.BeaconRoots.Writer",
@@ -749,6 +750,7 @@ COMPOSITION = {
     "Composition.Corpus.Proofs.ConsolidationExecution": ('consolidation-request',),
     "Composition.Corpus.Proofs.ConsolidationLatency": ('consolidation-request',),
     "Composition.Corpus.Proofs.RingTotality": ('beacon-roots', 'history-storage'),
+    "Composition.DepositParse": ('beacon-deposit',),
     "Composition.RequestPhaseAmsterdam": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestCodesKept": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestClassification": ('builder-request', 'withdrawal-request'),
@@ -759,6 +761,7 @@ COMPOSITION = {
     "Composition.BuilderRequestCarrier": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointG": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGFate": ('builder-request', 'withdrawal-request'),
+    "Composition.BuilderRequestJointGFateFocused": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGBalance": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGProvenance": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestJointGLedger": ('builder-request', 'withdrawal-request'),

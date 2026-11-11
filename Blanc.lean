@@ -39,6 +39,7 @@ import Blanc.Composition.BuilderRequestJointGConservation
 import Blanc.Composition.BuilderRequestJointGExitAuth
 import Blanc.Composition.BuilderRequestJointGExitUnique
 import Blanc.Composition.BuilderRequestJointGFate
+import Blanc.Composition.BuilderRequestJointGFateFocused
 import Blanc.Composition.BuilderRequestJointGLedger
 import Blanc.Composition.BuilderRequestJointGOnboarding
 import Blanc.Composition.BuilderRequestJointGOnboardingWitnesses
@@ -67,6 +68,7 @@ import Blanc.Composition.Corpus.Proofs.ConsolidationLatency
 import Blanc.Composition.Corpus.Proofs.RingHistory
 import Blanc.Composition.Corpus.Proofs.RingTotality
 import Blanc.Composition.Corpus.Proofs.RingValue
+import Blanc.Composition.DepositParse
 import Blanc.Composition.RequestPhaseAmsterdam
 import Blanc.Composition.RequestPhaseAmsterdamBal
 import Blanc.Composition.RequestPhaseOrder
@@ -90,6 +92,7 @@ import Blanc.Corpus.Proofs.HistoryStorage
 import Blanc.DelegatecallEnvelope
 import Blanc.DeploymentMessage
 import Blanc.DeploymentTouch
+import Blanc.DepositRequestParser
 import Blanc.ExecDeterminism
 import Blanc.ExecIdentification
 import Blanc.ExecutionAccountingAdmission

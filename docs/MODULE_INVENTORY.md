@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-578 shared modules, 550 with a module summary.
+579 shared modules, 551 with a module summary.
 
 ## `Blanc/`
 
@@ -41,6 +41,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`DelegatecallEnvelope.lean`](../Blanc/DelegatecallEnvelope.lean) | **Contract-neutral `DELEGATECALL` envelope vocabulary.** The descriptor below is a proof-carrying name for the exact child constructed by Jaune's `.delegatecall` arm. | [E2](COMMON_API.md#e2-the-walk-crosses-a-child-frame) |
 | [`DeploymentMessage.lean`](../Blanc/DeploymentMessage.lean) | contract-neutral CREATE message plumbing. | [C2](COMMON_API.md#c2-i-need-deploymentmessage-correspondence) |
 | [`DeploymentTouch.lean`](../Blanc/DeploymentTouch.lean) | **Successful deployment settlement with recorded touches.** These forward bridges keep the rules-selected touch in the exact settled machine. | [T1](COMMON_API.md#t1-i-have-exec-initevm-msg-and-need-processmessage-msg), [C2](COMMON_API.md#c2-i-need-deploymentmessage-correspondence) |
+| [`DepositRequestParser.lean`](../Blanc/DepositRequestParser.lean) | Positive deposit parsing over the actual ordered receipt keys | [T3](COMMON_API.md#t3-the-wrapper-is-a-transaction-and-the-fact-is-about-an-installed-contract) |
 | [`ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean) | *(no module summary)* | [E5](COMMON_API.md#e5-i-need-to-inspect-what-happened-in-an-exec) |
 | [`ExecIdentification.lean`](../Blanc/ExecIdentification.lean) | **Execution identification.** Contract-neutral facts identifying an execution's descendant frames across one step, proved by `Exec.unique`-style identification. | [E5](COMMON_API.md#e5-i-need-to-inspect-what-happened-in-an-exec) |
 | [`ExecutionAccountingAdmission.lean`](../Blanc/ExecutionAccountingAdmission.lean) | **Observed semantic accounting under trace-local admission.** A committed execution root supplies a replay whose observation is exactly its committed frames. | [T2c](COMMON_API.md#t2c-i-need-that-ledger-replay-on-every-wrapper-up-to-a-whole-configured-history), [T3](COMMON_API.md#t3-the-wrapper-is-a-transaction-and-the-fact-is-about-an-installed-contract) |

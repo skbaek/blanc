@@ -4613,6 +4613,17 @@ message-to-kept log equality under `stateGas = none` and the address-filter impl
 Receipt completeness and log attribution are derived from the supplied original
 carrier, with no installed-code, calldata-bound or entry-freshness premise.
 
+For positive parsing from ordered receipts,
+[`Blanc/DepositRequestParser.lean`](../Blanc/DepositRequestParser.lean) supplies
+`parseDepositRequests_of_receipts`. It requires positional `List.Forall₂` lookups in the
+actual receipt trie for every entry of `bout.receiptKeys`, and successful `extractDepositData`
+for every log selected by the deposit address and first event topic. The resulting record bytes
+follow receipt-key and log occurrence order, preserving repeated keys and equal receipt values.
+`withdrawalsPass_receipts` and `parseDepositRequests_withdrawalsPass` give unconditional
+receipt-key/trie and parser invariance for arbitrary withdrawal lists, fork rules and block
+environments. The ordered lookup and selected-log acceptance obligations remain explicit
+premises of the positive parsing theorem.
+
 
 For a successful creation receipt, use
 `StagedBodyTrace.decodedTxs_getElem_of_slot` and `txSplit_tx_eq_of_slot` in
