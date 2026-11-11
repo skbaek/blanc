@@ -82,15 +82,15 @@ private theorem event_logs {sevm : Sevm} {b : Devm}
 
 /-- The deposit wrapper appends one well-shaped event on its original successful run. -/
 private theorem deposit_wrapper_logs {sevm : Sevm} {pre post : Devm} {sel : B256} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.length < 2 ^ 256)
+    (fork : CoveredFork sevm.benvStat.fork)
     (run : SFunc.Run prog sevm (St pre [sel] mem0 G) t_00a4_c32 (.halted post)) :
     ∃ ev : BeaconDeposit.DepositEvent,
       post.logs = pre.logs ++ [BeaconDeposit.depositEventLog sevm.currentTarget ev] ∧
       ev.pubkey.length = 48 ∧ ev.withdrawal_credentials.length = 32 ∧
       ev.amount.length = 8 ∧ ev.signature.length = 96 ∧ ev.index.length = 8 := by
-  obtain ⟨decodable, gas, returned, body, _, logs⟩ := safe_decoder hcd run
+  obtain ⟨decodable, gas, returned, body, _, logs⟩ := safe_decoder_any_data run
   obtain ⟨_, _, _, _, _, _, b1, m1, gas1, kept1, mem1, body1⟩ :=
-    safe_guards (sel := sel) hcd fork body
+    safe_guards_any_data (sel := sel) fork body
   obtain ⟨b2, m2, gas2, kept2, mem2, body2⟩ := safe_event mem1 body1
   let ev := bodyEvent sevm (argPtr sevm 0) (argPtr sevm 1) (argPtr sevm 2)
     (gweiAmount sevm) (pre.getStorVal sevm.currentTarget solCountSlot)
@@ -107,9 +107,9 @@ private theorem deposit_wrapper_logs {sevm : Sevm} {pre post : Devm} {sel : B256
   rfl
 
 /-- Every original successful fresh execution appends no log or exactly one well-shaped event. -/
-theorem successful_logs {sevm : Sevm} {pre post : Devm}
+theorem successful_logs_any_data {sevm : Sevm} {pre post : Devm}
     (hcode : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (hcd : sevm.data.length < 2 ^ 256) (hstack : pre.stack = [])
+    (hstack : pre.stack = [])
     (hmem : pre.memory = Mem.empty) (executed : Exec 0 sevm pre (.ok post)) :
     post.logs = pre.logs ∨ ∃ ev : BeaconDeposit.DepositEvent,
       post.logs = pre.logs ++ [BeaconDeposit.depositEventLog sevm.currentTarget ev] ∧
@@ -128,7 +128,7 @@ theorem successful_logs {sevm : Sevm} {pre post : Devm}
       rw [at32] at found
       exact (Option.some.inj found).symm
     subst wrapper
-    exact Or.inr (deposit_wrapper_logs fork hcd run)
+    exact Or.inr (deposit_wrapper_logs fork run)
   · left
     have inViews : k ∈ viewSet := by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at member
@@ -140,6 +140,41 @@ theorem successful_logs {sevm : Sevm} {pre post : Devm}
     exact (run.world_of_quietH viewSet_quiet fork.rules_stateGas_none checked.1 checked.2).2
 
 /-- Every newly appended log is the exact accepted event image, with a 192-byte request record. -/
+theorem successful_log_shape_any_data {sevm : Sevm} {pre post : Devm}
+    (hcode : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (hstack : pre.stack = [])
+    (hmem : pre.memory = Mem.empty) (executed : Exec 0 sevm pre (.ok post)) :
+    ∀ log ∈ post.logs.drop pre.logs.length, ∃ ev : BeaconDeposit.DepositEvent,
+      log = BeaconDeposit.depositEventLog sevm.currentTarget ev ∧
+      extractDepositData log.data =
+        .ok (ev.pubkey ++ ev.withdrawal_credentials ++ ev.amount ++ ev.signature ++ ev.index) ∧
+      (ev.pubkey ++ ev.withdrawal_credentials ++ ev.amount ++ ev.signature ++ ev.index).length =
+        192 := by
+  intro log member
+  rcases successful_logs_any_data hcode fork hstack hmem executed with empty | ⟨ev, logs, lengths⟩
+  · rw [empty, List.drop_length] at member
+    exact False.elim (List.not_mem_nil member)
+  · rw [logs, List.drop_length_append' rfl, List.mem_singleton] at member
+    subst log
+    refine ⟨ev, rfl, ?_, ?_⟩
+    · exact extractDepositData_abiDepositEvent ev lengths.1 lengths.2.1 lengths.2.2.1
+        lengths.2.2.2.1 lengths.2.2.2.2
+    · exact depositRecord_length ev lengths.1 lengths.2.1 lengths.2.2.1
+        lengths.2.2.2.1 lengths.2.2.2.2
+
+/-- Bounded compatibility projection of the same original-execution result. -/
+theorem successful_logs {sevm : Sevm} {pre post : Devm}
+    (hcode : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (hcd : sevm.data.length < 2 ^ 256) (hstack : pre.stack = [])
+    (hmem : pre.memory = Mem.empty) (executed : Exec 0 sevm pre (.ok post)) :
+    post.logs = pre.logs ∨ ∃ ev : BeaconDeposit.DepositEvent,
+      post.logs = pre.logs ++ [BeaconDeposit.depositEventLog sevm.currentTarget ev] ∧
+      ev.pubkey.length = 48 ∧ ev.withdrawal_credentials.length = 32 ∧
+      ev.amount.length = 8 ∧ ev.signature.length = 96 ∧ ev.index.length = 8 := by
+  exact (fun _ : sevm.data.length < 2 ^ 256 =>
+    successful_logs_any_data hcode fork hstack hmem executed) hcd
+
+/-- Bounded compatibility projection of the same original-execution result. -/
 theorem successful_log_shape {sevm : Sevm} {pre post : Devm}
     (hcode : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (hcd : sevm.data.length < 2 ^ 256) (hstack : pre.stack = [])
@@ -150,16 +185,7 @@ theorem successful_log_shape {sevm : Sevm} {pre post : Devm}
         .ok (ev.pubkey ++ ev.withdrawal_credentials ++ ev.amount ++ ev.signature ++ ev.index) ∧
       (ev.pubkey ++ ev.withdrawal_credentials ++ ev.amount ++ ev.signature ++ ev.index).length =
         192 := by
-  intro log member
-  rcases successful_logs hcode fork hcd hstack hmem executed with empty | ⟨ev, logs, lengths⟩
-  · rw [empty, List.drop_length] at member
-    exact False.elim (List.not_mem_nil member)
-  · rw [logs, List.drop_length_append' rfl, List.mem_singleton] at member
-    subst log
-    refine ⟨ev, rfl, ?_, ?_⟩
-    · exact extractDepositData_abiDepositEvent ev lengths.1 lengths.2.1 lengths.2.2.1
-        lengths.2.2.2.1 lengths.2.2.2.2
-    · exact depositRecord_length ev lengths.1 lengths.2.1 lengths.2.2.1
-        lengths.2.2.2.1 lengths.2.2.2.2
+  exact (fun _ : sevm.data.length < 2 ^ 256 =>
+    successful_log_shape_any_data hcode fork hstack hmem executed) hcd
 
 end Blanc.Lift.BeaconDeposit

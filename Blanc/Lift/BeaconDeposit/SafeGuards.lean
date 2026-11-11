@@ -26,6 +26,25 @@ caller (the converse of `to_little_endian_64_run`: from a run of `t_14ba_c25` re
 returned state is `pB :: rest` over `leImg`; its eight `MSTORE8` bounds checks have `INVALID`
 failing arms).  The `SLOAD` is `Ninst.Run`'s `afterSload` successor (determinism of the step:
 compare with `Ninst.runCompiled_sload_selected`). -/
+theorem safe_guards_any_data {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B256} {G : Nat}
+    {o : Outcome}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.Run prog sevm (St b [rt, sgL, sP, wcL, wP, pkL, pP, 0x01b8, sel] mem0 G)
+      t_0304_c7 o) :
+    pkL = 48 ∧ wcL = 32 ∧ sgL = 96 ∧ 10 ^ 18 ≤ sevm.value.toNat ∧
+      sevm.value.toNat % 10 ^ 9 = 0 ∧ sevm.value.toNat / 10 ^ 9 < 2 ^ 64 ∧
+      ∃ b' M' G', Keep (afterSload sevm b solCountSlot) b' ∧
+        BodyMem M' 256 0x100
+          [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 (gweiAmount sevm).toNat),
+            (0xc0, (8 : B256).toBytes),
+            (0xe0, BeaconDeposit.le64 (b.getStorVal sevm.currentTarget solCountSlot).toNat)] ∧
+        SFunc.Run prog sevm
+          (St b' [0xc0, 96, sP, 0x80, 32, wP, 48, pP, BeaconDeposit.depositEventTopic, 0x80,
+            gweiAmount sevm, rt, 96, sP, 32, wP, 48, pP, 0x01b8, sel] M' G') t_0575_c7 o := by
+  have := safe_guardsH_any_data hfork.rules_bal_none run
+  rwa [afterSloadH_of_eip2929 hfork.rules_access] at this
+
+/-- Bounded compatibility projection of the same covered-fork guard result. -/
 theorem safe_guards {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B256} {G : Nat}
     {o : Outcome}
     (hcd : sevm.data.length < 2 ^ 256) (hfork : CoveredFork sevm.benvStat.fork)
@@ -41,7 +60,6 @@ theorem safe_guards {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B256
         SFunc.Run prog sevm
           (St b' [0xc0, 96, sP, 0x80, 32, wP, 48, pP, BeaconDeposit.depositEventTopic, 0x80,
             gweiAmount sevm, rt, 96, sP, 32, wP, 48, pP, 0x01b8, sel] M' G') t_0575_c7 o := by
-  have := safe_guardsH hcd hfork.rules_bal_none run
-  rwa [afterSloadH_of_eip2929 hfork.rules_access] at this
+  exact (fun _ : sevm.data.length < 2 ^ 256 => safe_guards_any_data hfork run) hcd
 
 end Blanc.Lift.BeaconDeposit

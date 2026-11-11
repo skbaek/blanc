@@ -30,9 +30,9 @@ caller (the converse of `to_little_endian_64_run`: from a run of `t_14ba_c25` re
 returned state is `pB :: rest` over `leImg`; its eight `MSTORE8` bounds checks have `INVALID`
 failing arms).  The `SLOAD` is `Ninst.Run`'s `afterSloadH` successor (determinism of the step:
 compare with `Ninst.runCompiled_sload_selected`). -/
-theorem safe_guardsH {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B256} {G : Nat}
+theorem safe_guardsH_any_data {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B256} {G : Nat}
     {o : Outcome}
-    (hcd : sevm.data.length < 2 ^ 256) (hbal : sevm.benvStat.rules.bal = none)
+    (hbal : sevm.benvStat.rules.bal = none)
     (run : SFunc.Run prog sevm (St b [rt, sgL, sP, wcL, wP, pkL, pP, 0x01b8, sel] mem0 G)
       t_0304_c7 o) :
     pkL = 48 ∧ wcL = 32 ∧ sgL = 96 ∧ 10 ^ 18 ≤ sevm.value.toNat ∧
@@ -186,7 +186,7 @@ theorem safe_guardsH {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B25
   unfold t_0535_c7 at run
   winv 5
   obtain ⟨G6, ⟨D, hcall1, run⟩ | ⟨D, hcall1, -⟩⟩ := ric_call (fs := prog) (k := 25) (by rfl) run
-  · obtain ⟨M1, G7, rfl, hwf1, hr1, hs1⟩ := safe_to_little_endian_64_returned hcd wf_mem0 reads_mem0
+  · obtain ⟨M1, G7, rfl, hwf1, hr1, hs1⟩ := safe_to_little_endian_64_returned_any_data wf_mem0 reads_mem0
       (by rw [mem0_size]) (by rw [mem0_size]) img0_fp (by rw [p80]) (by rw [p80]; omega)
       (by rw [p80]; decide) hcall1
     have hs1' : M1.size = 192 := by rw [hs1, mem0_size, p80]; decide
@@ -206,7 +206,7 @@ theorem safe_guardsH {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B25
     set b'' := afterSloadH sevm b solCountSlot with hb''def
     set cnt := b.getStorVal sevm.currentTarget solCountSlot with hcntdef
     obtain ⟨G23, ⟨D2, hcall2, run⟩ | ⟨D2, hcall2, -⟩⟩ := ric_call (fs := prog) (k := 25) (by rfl) run
-    · obtain ⟨M', G24, rfl, hwf', hr', hs'⟩ := safe_to_little_endian_64_returned hcd hwf1 hr1
+    · obtain ⟨M', G24, rfl, hwf', hr', hs'⟩ := safe_to_little_endian_64_returned_any_data hwf1 hr1
         (by rw [hs1']) (by rw [hs1']; decide) hfp2 (by decide) (by decide) (by decide) hcall2
       set img2 := leImg (img1 (gweiAmount sevm)) (192 : B256) cnt with himg2def
       have himg2_eq : img2 = Bytes.writeAt
@@ -268,9 +268,27 @@ theorem safe_guardsH {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B25
       have h80 : Bytes.toB256 [0x80] = (0x80 : B256) := rfl
       rw [h192, h80] at run
       refine ⟨rfl, rfl, rfl, hval1, hval2, hval3, b'', M', G24, Keep.refl b'', hBodyMem, run.uncut⟩
-    · exact (safe_to_little_endian_64_not_halted hcd hwf1 hr1 (by rw [hs1'])
+    · exact (safe_to_little_endian_64_not_halted_any_data hwf1 hr1 (by rw [hs1'])
         (by rw [hs1']; decide) hfp2 (by decide) (by decide) (by decide) hcall2).elim
-  · exact (safe_to_little_endian_64_not_halted hcd wf_mem0 reads_mem0 (by rw [mem0_size])
+  · exact (safe_to_little_endian_64_not_halted_any_data wf_mem0 reads_mem0 (by rw [mem0_size])
       (by rw [mem0_size]) img0_fp (by rw [p80]) (by rw [p80]; omega) (by rw [p80]; decide) hcall1).elim
+
+/-- Bounded compatibility projection of the same guard inversion. -/
+theorem safe_guardsH {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B256} {G : Nat}
+    {o : Outcome}
+    (hcd : sevm.data.length < 2 ^ 256) (hbal : sevm.benvStat.rules.bal = none)
+    (run : SFunc.Run prog sevm (St b [rt, sgL, sP, wcL, wP, pkL, pP, 0x01b8, sel] mem0 G)
+      t_0304_c7 o) :
+    pkL = 48 ∧ wcL = 32 ∧ sgL = 96 ∧ 10 ^ 18 ≤ sevm.value.toNat ∧
+      sevm.value.toNat % 10 ^ 9 = 0 ∧ sevm.value.toNat / 10 ^ 9 < 2 ^ 64 ∧
+      ∃ b' M' G', Keep (afterSloadH sevm b solCountSlot) b' ∧
+        BodyMem M' 256 0x100
+          [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 (gweiAmount sevm).toNat),
+            (0xc0, (8 : B256).toBytes),
+            (0xe0, BeaconDeposit.le64 (b.getStorVal sevm.currentTarget solCountSlot).toNat)] ∧
+        SFunc.Run prog sevm
+          (St b' [0xc0, 96, sP, 0x80, 32, wP, 48, pP, BeaconDeposit.depositEventTopic, 0x80,
+            gweiAmount sevm, rt, 96, sP, 32, wP, 48, pP, 0x01b8, sel] M' G') t_0575_c7 o := by
+  exact (fun _ : sevm.data.length < 2 ^ 256 => safe_guardsH_any_data hbal run) hcd
 
 end Blanc.Lift.BeaconDeposit

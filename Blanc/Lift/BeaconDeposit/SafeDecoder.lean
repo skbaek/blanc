@@ -32,20 +32,21 @@ Proof sketch.  Walk the wrapper's straight lines by `cases` (as `safe_dispatch`)
 decoder's `JUMPI` guards (head size `CDS - 4 ≥ 0x80`, per tail the four comparisons of
 `TailDecodable`) has its failing arm end in `PUSH 0 DUP REVERT`, which has no successful
 `Linst.Run`, so each comparison word is `0`/nonzero as `DepositDecodable` states (read the
-words through `B256.ltCheck`/`gtCheck` and `toNat`; `hcd` keeps `CALLDATASIZE` exact).  The
+words through `B256.ltCheck`/`gtCheck` and `toNat`; the modular `CALLDATASIZE` word is
+bounded by the full length, and the original guards justify its subtraction). The
 `callNext 7 t_01b8_c32` node is `.callRet` (the body only returns: `.callHalt` would need the
 body to halt successfully, and the body has no successful halting leaf — or keep both cases and
 note `callHalt` gives `.halted` directly, which the statement also covers by taking the body's
 result); the pushed words are `depositArgStack sevm [sel]` (`DepositArgs.lean`).  `t_01b8_c32`
 is `JUMPDEST; STOP`: `Burn.world` and `Linst.world_of_ok` (`Quiet.lean`). -/
-theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
-    (hcd : sevm.data.length < 2 ^ 256)
+theorem safe_decoder_any_data {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
     (run : SFunc.Run prog sevm (St b [sel] mem0 G) t_00a4_c32 (.halted post)) :
     DepositDecodable sevm ∧ ∃ G' d,
       SFunc.Run prog sevm (St b (depositArgStack sevm [sel]) mem0 G') t_0304_c7 (.returned d) ∧
       (∀ a, Devm.getStor post a = Devm.getStor d a) ∧ post.logs = d.logs := by
-  have hlen : sevm.data.length.toB256.toNat = sevm.data.length :=
-    B256.toNat_toB256_of_lt hcd
+  have hlen_le : sevm.data.length.toB256.toNat ≤ sevm.data.length := by
+    rw [B256.toNat_toB256]
+    exact Nat.mod_le _ _
   have hmax : (Nat.toB256 (2 ^ 32)).toNat = 2 ^ 32 := by decide
   have hmaxword : Bytes.toB256 [0x01, 0, 0, 0, 0] = Nat.toB256 (2 ^ 32) := by decide
   have h80 : (Bytes.toB256 [0x80] : B256).toNat = 128 := by decide
@@ -97,9 +98,9 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
   rcases ric_branch run with ⟨-, G38, run⟩ | ⟨hw_off0_2, G38, run⟩
   · exact (run.false_of_noOk (by decide)).elim
   have hguard_off0_2 := eq_zero_of_iszero_ne_zero hw_off0_2
-  have ht0_2 : (4 + argOff sevm 0 + 32).toNat ≤ sevm.data.length := by
-    have h := toNat_le_of_gtCheck_eq_zero hguard_off0_2
-    rwa [hlen] at h
+  have ht0_2_word := toNat_le_of_gtCheck_eq_zero hguard_off0_2
+  have ht0_2 : (4 + argOff sevm 0 + 32).toNat ≤ sevm.data.length :=
+    ht0_2_word.trans hlen_le
 
   -- Arithmetic: 132 ≤ CDS
   have hhead : 132 ≤ sevm.data.length := by
@@ -111,15 +112,15 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
     have hwrap1 : ((4 : B256) + argOff sevm 0).toNat + (32 : B256).toNat < 2 ^ 256 := by
       rw [h4_off, show (32 : B256).toNat = 32 by decide]
       have := ht0_1; omega
-    have h36le : 36 ≤ sevm.data.length := by
-      have := ht0_2
+    have h36le : 36 ≤ sevm.data.length.toB256.toNat := by
+      have := ht0_2_word
       rw [toNat_add_of_lt hwrap1, h4_off, show (32 : B256).toNat = 32 by decide] at this
       omega
-    have h4le : 4 ≤ sevm.data.length := by omega
-    have hsub : (sevm.data.length.toB256 - 4).toNat = sevm.data.length - 4 := by
+    have h4le : 4 ≤ sevm.data.length.toB256.toNat := by omega
+    have hsub : (sevm.data.length.toB256 - 4).toNat = sevm.data.length.toB256.toNat - 4 := by
       rw [toNat_sub_of_toNat_le]
-      · rw [hlen, show (4 : B256).toNat = 4 by decide]
-      · rw [hlen, show (4 : B256).toNat = 4 by decide]; exact h4le
+      · rfl
+      · exact h4le
     have hge := toNat_ge_of_ltCheck_eq_zero hguard_head
     rw [h80, hsub] at hge
     omega
@@ -147,8 +148,7 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
     have h := toNat_le_of_gtCheck_eq_zero hguard_len0_1
     rwa [hmaxword, hmax] at h
   have ht0_4 : (argPtr sevm 0 + argLen sevm 0).toNat ≤ sevm.data.length := by
-    have h := toNat_le_of_gtCheck_eq_zero hguard_len0_2
-    rwa [hlen] at h
+    exact (toNat_le_of_gtCheck_eq_zero hguard_len0_2).trans hlen_le
   have ht0 : TailDecodable sevm 0 := ⟨ht0_1, ht0_2, ht0_3, ht0_4⟩
 
   -- Tree 5: t_0109_c32 (tail 1, offset guard 1: argOff 1 ≤ 2^32)
@@ -178,8 +178,7 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
   · exact (run.false_of_noOk (by decide)).elim
   have hguard_off1_2 := eq_zero_of_iszero_ne_zero hw_off1_2
   have ht1_2 : (4 + argOff sevm 1 + 32).toNat ≤ sevm.data.length := by
-    have h := toNat_le_of_gtCheck_eq_zero hguard_off1_2
-    rwa [hlen] at h
+    exact (toNat_le_of_gtCheck_eq_zero hguard_off1_2).trans hlen_le
 
   -- Tree 7: t_0139_c32 (len 1 guards: argLen 1 ≤ 2^32 and argPtr 1 + argLen 1 ≤ CDS)
   unfold t_0139_c32 at run
@@ -204,8 +203,7 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
     have h := toNat_le_of_gtCheck_eq_zero hguard_len1_1
     rwa [hmaxword, hmax] at h
   have ht1_4 : (argPtr sevm 1 + argLen sevm 1).toNat ≤ sevm.data.length := by
-    have h := toNat_le_of_gtCheck_eq_zero hguard_len1_2
-    rwa [hlen] at h
+    exact (toNat_le_of_gtCheck_eq_zero hguard_len1_2).trans hlen_le
   have ht1 : TailDecodable sevm 1 := ⟨ht1_1, ht1_2, ht1_3, ht1_4⟩
 
   -- Tree 8: t_015b_c32 (tail 2, offset guard 1: argOff 2 ≤ 2^32)
@@ -235,8 +233,7 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
   · exact (run.false_of_noOk (by decide)).elim
   have hguard_off2_2 := eq_zero_of_iszero_ne_zero hw_off2_2
   have ht2_2 : (4 + argOff sevm 2 + 32).toNat ≤ sevm.data.length := by
-    have h := toNat_le_of_gtCheck_eq_zero hguard_off2_2
-    rwa [hlen] at h
+    exact (toNat_le_of_gtCheck_eq_zero hguard_off2_2).trans hlen_le
 
   -- Tree 10: t_018b_c32 (len 2 guards: argLen 2 ≤ 2^32 and argPtr 2 + argLen 2 ≤ CDS)
   unfold t_018b_c32 at run
@@ -261,8 +258,7 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
     have h := toNat_le_of_gtCheck_eq_zero hguard_len2_1
     rwa [hmaxword, hmax] at h
   have ht2_4 : (argPtr sevm 2 + argLen sevm 2).toNat ≤ sevm.data.length := by
-    have h := toNat_le_of_gtCheck_eq_zero hguard_len2_2
-    rwa [hlen] at h
+    exact (toNat_le_of_gtCheck_eq_zero hguard_len2_2).trans hlen_le
   have ht2 : TailDecodable sevm 2 := ⟨ht2_1, ht2_2, ht2_3, ht2_4⟩
 
   have hdec : DepositDecodable sevm := ⟨hhead, ht0, ht1, ht2⟩
@@ -295,5 +291,13 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
             exact ⟨hdec, G', D, hrun_body, hstor, hlogs⟩
   · exact (SFunc.RunP.not_halted_entry (k := 7) bodySet_noHalt (by decide) rfl hrun_body rfl).elim
 
-end Blanc.Lift.BeaconDeposit
+/-- Bounded compatibility projection of the original decoder walk. -/
+theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
+    (hcd : sevm.data.length < 2 ^ 256)
+    (run : SFunc.Run prog sevm (St b [sel] mem0 G) t_00a4_c32 (.halted post)) :
+    DepositDecodable sevm ∧ ∃ G' d,
+      SFunc.Run prog sevm (St b (depositArgStack sevm [sel]) mem0 G') t_0304_c7 (.returned d) ∧
+      (∀ a, Devm.getStor post a = Devm.getStor d a) ∧ post.logs = d.logs := by
+  exact (fun _ : sevm.data.length < 2 ^ 256 => safe_decoder_any_data run) hcd
 
+end Blanc.Lift.BeaconDeposit
