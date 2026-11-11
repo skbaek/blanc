@@ -16,8 +16,8 @@ layering classification, or imported by the root.
   fork: the caller dispatch does not test whether Amsterdam has activated. Thus a user-originated SYSTEM_ADDRESS
   call before Amsterdam can dequeue or latch, although the protocol schedules its own builder calls only at Amsterdam.
   The latch is reversible: the next empty-calldata system call resets slot 0 from the inhibitor to zero.
-* `B_S4`: the delivery statement rooted at an observed mainnet checkpoint, block 26,211,406 (timestamp 1,792,229,651,
-  hash `0x71b1…f661`, `stateRoot = expectedStateRoot`), the block of the recorded creation transaction; the record
+* `B_S4`: the delivery statement rooted at an observed mainnet checkpoint, block 26,391,669 (timestamp 1,794,399,959,
+  hash `0x2410…fb6f`, `stateRoot = expectedStateRoot`), a recent observed checkpoint; the record
   holds the full tip schema together with the five whole-account/storage equalities `ValidJointG`'s checkpoint fields
   consume.
 -/
@@ -288,19 +288,19 @@ def B_S2_exit_control : Prop :=
 
 /-! ## B-S4: rooted in a recorded mainnet fact -/
 
-/-- **The observation schema at mainnet block 26,211,406**, the block of the recorded creation transaction
-`0xb2e7407f…2fe9` (`scripts/lift/certificates.json`): the complete tip header (number, timestamp, hash, and
+/-- **The observation schema at mainnet block 26,391,669**, a recent observed checkpoint with the registered
+runtime bytes and the same fresh-storage facts. The complete tip header (number, timestamp, hash, and
 `expectedStateRoot` supplied when the observation record is taken and adopted under registered provenance) together with
 the five whole-account and whole-storage reads (`eth_getCode` at both builder addresses and `SYSTEM_ADDRESS`, and
 `eth_getProof` `storageHash` establishing empty storage at the deposit contract and `{slot 0 ↦ 2^256 − 1}` at the exit
 contract). Lean does not authenticate the account reads against `expectedStateRoot`. -/
 structure BuilderCheckpointObservation (expectedStateRoot : B256) (checkpoint : BlockChain) : Prop where
-  /-- The checkpoint's last header: number 26,211,406, timestamp 1,792,229,651, hash `0x71b1…f661`, and
+  /-- The checkpoint's last header: number 26,391,669, timestamp 1,794,399,959, hash `0x2410…fb6f`, and
   `stateRoot = expectedStateRoot`. -/
   tip : ∃ t, checkpoint.blocks.getLast? = some t ∧
-    t.header.number = 26211406 ∧
-    t.header.timestamp = 1792229651 ∧
-    t.header.hash = 0x71b1ba54e3d1c0d0f18381919861f75c04a6f3b2b860038da570b70240a3f661 ∧
+    t.header.number = 26391669 ∧
+    t.header.timestamp = 1794399959 ∧
+    t.header.hash = 0x2410154b2609d8811f1acde0d30fea3815da62d90648e262fae38d2b5e4bfb6f ∧
     t.header.stateRoot = expectedStateRoot
   /-- `eth_getCode` at the deposit contract: the registered runtime. -/
   depositCode : checkpoint.state.getCode Deposit.Creation.address = Deposit.code
@@ -320,7 +320,7 @@ and whole-storage equalities `ValidJointG`'s checkpoint fields consume: no code 
 codes, the deposit contract's `Stor.empty`, and the exit contract's `Exit.deployedStorage`. -/
 def B_S4_at (expectedStateRoot : B256) : Prop :=
   (∀ {cfg : ChainConfig} {checkpoint stop : BlockChain} {blocks : List KeptBlock}
-    -- obs: the recorded mainnet facts at block 26,211,406 with state root `expectedStateRoot`
+    -- obs: the recorded mainnet facts at block 26,391,669 with state root `expectedStateRoot`
     (_obs : BuilderCheckpointObservation expectedStateRoot checkpoint)
     -- kept: a kept history from the checkpoint
     (_kept : KeptHistory cfg checkpoint blocks stop)
@@ -339,7 +339,7 @@ def B_S4_at (expectedStateRoot : B256) : Prop :=
     checkpoint.state.getCode Exit.Creation.address = Exit.code ∧
     checkpoint.state.getStor Exit.Creation.address = Exit.deployedStorage)
 
-/-- **B-S4.** Uniform over the tip `expectedStateRoot` recorded and adopted at mainnet block 26,211,406. -/
+/-- **B-S4.** Uniform over the tip `expectedStateRoot` recorded and adopted at mainnet block 26,391,669. -/
 def B_S4 : Prop := ∀ expectedStateRoot : B256, B_S4_at expectedStateRoot
 
 end Blanc.Corpus.Freeze.Builder
