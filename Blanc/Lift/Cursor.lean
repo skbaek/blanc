@@ -28,8 +28,10 @@ segment per pending function, each matched by its abstract frame
 * `cursor_of_parentPrefix`: hence every node of the frame's same-frame chain is
   cursor-placed, reached from entry `0` by synthetic steps.
 
-No statement here has a success premise.  `CoveredFork` enters only through
-the transfer soundness of the instruction steps (`ninstTransfer_run`).
+No statement here has a success premise. Capability-aware steps take only
+the active instruction's stack-transfer law; the prefix requires that law at
+synthetically reachable next nodes. The original no-state-gas and covered
+interfaces supply it from their existing primitive.
 -/
 
 namespace Blanc.Lift
@@ -236,9 +238,12 @@ theorem ret_mem_of_absNinst {n : Ninst} {a a' : List AVal}
 /-- The abstract effect of a checked non-jump instruction is sound for one
 instruction run, whatever the frame's eventual outcome: the words the
 instruction leaves above the untouched `rest` match the transferred frame. -/
-theorem absNinst_run_stack_noStateGas {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
+theorem absNinst_run_stack_of_stack {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
     {a a' : List AVal} {ρ : B256} {S rest : List B256}
-    (hfork : sevm.benvStat.rules.stateGas = none) (habs : absNinst n a = some a')
+    (transfer : ∀ {pre post : Devm} {input output : Pattern},
+      Matches input pre.stack → ninstTransfer n input = some output →
+      Ninst.Run sevm pre n post → Matches output post.stack)
+    (habs : absNinst n a = some a')
     (hstack : devm.stack = S ++ rest) (hframe : FrameMatches ρ a S)
     (run : Ninst.Run sevm devm n devm') :
     ∃ S', devm'.stack = S' ++ rest ∧ FrameMatches ρ a' S' := by
@@ -259,7 +264,7 @@ theorem absNinst_run_stack_noStateGas {sevm : Sevm} {devm devm' : Devm} {n : Nin
       · rw [indexPattern_map_label hlen]
         exact frameMatches_matches hframe
       · exact matches_some_map rest
-    have hout := ninstTransfer_run_noStateGas hfork hinput
+    have hout := transfer hinput
       (ninstTransfer_append (rest.map some) (ninstTransfer_map (label a ρ) rfl htrans)) run
     rw [mapM_readBack_label hread] at hout
     obtain ⟨S', below, hsp, hfirst, hbelow⟩ := matches_split hout
@@ -267,6 +272,16 @@ theorem absNinst_run_stack_noStateGas {sevm : Sevm} {devm devm' : Devm} {n : Nin
     refine ⟨S', hsp, ?_⟩
     rw [hfold]
     exact frameMatches_foldTop hframe hstack run hsp (matches_to_frame hfirst)
+
+/-- The original selected no-state-gas interface supplies its primitive stack law. -/
+theorem absNinst_run_stack_noStateGas {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
+    {a a' : List AVal} {ρ : B256} {S rest : List B256}
+    (hfork : sevm.benvStat.rules.stateGas = none) (habs : absNinst n a = some a')
+    (hstack : devm.stack = S ++ rest) (hframe : FrameMatches ρ a S)
+    (run : Ninst.Run sevm devm n devm') :
+    ∃ S', devm'.stack = S' ++ rest ∧ FrameMatches ρ a' S' := by
+  exact absNinst_run_stack_of_stack (ninstTransfer_run_noStateGas hfork)
+    habs hstack hframe run
 
 theorem pop_one_frame {ρ : B256} {av : AVal} {a : List AVal} {S rest : List B256}
     {x : B256} {d d' : Devm} (hstack : d.stack = S ++ rest)
@@ -350,9 +365,13 @@ the checked cursor `κ`, its same-frame continuation `n'` — after a plain step
 an immediately completed spawn, or a child frame of any outcome — sits at a
 cursor `κ'` one synthetic step after `κ`, and the stateful images are one
 `ConfStep` apart (a spawning step's child lies among `n`'s raw descendants). -/
-theorem cursor_stepS_noStateGas {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
+theorem cursor_stepS_of_next_stack {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     {n n' : Exec.Deriv} {κ : Cursor} (ok : CursorOK code c n κ)
-    (edge : Exec.Deriv.ParentStep n' n) (hfork : n.sevm.benvStat.rules.stateGas = none) :
+    (edge : Exec.Deriv.ParentStep n' n)
+    (admit : ∀ i tail, κ.f = .next i tail →
+      ∀ {pre post : Devm} {input output : Pattern},
+        Matches input pre.stack → ninstTransfer i input = some output →
+        Ninst.Run n.sevm pre i post → Matches output post.stack) :
     ∃ κ', SStep c κ κ' ∧
       ConfStep (Ninst.RunWith (Cursor.DescOf n)) c.prog n.sevm (κ.conf n.devm) (κ'.conf n'.devm) ∧
       CursorOK code c n' κ' := by
@@ -372,7 +391,8 @@ theorem cursor_stepS_noStateGas {code : ByteArray} {c : Cert} (hc : Cert.check c
         rw [hcode, hpc]
         exact Ninst.at_of_slice (bytesAt_slice (ninst_bytes_ne_nil i) hbytes)
       obtain ⟨hpc', runIn⟩ := Cursor.parentStep_ninstIn edge hat
-      obtain ⟨S', hst', hfr'⟩ := Cursor.absNinst_run_stack_noStateGas hfork habs hstack hframe runIn.toRun
+      obtain ⟨S', hst', hfr'⟩ := Cursor.absNinst_run_stack_of_stack (admit i f rfl)
+        habs hstack hframe runIn.toRun
       exact ⟨_, .next habs, .next runIn, hcode', by simp only [hpc', hpc], hrest,
         fun hm => hret (Cursor.ret_mem_of_absNinst habs hm), S', rest, hst', hfr', hK⟩
   | dest f =>
@@ -587,6 +607,16 @@ theorem cursor_stepS_noStateGas {code : ByteArray} {c : Cert} (hc : Cert.check c
       rw [hcode, hpc]; simpa only [checkNode, Option.isNone_iff_eq_none] using hcheck
     exact (Cursor.parentStep_false_of_none edge hnone).elim
 
+/-- The original interface admits each active next instruction by its selected lane. -/
+theorem cursor_stepS_noStateGas {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
+    {n n' : Exec.Deriv} {κ : Cursor} (ok : CursorOK code c n κ)
+    (edge : Exec.Deriv.ParentStep n' n) (hfork : n.sevm.benvStat.rules.stateGas = none) :
+    ∃ κ', SStep c κ κ' ∧
+      ConfStep (Ninst.RunWith (Cursor.DescOf n)) c.prog n.sevm (κ.conf n.devm) (κ'.conf n'.devm) ∧
+      CursorOK code c n' κ' := by
+  exact cursor_stepS_of_next_stack hc ok edge
+    (fun _ _ _ => ninstTransfer_run_noStateGas hfork)
+
 /-- **One same-frame edge is one synthetic step.**  `cursor_stepS` without the
 state. -/
 theorem cursor_step_noStateGas {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
@@ -605,22 +635,40 @@ theorem cursor_step {code : ByteArray} {c : Cert} (hc : Cert.check code c = true
 same-frame chain of a frame entered at pc `0` of certified bytes — whatever
 that frame's eventual outcome — sits at a checked cursor reached from entry
 `0` by synthetic steps. -/
+theorem cursor_of_parentPrefix_of_next_stack {code : ByteArray} {c : Cert}
+    (hc : Cert.check code c = true) {F n : Exec.Deriv}
+    (hpc : F.pc = 0) (hcode : F.sevm.code = code) (hp : Exec.Deriv.ParentPrefix F n)
+    (admit : ∀ κ, Relation.ReflTransGen (SStep c) (Cursor.start c) κ →
+      ∀ i tail, κ.f = .next i tail →
+        ∀ {pre post : Devm} {input output : Pattern},
+          Matches input pre.stack → ninstTransfer i input = some output →
+          Ninst.Run F.sevm pre i post → Matches output post.stack) :
+    ∃ κ, Relation.ReflTransGen (SStep c) (Cursor.start c) κ ∧ CursorOK code c n κ := by
+  suffices h : ∀ {R N : Exec.Deriv}, Exec.Deriv.ParentPrefix R N →
+      ∀ κ₀, CursorOK code c R κ₀ → R.sevm = F.sevm →
+      Relation.ReflTransGen (SStep c) (Cursor.start c) κ₀ →
+      ∃ κ, Relation.ReflTransGen (SStep c) κ₀ κ ∧ CursorOK code c N κ from
+    h hp _ (cursor_start hc hpc hcode) rfl .refl
+  intro R N chain
+  induction chain with
+  | refl root => exact fun κ₀ ok _ _ => ⟨κ₀, .refl, ok⟩
+  | step head _ ih =>
+    intro κ₀ ok hsevm reached
+    obtain ⟨κ₁, hstep, _, ok₁⟩ := cursor_stepS_of_next_stack hc ok head (by
+      intro i tail next pre post input output matched checked run
+      apply admit κ₀ reached i tail next matched checked
+      simpa only [hsevm] using run)
+    obtain ⟨κ, hreach, ok'⟩ := ih κ₁ ok₁
+      ((Cursor.parentStep_sevm head).trans hsevm) (reached.tail hstep)
+    exact ⟨κ, .head hstep hreach, ok'⟩
+
+/-- The original selected lane discharges admission on the root's unchanged Sevm. -/
 theorem cursor_of_parentPrefix_noStateGas {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     {F n : Exec.Deriv} (hpc : F.pc = 0) (hcode : F.sevm.code = code)
     (hfork : F.sevm.benvStat.rules.stateGas = none) (hp : Exec.Deriv.ParentPrefix F n) :
     ∃ κ, Relation.ReflTransGen (SStep c) (Cursor.start c) κ ∧ CursorOK code c n κ := by
-  suffices h : ∀ {F n : Exec.Deriv}, Exec.Deriv.ParentPrefix F n →
-      ∀ κ₀, CursorOK code c F κ₀ → F.sevm.benvStat.rules.stateGas = none →
-      ∃ κ, Relation.ReflTransGen (SStep c) κ₀ κ ∧ CursorOK code c n κ from
-    h hp _ (cursor_start hc hpc hcode) hfork
-  intro F n hp
-  induction hp with
-  | refl root => exact fun κ₀ ok _ => ⟨κ₀, .refl, ok⟩
-  | step head _ ih =>
-    intro κ₀ ok hfork
-    obtain ⟨κ₁, hstep, ok₁⟩ := cursor_step_noStateGas hc ok head hfork
-    obtain ⟨κ, hreach, ok'⟩ := ih κ₁ ok₁ (by rw [Cursor.parentStep_sevm head]; exact hfork)
-    exact ⟨κ, .head hstep hreach, ok'⟩
+  exact cursor_of_parentPrefix_of_next_stack hc hpc hcode hp
+    (fun _ _ _ _ _ => ninstTransfer_run_noStateGas hfork)
 
 /-- A cursor-placed node decoding a terminal instruction sits at that
 instruction's checked `last` node, independently of its execution outcome. -/
