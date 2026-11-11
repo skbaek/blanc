@@ -799,6 +799,13 @@ COMPOSITION = {
     # Every joint owner is explicit; no family or shared module may import back.
 }
 
+SHARED += ["ExecutionKeptStorageFold", "JointGloasReplayStep"]
+COMPOSITION.update({
+    "Composition.ConsolidationRequestPublicStorage": ("consolidation-request",),
+    "Composition.DepositPendingPass": ("beacon-deposit",),
+    "Composition.BuilderRequestApplicability.Checks": ("builder-request",),
+})
+
 ROOTS = ["Blanc", "Main"]
 
 def composition_declaration_failures(declarations, contracts):

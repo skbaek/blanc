@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-581 shared modules, 553 with a module summary.
+583 shared modules, 555 with a module summary.
 
 ## `Blanc/`
 
@@ -129,6 +129,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`ExecutionKeptPreCalls.lean`](../Blanc/ExecutionKeptPreCalls.lean) | **Kept-history pre-execution system calls, header links, and random access.** A kept block opens with two pre-execution system calls (`beaconRootsCall` at `beaconRootsAddress` and `historyStorageCall` at `historyStorageAddress`), runs its decoded transactions from … | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionKeptReceiptLogs.lean`](../Blanc/ExecutionKeptReceiptLogs.lean) | Log sequence compatibility of the existing kept and committed projections | [T3](COMMON_API.md#t3-the-wrapper-is-a-transaction-and-the-fact-is-about-an-installed-contract) |
 | [`ExecutionKeptRuntime.lean`](../Blanc/ExecutionKeptRuntime.lean) | Installed runtime transport on the original kept transaction carrier | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
+| [`ExecutionKeptStorageFold.lean`](../Blanc/ExecutionKeptStorageFold.lean) | **Whole-storage replay of the actual kept-frame chain.** The existing chain supplies every incoming storage boundary. | [T2b](COMMON_API.md#t2b-i-need-a-contracts-own-ledger-replay-across-retained-settlement) |
 | [`ExecutionKeptTop.lean`](../Blanc/ExecutionKeptTop.lean) | **The top-level executions of a message.** `processMessageCall` runs at most one interpreter execution, on either lane of the rule record. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionKeptValue.lean`](../Blanc/ExecutionKeptValue.lean) | **Kept-frame value: never falls, and covers the kept values.** **Build target.** Jaune pin `e8db2742`, built on `tests@v21.0.1`, EELS `1562e2f`. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionMessageAdmission.lean`](../Blanc/ExecutionMessageAdmission.lean) | **Trace-local admission through message wrappers.** The retained message carriers expose the exact recursive `Exec` selected by Jaune's deterministic wrappers. | [T2a](COMMON_API.md#t2a-i-need-a-frame-invariant-under-trace-local-entry-premises) |
@@ -228,6 +229,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`JointFeed.lean`](../Blanc/JointFeed.lean) | **Shared joint-history kept-block bridges, ring-contract joint carrier, and feed indexing.** Contract-neutral helpers sitting above `JointHistory` and `ExecutionKeptConfigured`: | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
 | [`JointGloasHistory.lean`](../Blanc/JointGloasHistory.lean) | **Gloas joint runs: `GJointRun` over `jointStepG`, with one kept execution history.** A Gloas joint run (goal `eip8282-gloas-cross-layer-v1` §3; Plans `recon/statements.md` §0.1, rev 3.1) is a sequence of successful `JauneConsensus.jointStepG` steps over the sum state … | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
 | [`JointGloasInvariants.lean`](../Blanc/JointGloasInvariants.lean) | **The joint-level Gloas invariants G3-09, G3-10, G3-11, and the crossing's FULL settlement (O-b).** The three joint-level rows of Plans `recon/design.md` §5 (rev 3.1), over `GJointState`: | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
+| [`JointGloasReplayStep.lean`](../Blanc/JointGloasReplayStep.lean) | Computational success certificates for the original Gloas joint step. | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
 | [`JointHistory.lean`](../Blanc/JointHistory.lean) | **Joint execution–consensus histories.** A joint run is a sequence of successful `JauneConsensus.jointStep`s from a joint anchor. | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
 | [`JointTime.lean`](../Blanc/JointTime.lean) | **Genesis time across the pending-deposit pass.** Project the actual successful state updates and reuse the existing pending step characterization and list-loop relation. | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
 | [`Ladder.lean`](../Blanc/Ladder.lean) | *(no module summary)* | [Root](COMMON_API.md#root-what-are-you-trying-to-do), [I3](COMMON_API.md#i3-a-foreign-or-childless-frame-must-preserve-a-contract-precondition), [T1](COMMON_API.md#t1-i-have-exec-initevm-msg-and-need-processmessage-msg), [C9.13](COMMON_API.md#c913-i-need-a-whole-contract-property-without-per-path-walks) |

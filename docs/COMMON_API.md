@@ -1378,6 +1378,12 @@ state `GJointState`, of three kinds: `.pre` (`PreStepData`, a `jointStep` with i
 `latest_block_hash` (`processBlock_latestBlockHash`), and the crossing's forced FULL settlement
 (`crossing_parentFull`, `jointStepG_cross_ok_of_spec`) and builders (`CrossingData.buildersFar`) are in
 [`Blanc/JointGloasInvariants.lean`](../Blanc/JointGloasInvariants.lean).
+`JointGloasReplayStep.replay` in
+[`Blanc/JointGloasReplayStep.lean`](../Blanc/JointGloasReplayStep.lean) returns
+an optional post-state with the original `jointStepG` success equation.
+`sound` constructs the matching `GJointRunStep` from that certificate,
+`PreBound` and `ParentCoherent`.
+
 For the beacon side of a step, `JointRun.steps_jointStep` recovers the successful
 `jointStep` of any indexed step; `jointBlockInput ccfg bls s b` is the beacon state the
 step hands to `process_block` (same calls as `jointStep`), and `jointStep_processBlock`
@@ -4232,6 +4238,11 @@ rather than restating them:
   prefix storage; `.head_guard` exposes the first event's incoming guard.
   The registered recipe triggers do not recognize this custom relation or
   carrier-construction need, so discovery remains in this branch.
+
+The actual kept-chain bridge is `KeptChain.storageReplay` in
+[`Blanc/ExecutionKeptStorageFold.lean`](../Blanc/ExecutionKeptStorageFold.lean).
+It derives `GuardedStorageReplay` from the supplied `KeptChain` and each
+frame's update law, retaining the original incoming storage at every boundary.
 
 
 ### T2c. I need that ledger replay on every wrapper up to a whole configured history
