@@ -78,15 +78,19 @@ noncomputable def submissionsValue (blocks : List KeptBlock) : Nat :=
   (((blocks.flatMap (KeptBlock.keptAt addr)).filter
     fun f => decide (f.sevm.caller ≠ systemAddress ∧ f.sevm.data.length = 96)).map fun f => f.sevm.value.toNat).sum
 
-/-- **C-S6. Value is kept.** Over every kept history (covered forks and Amsterdam alike) from a state holding the
-canonical code, the predeploy's final balance is at least its starting balance plus the value of every committed
-submission; indeed plus the value of every kept frame there. -/
+/-- **C-S6. Value is kept.** Over every kept history at covered forks from a state holding the canonical code, the
+predeploy's final balance is at least its starting balance plus the value of every committed submission; indeed plus
+the value of every kept frame there. (The internal balance-silence lemma stays fork-generic across kept histories; the
+public statement scopes to covered forks `Prague..BPO2` per §2/§5 so Amsterdam creates no public maintenance
+obligation.) -/
 def C_S6 : Prop :=
   ∀ {cfg : ChainConfig} {start final : BlockChain} {blocks : List KeptBlock}
     -- kept: the blocks are a kept history from `start` to `final`
     (_kept : KeptHistory cfg start blocks final)
     -- code: the canonical 414 bytes sit at the predeploy at the start
     (_code : installed start.state)
+    -- covered: every block is at Prague, Osaka, BPO1 or BPO2
+    (_covered : ∀ b ∈ blocks, CoveredFork b.fork)
     -- noSender: no kept block's transaction is sent by the predeploy
     (_noSender : ∀ b ∈ blocks, NoSenderAt addr b.run.senders)
     -- roots: every root message opens on a world whose balances sum below 2^256
@@ -139,5 +143,43 @@ def C_S8 : Prop :=
     (blockRecords D)[q % 2]? = some r ∧
     (∀ i ≤ q % 2, (blockRecords D)[i]? = (queueAtRequests B)[2 * (q / 2) + i]?) ∧
     (submissions blocks)[(emissions (blocks.take j)).length + q]? = some r
+
+/-! ## C-S8 negative control -/
+
+/-- The `⌊q / 2⌋` queue-latency bound when drain capacity is `cap` (`cap = 2` for EIP-7251) and every step through
+`j + q / 2` drains: if `r` sits at position `q` of the queue after `j` steps, step `j + q / 2` delivers `r` at record
+slot `q % 2`. -/
+def QueueLatencyAtCap (cap : Nat) : Prop :=
+  ∀ (st : Lift.BuilderRequest.QueueState Bytes) (es : List (Lift.RequestQueue.Effect Bytes))
+    (j q : Nat) (r : Bytes) (ds : List Bytes),
+    (∀ k ≤ j + q / 2, ∃ next, es[k]? = some (.drain next)) →
+    ((Lift.RequestQueue.run cap st (es.take j)).queue)[q]? = some r →
+    (Lift.RequestQueue.deliveries cap st es)[j + q / 2]? = some ds →
+    ds[q % 2]? = some r
+
+/-- The bytes a mutated EIP-7251 system dequeue with per-block capacity `1` (instead of `2`) returns from storage
+reader `rd`. -/
+def drainedCap1 (rd : B256 → B256) : Bytes :=
+  Lift.ConsolidationRequest.sysOutput.drained rd (rd 2)
+    (Lift.RequestSystem.drainCount 1 (rd 2) (rd 3)).toNat
+
+/-- **C-S8 negative control.**
+(1) On the queue model, `QueueLatencyAtCap 2` holds, whereas mutating the per-block drain capacity to `1` falsifies
+`QueueLatencyAtCap 1` on a 2-entry queue (`j = 0, q = 1`, destination `0 + 1 / 2 = 0`, slot `1 % 2 = 1`).
+(2) Concretely on contract storage `s` holding a 2-entry stored queue `[r₀, r₁]` (`r₀ ≠ r₁`, each 116 bytes, so
+`(storedQueue s.get)[1]? = some r₁` at `q = 1`), the real `cap = 2` dequeue output `drained` publishes `r₁` at record
+`1 % 2 = 1` in block `B + ⌊1 / 2⌋ = B`, whereas the `cap = 1` mutant `drainedCap1` publishes only `[r₀]`
+(`(records116 (drainedCap1 s.get))[1 % 2]? ≠ some r₁`), and a mutated publication fold that omits type-2 requests
+publishes `[]` (`(records116 [])[1 % 2]? ≠ some r₁`). -/
+def C_S8_control : Prop :=
+  QueueLatencyAtCap 2 ∧
+  ¬ QueueLatencyAtCap 1 ∧
+  ∃ (s : Stor) (r₀ r₁ : Bytes),
+    storedQueue s.get = [r₀, r₁] ∧ r₀.length = 116 ∧ r₁.length = 116 ∧ r₀ ≠ r₁ ∧
+    (storedQueue s.get)[1]? = some r₁ ∧
+    (records116 (Lift.ConsolidationRequest.drained s.get))[1 % 2]? = some r₁ ∧
+    records116 (drainedCap1 s.get) = [r₀] ∧
+    (records116 (drainedCap1 s.get))[1 % 2]? ≠ some r₁ ∧
+    (records116 [])[1 % 2]? ≠ some r₁
 
 end Blanc.Corpus.Freeze.Consolidation

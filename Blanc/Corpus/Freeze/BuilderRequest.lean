@@ -8,10 +8,17 @@ import Blanc.Lift.BuilderRequest.Exit.Fifo
 Statements only, against Blanc main `7f2a69ba` and Jaune `c30cf0a5`. Nothing here is proved, registered in the
 layering classification, or imported by the root.
 
-* `B_S2`: one statement for each builder contract. Every frame a kept history keeps at the contract is the block's own
-  dequeue, a submission or a fee read, with its storage, log, output and balance effect.
-* `B_S4`: the delivery statement rooted at an observed mainnet checkpoint, block 26,211,406, the block of the recorded
-  creation transaction; the record holds exactly the facts `ValidJointG`'s checkpoint fields consume.
+* `B_S2`: one statement for each builder contract (Form A, under `HistoryClean` and `SystemCodeAbsent`). Every frame a
+  kept history keeps at the contract is the block's own dequeue, a submission or a fee read, with its storage, log,
+  output and balance effect.
+  *Form B note (user decision packet):* an unrestricted Form B dropping `HistoryClean` and `SystemCodeAbsent` must
+  account **both** for the latch arm (a `SYSTEM_ADDRESS` call with nonempty calldata) **and** for user-originated
+  empty-calldata `SYSTEM_ADDRESS` dequeues before Amsterdam, because the runtime's `CALLER == SYSTEM_ADDRESS` dispatch
+  does not inspect the execution fork.
+* `B_S4`: the delivery statement rooted at an observed mainnet checkpoint, block 26,211,406 (timestamp 1,792,229,651,
+  hash `0x71b1…f661`, `stateRoot = expectedStateRoot`), the block of the recorded creation transaction; the record
+  holds the full tip schema together with the five whole-account/storage equalities `ValidJointG`'s checkpoint fields
+  consume.
 -/
 
 namespace Blanc.Corpus.Freeze.Builder
@@ -120,20 +127,152 @@ def B_S2_exit : Prop :=
     (_system : SystemCodeAbsent start),
     ∀ b ∈ blocks, ∀ f ∈ b.keptAt exitAddr, ExitSettled b f
 
-/-- **B-S2.** One statement for each builder contract. -/
+/-- **B-S2.** One statement for each builder contract (Form A: `CodesKept`, `HistoryClean`, `SystemCodeAbsent`). Note
+that an unrestricted Form B without `HistoryClean` and `SystemCodeAbsent` would have to admit both the nonempty-calldata
+`SYSTEM_ADDRESS` latch arm and pre-Amsterdam user-originated empty-calldata `SYSTEM_ADDRESS` dequeues, since the
+deployed bytecode's `CALLER == SYSTEM_ADDRESS` branch does not inspect `b.fork`. -/
 def B_S2 : Prop := B_S2_deposit ∧ B_S2_exit
+
+/-! ### B-S2 negative controls -/
+
+/-- Replace `repl.length` bytes starting at `offset` in `code`. -/
+def patchBytes (code : ByteArray) (offset : Nat) (repl : List UInt8) : ByteArray :=
+  ⟨(code.toList.take offset ++ repl ++ code.toList.drop (offset + repl.length)).toArray⟩
+
+/-- Mutant of `Deposit.code` with the 1-ETH floor guard (`PUSH2 0x0270; JUMPI` at bytes `187..190`, `0xbb..0xbe`)
+replaced by `POP; JUMPDEST; JUMPDEST; JUMPDEST` (`0x50, 0x5b, 0x5b, 0x5b`), so `< 1 ETH` 184-byte submissions fall
+through and commit. -/
+def depositNoFloorCode : ByteArray :=
+  patchBytes Deposit.code 187 [0x50, 0x5b, 0x5b, 0x5b]
+
+/-- Mutant of `Deposit.code` with the shared guard-revert opcode (`REVERT` `0xfd` at byte `627`, `0x0273`) replaced by
+`STOP` (`0x00`), adding a spurious success arm whenever an acceptance guard fails. -/
+def depositSpuriousArmCode : ByteArray :=
+  patchBytes Deposit.code 627 [0x00]
+
+/-- Mutant of `Exit.code` with the fee guard (`PUSH2 0x01c6; JUMPI` at bytes `161..164`, `0xa1..0xa4`) replaced by
+`POP; JUMPDEST; JUMPDEST; JUMPDEST` (`0x50, 0x5b, 0x5b, 0x5b`), so underpaid 48-byte exit submissions fall through and
+commit. -/
+def exitNoFeeGuardCode : ByteArray :=
+  patchBytes Exit.code 161 [0x50, 0x5b, 0x5b, 0x5b]
+
+/-- Mutant of `Exit.code` with the shared guard-revert opcode (`REVERT` `0xfd` at byte `457`, `0x01c9`) replaced by
+`STOP` (`0x00`), adding a spurious success arm whenever an acceptance guard fails. -/
+def exitSpuriousArmCode : ByteArray :=
+  patchBytes Exit.code 457 [0x00]
+
+/-- **B-S2 deposit negative control (`B_S2_deposit_control`).**
+(1) Real guard rejection: on canonical `Deposit.code`, any fresh non-system frame at a kept fork (`KeptFork`) that
+violates calldata length (`data ≠ [] ∧ data.length ≠ 184`), inhibition (`slot 0 = B256.max`), or submission admission
+(`data.length = 184 ∧ ¬ Deposit.Admitted sevm (wordFee (quotedExcess 8 pre depositAddr))`) has no `.ok` execution.
+(2) Guard-deletion mutant (`depositNoFloorCode`, 1-ETH floor deleted): there exist a kept block `b`, `sevm`, `pre`,
+`post`, and a committed execution `run : Exec 0 { sevm with code := depositNoFloorCode } pre (.ok post)` (`hc`) on
+inputs where canonical `Deposit.code` has no `.ok` execution, whose committed frame `Exec.Frame.ofRun run hc` falsifies
+`DepositSettled b`.
+(3) Spurious-success-arm mutant (`depositSpuriousArmCode`, `REVERT → STOP`): there exist `b`, `sevm`, `pre`, `post`,
+and a committed execution `run : Exec 0 { sevm with code := depositSpuriousArmCode } pre (.ok post)` (`hc`, rejected by
+canonical `Deposit.code`, e.g. wrong calldata length) whose committed frame `Exec.Frame.ofRun run hc` falsifies
+`DepositSettled b`. -/
+def B_S2_deposit_control : Prop :=
+  (∀ {sevm : Sevm} {pre post : Devm},
+    sevm.code = Deposit.code →
+    sevm.currentTarget = depositAddr →
+    KeptFork sevm.benvStat.fork →
+    sevm.caller ≠ systemAddress →
+    pre.stack = [] →
+    pre.memory.size % 32 = 0 →
+    Mem.Wf pre.memory →
+    sevm.data.length < 2 ^ 256 →
+    ((sevm.data ≠ [] ∧ sevm.data.length ≠ 184) ∨
+      pre.getStorVal depositAddr 0 = B256.max ∨
+      (sevm.data.length = 184 ∧ ¬ Deposit.Admitted sevm (wordFee (quotedExcess 8 pre depositAddr)))) →
+    IsEmpty (Exec 0 sevm pre (.ok post))) ∧
+  (∃ (b : KeptBlock) (sevm : Sevm) (pre post : Devm)
+      (run : Exec 0 { sevm with code := depositNoFloorCode } pre (.ok post))
+      (hc : Execution.commits (.ok post) = true),
+    sevm.currentTarget = depositAddr ∧
+    sevm.caller ≠ systemAddress ∧
+    KeptFork sevm.benvStat.fork ∧
+    b.fork = sevm.benvStat.fork ∧
+    pre.stack = [] ∧ pre.memory = .empty ∧
+    sevm.data.length = 184 ∧
+    (∀ post', IsEmpty (Exec 0 { sevm with code := Deposit.code } pre (.ok post'))) ∧
+    ¬ DepositSettled b (Exec.Frame.ofRun run hc)) ∧
+  (∃ (b : KeptBlock) (sevm : Sevm) (pre post : Devm)
+      (run : Exec 0 { sevm with code := depositSpuriousArmCode } pre (.ok post))
+      (hc : Execution.commits (.ok post) = true),
+    sevm.currentTarget = depositAddr ∧
+    sevm.caller ≠ systemAddress ∧
+    KeptFork sevm.benvStat.fork ∧
+    b.fork = sevm.benvStat.fork ∧
+    pre.stack = [] ∧ pre.memory = .empty ∧
+    sevm.data ≠ [] ∧ sevm.data.length ≠ 184 ∧
+    (∀ post', IsEmpty (Exec 0 { sevm with code := Deposit.code } pre (.ok post'))) ∧
+    ¬ DepositSettled b (Exec.Frame.ofRun run hc))
+
+/-- **B-S2 exit negative control (`B_S2_exit_control`).**
+(1) Real guard rejection: on canonical `Exit.code`, any fresh non-system frame at a kept fork (`KeptFork`) that
+violates calldata length (`data ≠ [] ∧ data.length ≠ 48`), inhibition (`slot 0 = B256.max`), or fee coverage
+(`data.length = 48 ∧ sevm.value.toNat < (wordFee (quotedExcess 2 pre exitAddr)).toNat`) has no `.ok` execution.
+(2) Guard-deletion mutant (`exitNoFeeGuardCode`, fee guard deleted): there exist `b`, `sevm`, `pre`, `post`, and a
+committed execution `run : Exec 0 { sevm with code := exitNoFeeGuardCode } pre (.ok post)` (`hc`, on 48-byte underpaid
+inputs rejected by canonical `Exit.code`) whose committed frame `Exec.Frame.ofRun run hc` falsifies `ExitSettled b`.
+(3) Spurious-success-arm mutant (`exitSpuriousArmCode`, `REVERT → STOP`): there exist `b`, `sevm`, `pre`, `post`, and a
+committed execution `run : Exec 0 { sevm with code := exitSpuriousArmCode } pre (.ok post)` (`hc`, on wrong-length
+calldata rejected by canonical `Exit.code`) whose committed frame `Exec.Frame.ofRun run hc` falsifies `ExitSettled b`. -/
+def B_S2_exit_control : Prop :=
+  (∀ {sevm : Sevm} {pre post : Devm},
+    sevm.code = Exit.code →
+    sevm.currentTarget = exitAddr →
+    KeptFork sevm.benvStat.fork →
+    sevm.caller ≠ systemAddress →
+    pre.stack = [] →
+    pre.memory.size % 32 = 0 →
+    Mem.Wf pre.memory →
+    sevm.data.length < 2 ^ 256 →
+    ((sevm.data ≠ [] ∧ sevm.data.length ≠ 48) ∨
+      pre.getStorVal exitAddr 0 = B256.max ∨
+      (sevm.data.length = 48 ∧ sevm.value.toNat < (wordFee (quotedExcess 2 pre exitAddr)).toNat)) →
+    IsEmpty (Exec 0 sevm pre (.ok post))) ∧
+  (∃ (b : KeptBlock) (sevm : Sevm) (pre post : Devm)
+      (run : Exec 0 { sevm with code := exitNoFeeGuardCode } pre (.ok post))
+      (hc : Execution.commits (.ok post) = true),
+    sevm.currentTarget = exitAddr ∧
+    sevm.caller ≠ systemAddress ∧
+    KeptFork sevm.benvStat.fork ∧
+    b.fork = sevm.benvStat.fork ∧
+    pre.stack = [] ∧ pre.memory = .empty ∧
+    sevm.data.length = 48 ∧
+    (∀ post', IsEmpty (Exec 0 { sevm with code := Exit.code } pre (.ok post'))) ∧
+    ¬ ExitSettled b (Exec.Frame.ofRun run hc)) ∧
+  (∃ (b : KeptBlock) (sevm : Sevm) (pre post : Devm)
+      (run : Exec 0 { sevm with code := exitSpuriousArmCode } pre (.ok post))
+      (hc : Execution.commits (.ok post) = true),
+    sevm.currentTarget = exitAddr ∧
+    sevm.caller ≠ systemAddress ∧
+    KeptFork sevm.benvStat.fork ∧
+    b.fork = sevm.benvStat.fork ∧
+    pre.stack = [] ∧ pre.memory = .empty ∧
+    sevm.data ≠ [] ∧ sevm.data.length ≠ 48 ∧
+    (∀ post', IsEmpty (Exec 0 { sevm with code := Exit.code } pre (.ok post'))) ∧
+    ¬ ExitSettled b (Exec.Frame.ofRun run hc))
 
 /-! ## B-S4: rooted in a recorded mainnet fact -/
 
-/-- **The observation to record** at mainnet block 26,211,406, the block of the recorded creation transaction
-`0xb2e7407f…2fe9` (`scripts/lift/certificates.json`): the tip header and the account reads. The storage fields are
-whole-storage facts; JSON-RPC answers them through `eth_getProof`'s `storageHash` (the empty-trie root for the deposit
-contract; the root of the one-entry trie `slot 0 ↦ 2^256 − 1` for the exit contract). Lean authenticates none of it
-against a state root. The record is not taken yet: the state root joins `tip` when it is (registered provenance). -/
-structure BuilderCheckpointObservation (checkpoint : BlockChain) : Prop where
-  /-- The checkpoint's last header: number 26211406, hash 0x71b1…f661. -/
-  tip : ∃ t, checkpoint.blocks.getLast? = some t ∧ t.header.number = 26211406 ∧
-    t.header.hash = 0x71b1ba54e3d1c0d0f18381919861f75c04a6f3b2b860038da570b70240a3f661
+/-- **The observation schema at mainnet block 26,211,406**, the block of the recorded creation transaction
+`0xb2e7407f…2fe9` (`scripts/lift/certificates.json`): the complete tip header (number, timestamp, hash, and
+`expectedStateRoot` supplied when the observation record is taken and adopted under registered provenance) together with
+the five whole-account and whole-storage reads (`eth_getCode` at both builder addresses and `SYSTEM_ADDRESS`, and
+`eth_getProof` `storageHash` establishing empty storage at the deposit contract and `{slot 0 ↦ 2^256 − 1}` at the exit
+contract). Lean does not authenticate the account reads against `expectedStateRoot`. -/
+structure BuilderCheckpointObservation (expectedStateRoot : B256) (checkpoint : BlockChain) : Prop where
+  /-- The checkpoint's last header: number 26,211,406, timestamp 1,792,229,651, hash `0x71b1…f661`, and
+  `stateRoot = expectedStateRoot`. -/
+  tip : ∃ t, checkpoint.blocks.getLast? = some t ∧
+    t.header.number = 26211406 ∧
+    t.header.timestamp = 1792229651 ∧
+    t.header.hash = 0x71b1ba54e3d1c0d0f18381919861f75c04a6f3b2b860038da570b70240a3f661 ∧
+    t.header.stateRoot = expectedStateRoot
   /-- `eth_getCode` at the deposit contract: the registered runtime. -/
   depositCode : checkpoint.state.getCode Deposit.Creation.address = Deposit.code
   /-- `eth_getProof` at the deposit contract: the empty storage root. -/
@@ -145,14 +284,15 @@ structure BuilderCheckpointObservation (checkpoint : BlockChain) : Prop where
   /-- `eth_getCode(0xff…fe)` is empty. -/
   systemEmpty : checkpoint.state.getCode systemAddress = ByteArray.empty
 
-/-- **B-S4.** (1) Exact delivery (the family's S3, `history_delivers_exactly`) for every kept history from the observed
-checkpoint, under any chain configuration: what the blocks publish for each builder contract is, in order, a prefix of
-what was submitted to it. (2) The record holds exactly what `ValidJointG` asks of its checkpoint: no code at
-SYSTEM_ADDRESS, both codes, the deposit contract's empty storage and the exit contract's deployed storage. -/
-def B_S4 : Prop :=
+/-- **B-S4 instantiated at a recorded tip `expectedStateRoot`.** (1) Exact delivery (`history_delivers_exactly`) for
+every kept history from the observed checkpoint, under any chain configuration: what the blocks publish for each
+builder contract is, in order, a prefix of what was submitted to it. (2) The record holds the exact five whole-account
+and whole-storage equalities `ValidJointG`'s checkpoint fields consume: no code at `SYSTEM_ADDRESS`, both builder
+codes, the deposit contract's `Stor.empty`, and the exit contract's `Exit.deployedStorage`. -/
+def B_S4_at (expectedStateRoot : B256) : Prop :=
   (∀ {cfg : ChainConfig} {checkpoint stop : BlockChain} {blocks : List KeptBlock}
-    -- obs: the recorded mainnet facts at block 26,211,406
-    (_obs : BuilderCheckpointObservation checkpoint)
+    -- obs: the recorded mainnet facts at block 26,211,406 with state root `expectedStateRoot`
+    (_obs : BuilderCheckpointObservation expectedStateRoot checkpoint)
     -- kept: a kept history from the checkpoint
     (_kept : KeptHistory cfg checkpoint blocks stop)
     -- clean: no kept block has SYSTEM_ADDRESS as a sender or a 7702 authority, and none creates it
@@ -163,11 +303,14 @@ def B_S4 : Prop :=
     (_few : (exitSubmitted blocks).length ≤ 2 ^ 64),
     depositRequests blocks <+: (depositSubmitted blocks).flatMap Deposit.contract.out ∧
     exitRequests blocks <+: (exitSubmitted blocks).flatMap Exit.contract.out) ∧
-  (∀ {checkpoint : BlockChain} (_obs : BuilderCheckpointObservation checkpoint),
+  (∀ {checkpoint : BlockChain} (_obs : BuilderCheckpointObservation expectedStateRoot checkpoint),
     checkpoint.state.getCode systemAddress = ByteArray.empty ∧
     checkpoint.state.getCode Deposit.Creation.address = Deposit.code ∧
     checkpoint.state.getStor Deposit.Creation.address = Stor.empty ∧
     checkpoint.state.getCode Exit.Creation.address = Exit.code ∧
     checkpoint.state.getStor Exit.Creation.address = Exit.deployedStorage)
+
+/-- **B-S4.** Uniform over the tip `expectedStateRoot` recorded and adopted at mainnet block 26,211,406. -/
+def B_S4 : Prop := ∀ expectedStateRoot : B256, B_S4_at expectedStateRoot
 
 end Blanc.Corpus.Freeze.Builder
