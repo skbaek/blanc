@@ -4093,6 +4093,11 @@ consumer needs canonical interpreter ingress as one conjunct:
   the original execution exclusion to kept roots under `rules.stateGas = none`
   and the stated entry/target guards; the message wrapper also requires
   nondelegating code. They derive `NoCreateAt` from those actual roots.
+  `PreRoots.noCreateAt_of_code` transports the same exclusion through
+  the actual beacon/history pre-call roots; `RequestRoots.prague_noCreateAt_of_code`
+  transports it through the two actual Prague request roots. Both retain the
+  installed-code, state-gas and target-distinct guards and derive the result
+  from the original carriers.
 - To discharge the frame walks' entry premise `pre.gasMeasure < 2 ^ 256` for every raw frame of
   a configured history with no premise at all: `ConfiguredHistoryTrace.gas_bound` (`< 2 ^ 64`)
   and `ConfiguredHistoryTrace.frameAdmitted_gas`
