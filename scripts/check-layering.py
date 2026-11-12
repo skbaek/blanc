@@ -857,6 +857,7 @@ COMPOSITION.update({
 # Original consolidation classifier/trace and deposit joint request seam.
 COMPOSITION.update({
     "Composition.ConsolidationRequestJoint": ("consolidation-request",),
+    "Composition.ConsolidationRequestJointControls": ("consolidation-request",),
     "Composition.DepositJoint": ("beacon-deposit",),
 })
 

@@ -72,6 +72,7 @@ import Blanc.Composition.BuilderRequestPublicStorage
 import Blanc.Composition.ConsolidationRequestDrainControl
 import Blanc.Composition.ConsolidationRequestDrainInput
 import Blanc.Composition.ConsolidationRequestJoint
+import Blanc.Composition.ConsolidationRequestJointControls
 import Blanc.Composition.ConsolidationRequestPublicHeadlines
 import Blanc.Composition.ConsolidationRequestPublicHistory
 import Blanc.Composition.ConsolidationRequestPublicObservers

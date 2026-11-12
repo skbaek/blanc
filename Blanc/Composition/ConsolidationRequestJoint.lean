@@ -254,4 +254,144 @@ private theorem joint_trace_step {P : Preset} {ccfg : Config} {bls : Bool}
   exact spec.2.2 k cr m _ (by simpa only [Array.getElem?_toList] using request)
     mid (List.getElem?_eq_getElem next)
 
+private theorem block_records {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    (D : JointRunStep (P := P) cfg ccfg bls) :
+    records116 (blockConsolidations D.keptBlock) =
+      (stepConsolidationRequests D).map Ssz.serialize := by
+  obtain ⟨requests, read, _⟩ := D.exists_executionRequests
+  rw [stepConsolidationRequests, read, blockConsolidations_eq]
+  change Blanc.Lift.ConsolidationRequest.consensusRecords D.keptBlock.output.requests = _
+  simpa only [Blanc.Lift.ConsolidationRequest.out_consensusRecord] using
+    Blanc.Lift.ConsolidationRequest.JointRunStep.consensusRecords_eq D read
+
+private theorem emissions_toExec {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    {anchor final : JointState P} {checkpoint : BlockChain}
+    (pre : ConfiguredHistoryTrace cfg checkpoint anchor.exec)
+    (run : JointRun cfg ccfg bls anchor final) :
+    emissions (run.toExec pre).kept = emissions pre.kept ++ (consolidationFeed run).map Ssz.serialize := by
+  rw [run.kept_toExec pre]
+  unfold emissions consolidationFeed
+  rw [List.flatMap_append, List.flatMap_map, List.map_flatMap]
+  congr 1
+  congr 1
+  funext D
+  exact block_records D
+
+private theorem joint_fifo {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    {checkpoint : BlockChain} {anchor final : JointState P}
+    (v : ValidJointC cfg ccfg bls checkpoint anchor final) :
+    submissions v.blocks = emissions v.blocks ++ remainingQueue final.exec.state :=
+  history_fifo (v.run.toExec v.pre).keptHistory (v.run.toExec v.pre).kept_covered
+    v.root v.clean v.occurrences
+
+private theorem feed_get {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    {anchor final : JointState P} (run : JointRun cfg ccfg bls anchor final)
+    {j k : Nat} {D : JointRunStep (P := P) cfg ccfg bls} {cr : ConsolidationRequest}
+    (step : run.steps[j]? = some D) (request : (stepConsolidationRequests D)[k]? = some cr) :
+    (consolidationFeed run)[feedPosition run j k]? = some cr := by
+  have indexed := JointFeed.feed_getElem?_of_some
+    (fun requests : ExecutionRequests P => requests.consolidations.toArray.toList) run step
+    (List.getElem?_eq_some_iff.mp request).1
+  exact indexed.trans request
+
+private theorem submission_of_feed {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    {checkpoint : BlockChain} {anchor final : JointState P}
+    (v : ValidJointC cfg ccfg bls checkpoint anchor final)
+    {j k : Nat} {D : JointRunStep (P := P) cfg ccfg bls} {cr : ConsolidationRequest}
+    (step : v.run.steps[j]? = some D) (request : (stepConsolidationRequests D)[k]? = some cr) :
+    (consolidationFeed v.run)[feedPosition v.run j k]? = some cr ∧
+    (submissions v.blocks)[(emissions v.preBlocks).length + feedPosition v.run j k]? =
+      some (Ssz.serialize cr) := by
+  have feed := feed_get v.run step request
+  refine ⟨feed, ?_⟩
+  have bound : feedPosition v.run j k < ((consolidationFeed v.run).map Ssz.serialize).length := by
+    rw [List.length_map]
+    exact (List.getElem?_eq_some_iff.mp feed).1
+  rw [joint_fifo v, emissions_toExec, List.append_assoc,
+    List.getElem?_append_right (Nat.le_add_right _ _), Nat.add_sub_cancel_left,
+    List.getElem?_append_left bound, List.getElem?_map, feed, Option.map_some]
+
+private theorem feed_unique {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    {anchor final : JointState P} (run : JointRun cfg ccfg bls anchor final)
+    {j k j' k' : Nat} {D D' : JointRunStep (P := P) cfg ccfg bls} {cr cr' : ConsolidationRequest}
+    (step : run.steps[j]? = some D) (request : (stepConsolidationRequests D)[k]? = some cr)
+    (step' : run.steps[j']? = some D') (request' : (stepConsolidationRequests D')[k']? = some cr')
+    (position : feedPosition run j k = feedPosition run j' k') : j = j' ∧ k = k' := by
+  obtain ⟨hj, rfl⟩ := List.getElem?_eq_some_iff.mp step
+  obtain ⟨hj', rfl⟩ := List.getElem?_eq_some_iff.mp step'
+  exact JointFeed.feedPosition_inj
+    (fun requests : ExecutionRequests P => requests.consolidations.toArray.toList) run
+    hj hj' (List.getElem?_eq_some_iff.mp request).1 (List.getElem?_eq_some_iff.mp request').1 position
+
+/-- Original positional authorization at the actual consolidation mid-list state. -/
+theorem c_s9_authorization : C_S9_authorization := by
+  intro P cfg ccfg bls checkpoint anchor final v j D step requests read k cr request tr trace m mid o V classified acts
+  have hstep : (stepConsolidationRequests D)[k]? = some cr := by
+    simpa only [stepConsolidationRequests, read, Array.getElem?_toList] using request
+  obtain ⟨feed, submission⟩ := submission_of_feed v step hstep
+  obtain ⟨m', next, process⟩ := joint_trace_step read trace request mid
+  rw [classifySound, classified] at process
+  obtain ⟨index, validator, hv, credential, address⟩ := classified_authorized classified acts
+  exact ⟨⟨m', next, process⟩, feed, submission, index,
+    validator, hv, credential, address,
+    address.trans (Blanc.ConsensusSsz.serialize_consolidationRequest_take20 cr).symm⟩
+
+/-- Original three-range fate partition, retaining request and submission occurrences by index. -/
+theorem c_s9_fate : C_S9_fate := by
+  intro P cfg ccfg bls checkpoint anchor final v n hn
+  have fifo := joint_fifo v
+  have emitted : emissions v.blocks =
+      emissions v.preBlocks ++ (consolidationFeed v.run).map Ssz.serialize :=
+    emissions_toExec v.pre v.run
+  have indexed : (submissions v.blocks)[n]? = some (submissions v.blocks)[n] :=
+    List.getElem?_eq_getElem hn
+  by_cases before : n < (emissions v.preBlocks).length
+  · refine .inl ⟨before, ?_⟩
+    have bound : n < (emissions v.blocks).length := by
+      rw [emitted, List.length_append]
+      omega
+    rw [← indexed, fifo, List.getElem?_append_left bound, emitted, List.getElem?_append_left before]
+  by_cases remaining : (emissions v.blocks).length ≤ n
+  · refine .inr (.inr ⟨remaining, ?_⟩)
+    rw [← indexed, fifo, List.getElem?_append_right remaining]
+  have interval : (emissions v.preBlocks).length ≤ n ∧ n < (emissions v.blocks).length :=
+    ⟨Nat.le_of_not_lt before, Nat.lt_of_not_le remaining⟩
+  refine .inr (.inl ⟨interval.1, interval.2, ?_⟩)
+  have feedBound : n - (emissions v.preBlocks).length < (consolidationFeed v.run).length := by
+    have length := congrArg List.length emitted
+    rw [List.length_append, List.length_map] at length
+    omega
+  obtain ⟨j, k, hj, hk, position⟩ := JointFeed.exists_feed_position
+    (fun requests : ExecutionRequests P => requests.consolidations.toArray.toList) v.run feedBound
+  change feedPosition v.run j k = n - (emissions v.preBlocks).length at position
+  let D := v.run.steps[j]
+  let cr := (stepConsolidationRequests D)[k]
+  have step : v.run.steps[j]? = some D := List.getElem?_eq_getElem hj
+  have hstep : (stepConsolidationRequests D)[k]? = some cr := List.getElem?_eq_getElem hk
+  obtain ⟨requests, read, _⟩ := D.exists_executionRequests
+  have request : requests.consolidations.toArray[k]? = some cr := by
+    simpa only [stepConsolidationRequests, read, Array.getElem?_toList] using hstep
+  have feed := feed_get v.run step hstep
+  have serialized : Ssz.serialize cr = (submissions v.blocks)[n] := by
+    have same : (submissions v.blocks)[n]? = some (Ssz.serialize cr) := by
+      rw [fifo, List.getElem?_append_left interval.2, emitted,
+        List.getElem?_append_right interval.1, List.getElem?_map, ← position, feed, Option.map_some]
+    exact Option.some.inj (same.symm.trans indexed)
+  obtain ⟨tr, trace, length⟩ := joint_trace_of_step v.run step read
+  have midBound : k < tr.length := by
+    rw [length, Array.length_toList]
+    have := (Array.getElem?_eq_some_iff.mp request).1
+    omega
+  have mid : tr[k]? = some tr[k] := List.getElem?_eq_getElem midBound
+  obtain ⟨m', next, process⟩ := joint_trace_step read trace request mid
+  rw [classifySound] at process
+  obtain ⟨o, classified, applied⟩ := Except.bind_eq_ok process
+  refine ⟨j, k, D, requests, cr, tr, tr[k], step, read, request, position,
+    serialized, trace, mid, o, classified,
+    (fun o' other => Except.ok.inj (other.symm.trans classified)),
+    m', next, applied, outcome_means classified applied, ?_⟩
+  intro j' k' D' cr' step' request' position'
+  have unique := feed_unique v.run step hstep step' request' (position.trans position'.symm)
+  exact ⟨unique.1.symm, unique.2.symm⟩
+
 end Blanc.Composition.ConsolidationRequestJoint
