@@ -6464,6 +6464,14 @@ the oldest `min(length, cap)` records). For the queue model over a list of frame
 stored-excess function; `run`, `deliveries`, the FIFO `fifo`; `represents_push` for a submission's storage) and
 [`Blanc/Lift/RequestQueue/Chain.lean`](../Blanc/Lift/RequestQueue/Chain.lean) (`Queue`, a `Step` packaging a
 frame with its queue law, `Chain`, `Chain.delivered`, `Chain.drain_delivers`).
+For batches of pushes and cap-one drains in that same model, use
+[`Blanc/Lift/RequestQueue/Batch.lean`](../Blanc/Lift/RequestQueue/Batch.lean):
+`run_pushes_queue`, `run_unit_drains_queue` and `deliveries_unit_drains`.
+For the actual guarded Gloas withdrawal prefix and its physical application positions, use
+[`Blanc/GloasWithdrawalPrefix.lean`](../Blanc/GloasWithdrawalPrefix.lean):
+`processWithdrawals_prefix` retains the early/full branch; `applyWithdrawals_at`
+and `applyWithdrawals_pending_singleton` retain the original singleton application,
+its routing range and its literal saturating update. Queue sweeps remain separate.
 For queue-model delivery under consecutive drains, without storage or kept-history premises, use
 [`Blanc/Lift/RequestQueue/DrainLatency.lean`](../Blanc/Lift/RequestQueue/DrainLatency.lean):
 `deliveries_drain_slot` follows record `cap*k+i`, with `i<cap`, to effect `j+k`;

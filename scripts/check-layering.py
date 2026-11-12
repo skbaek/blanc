@@ -820,6 +820,11 @@ SHARED += ["SystemWordWriterKept", "KeptCreateAvoid"]
 CONTRACTS["history-storage"].append("Lift.HistoryStorage.Writer")
 COMPOSITION.update({'Composition.Corpus.Proofs.RingHistoryControls': ('beacon-roots', 'history-storage', 'withdrawal-request', 'consolidation-request'), 'Composition.Corpus.Proofs.RingRoots': ('beacon-roots', 'history-storage'), 'Composition.Corpus.Proofs.BuilderCheckpoint': ('builder-request', 'withdrawal-request'), 'Composition.Corpus.Proofs.BuilderObservedJoint': ('builder-request', 'withdrawal-request'), 'Composition.BuilderRequestApplicabilityInput': ('builder-request', 'withdrawal-request')})
 
+
+# Reviewed guarded withdrawal-prefix and cap-one queue support.
+SHARED += ['GloasWithdrawalPrefix', 'Lift.RequestQueue.Batch']
+COMPOSITION.update({'Composition.BuilderRequestJointGDebitOnce': ('builder-request', 'withdrawal-request')})
+
 ROOTS = ["Blanc", "Main"]
 
 def composition_declaration_failures(declarations, contracts):

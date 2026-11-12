@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-586 shared modules, 558 with a module summary.
+588 shared modules, 560 with a module summary.
 
 ## `Blanc/`
 
@@ -226,6 +226,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`ForwardSha256.lean`](../Blanc/ForwardSha256.lean) | Fixed-width SHA-256 precompile crossing | [E3](COMMON_API.md#e3-i-must-carry-a-predicate-over-all-entered-child-roots) |
 | [`ForwardStorageAccess.lean`](../Blanc/ForwardStorageAccess.lean) | **Selected storage-access projections.** Contract-neutral access-set and gas carriers for a warm-or-cold `SLOAD`, plus the unchanged-state projections commonly threaded through compiled loops. | [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term) |
 | [`GasErasure.lean`](../Blanc/GasErasure.lean) | Contract-neutral gas erasure: equality of EVM states modulo `gasLeft`, and per-instruction congruence of successful source runs over a gas-free whitelist. | [E5](COMMON_API.md#e5-i-need-to-inspect-what-happened-in-an-exec), [I1](COMMON_API.md#i1-one-instructionlinefunction-preserves-an-observation) |
+| [`GloasWithdrawalPrefix.lean`](../Blanc/GloasWithdrawalPrefix.lean) | **Guarded pending-builder withdrawal prefixes and actual apply positions.** The prefix comes from successful processWithdrawals, including its actual early/full guard. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`HistoricalFork.lean`](../Blanc/HistoricalFork.lean) | *(no module summary)* | [Root](COMMON_API.md#root-what-are-you-trying-to-do), [T5](COMMON_API.md#t5-the-wrapper-is-a-block-body-and-the-fact-is-about-an-installed-contract) |
 | [`JointFeed.lean`](../Blanc/JointFeed.lean) | **Shared joint-history kept-block bridges, ring-contract joint carrier, and feed indexing.** Contract-neutral helpers sitting above `JointHistory` and `ExecutionKeptConfigured`: | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
 | [`JointGloasHistory.lean`](../Blanc/JointGloasHistory.lean) | **Gloas joint runs: `GJointRun` over `jointStepG`, with one kept execution history.** A Gloas joint run (goal `eip8282-gloas-cross-layer-v1` §3; Plans `recon/statements.md` §0.1, rev 3.1) is a sequence of successful `JauneConsensus.jointStepG` steps over the sum state … | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
@@ -580,6 +581,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 
 | module | summary | cited in |
 |---|---|---|
+| [`Batch.lean`](../Blanc/Lift/RequestQueue/Batch.lean) | Queue projections for pushes and repeated cap-one drains, reusing Model. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Chain.lean`](../Blanc/Lift/RequestQueue/Chain.lean) | **Exact delivery over a given sequence of request-contract frames.** A `Queue` is a request contract's layout: its record type, the slots per record and the word each keeps, a record's returned bytes, and the cap per drain. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Drain.lean`](../Blanc/Lift/RequestQueue/Drain.lean) | **What a request system call leaves on a represented queue, for any excess arm.** The system path of the EIP-7002, EIP-7251 and EIP-8282 request contracts drains the queue the same way and differs only in the excess it stores (`SysShape.next`). | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`DrainLatency.lean`](../Blanc/Lift/RequestQueue/DrainLatency.lean) | **Queue positions under consecutive drains.** If every effect through a destination is a drain, a record at queue position `q` at effect `j` is returned by effect `j + q / cap`, at output position `q % cap`. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
