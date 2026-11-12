@@ -67,6 +67,8 @@ import Blanc.Composition.BuilderRequestPublicFindings
 import Blanc.Composition.BuilderRequestPublicGuarantees
 import Blanc.Composition.BuilderRequestPublicObservers
 import Blanc.Composition.BuilderRequestPublicStorage
+import Blanc.Composition.ConsolidationRequestDrainControl
+import Blanc.Composition.ConsolidationRequestDrainInput
 import Blanc.Composition.ConsolidationRequestPublicHeadlines
 import Blanc.Composition.ConsolidationRequestPublicHistory
 import Blanc.Composition.ConsolidationRequestPublicObservers

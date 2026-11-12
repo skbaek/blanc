@@ -837,6 +837,12 @@ COMPOSITION.update({
     "Composition.DepositClassifiedControls": ("beacon-deposit",),
 })
 
+# Actual coded-SYSTEM consolidation control composes the fixed W/C inputs and all pre-call phases.
+COMPOSITION.update({
+    "Composition.ConsolidationRequestDrainInput": ("withdrawal-request", "consolidation-request"),
+    "Composition.ConsolidationRequestDrainControl": ("beacon-roots", "history-storage", "withdrawal-request", "consolidation-request"),
+})
+
 ROOTS = ["Blanc", "Main"]
 
 def composition_declaration_failures(declarations, contracts):

@@ -155,6 +155,17 @@ theorem covered_system_root {benv : Benv} {a : Adr} {C : ByteArray} {data : Byte
         cases chain with
         | cons starts rest => exact keptChain_nil_eq rest
 
+/-- The actual two pre-call results identify the retained pre-output. -/
+theorem PreRoots.output_of_calls {benv : Benv} {st beacon history : State}
+    {bal beaconBal historyBal : BalBuilder} {rs : List Root}
+    (roots : PreRoots benv st bal rs)
+    (beaconRun : beaconRootsCall benv.stat.rules benv = .ok (beacon, beaconBal))
+    (historyRun : historyStorageCall benv.stat.rules (benv.withState beacon) beaconBal =
+      .ok (history, historyBal)) : st = history ∧ bal = historyBal := by
+  obtain ⟨beacon', beaconBal', _, _, first, _, second, _, _⟩ := roots
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj (first.symm.trans beaconRun))
+  exact Prod.mk.inj (Except.ok.inj (second.symm.trans historyRun))
+
 /-! ## Header links and pre-call inputs on one kept step -/
 
 /-- When `chain.blocks.getLast? = some tip`, the last entry of `getLast256BlockHashes chain` is `tip.header.hash`. -/

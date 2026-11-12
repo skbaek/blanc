@@ -2587,7 +2587,8 @@ a bare set-membership goal does not identify this execution-specific route.
   `KeptHistory.unique`, `ConfiguredHistoryTrace.kept_unique`), so frames read off it do not depend on the derivation.
   For the pre-execution system calls of a kept step (EIP-4788 beacon roots and EIP-2935 history storage, header
   parent/number/timestamp/block-hash links, and prefix/suffix/tip/step splits of `KeptHistory`), use
-  [`Blanc/ExecutionKeptPreCalls.lean`](../Blanc/ExecutionKeptPreCalls.lean) (`KeptStep.beaconRoots_frames`,
+  [`Blanc/ExecutionKeptPreCalls.lean`](../Blanc/ExecutionKeptPreCalls.lean) (`PreRoots.output_of_calls`,
+  `KeptStep.beaconRoots_frames`,
   `KeptStep.beaconRoots_stor`, `KeptStep.historyStorage_frames`, `KeptStep.historyStorage_stor`,
   `KeptStep.lastBlockHash`, `KeptStep.parentBeaconRoot`, `KeptHistory.split_at`, `KeptHistory.tip_snoc`,
   `KeptHistory.step_adj`, `KeptHistory.number_add`, `KeptHistory.timestamp_lt`); `KeptHistory.mainnet_covered` in
