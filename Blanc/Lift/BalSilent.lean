@@ -1,5 +1,7 @@
 import Blanc.Lift.Silent
 import Blanc.Lift.Sound
+import Blanc.Lift.Quiet
+import Blanc.Lift.CallRestriction
 
 /-!
 # Balance-silent synthetic trees
@@ -215,5 +217,98 @@ theorem frame_keeps_balances {code : ByteArray} {c : Cert} {S : List Nat} (hc : 
   rw [hf] at hat
   simp only [Bool.and_eq_true] at hat
   exact SFunc.RunP.getBal_of_balSilent (fun h => h) closed hat.1 hat.2 run
+
+/-- **A `STATICCALL`-only run without `SELFDESTRUCT` moves no ether.** -/
+theorem SFunc.RunP.getBal_of_staticcalls
+    {P : Sevm → Devm → Ninst → Devm → Prop}
+    (actual : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {fs : List SFunc} {sevm : Sevm} {pre : Devm} {f : SFunc} {o : Outcome}
+    (closed : ∀ g ∈ fs,
+      g.execsSatisfy Xinst.isStaticcall = true ∧ g.noSelfdestruct = true)
+    (calls : f.execsSatisfy Xinst.isStaticcall = true)
+    (terminal : f.noSelfdestruct = true)
+    (run : SFunc.RunP P fs sevm pre f o) :
+    (Outcome.devm o).getBal = pre.getBal := by
+  have popBal : ∀ {xs : List B256} {a b : Devm}, Devm.PopBurn xs a b →
+      b.getBal = a.getBal := fun pop => funext (getBal_eq_of_state_eq pop.state.symm)
+  induction run with
+  | zero d pop run ih =>
+      simp only [SFunc.execsSatisfy, Bool.and_eq_true] at calls
+      simp only [SFunc.noSelfdestruct, SFunc.lastsSatisfy, Bool.and_eq_true] at terminal
+      exact (ih calls.1 terminal.1).trans (popBal pop)
+  | succ d w hnz pop run ih =>
+      simp only [SFunc.execsSatisfy, Bool.and_eq_true] at calls
+      simp only [SFunc.noSelfdestruct, SFunc.lastsSatisfy, Bool.and_eq_true] at terminal
+      exact (ih calls.2 terminal.2).trans (popBal pop)
+  | toZero d pop run ih =>
+      exact (ih calls terminal).trans (popBal pop)
+  | toSucc d w hnz lookup pop run ih =>
+      have htarget := closed _ (List.mem_of_getElem? lookup)
+      exact (ih htarget.1 htarget.2).trans (popBal pop)
+  | @last _ _ l hrun =>
+      have hl : (if l = .selfdestruct then false else true) = true := by
+        cases l
+        · rfl
+        · rfl
+        · rfl
+        · simp only [SFunc.noSelfdestruct, SFunc.lastsSatisfy, Linst.notSelfdestruct,
+            Bool.false_eq_true] at terminal
+      exact congrArg Prod.fst (linst_balance_deletion_frame hl hrun)
+  | @next _ _ n _ _ hrun run ih =>
+      have htail_calls := SFunc.execsSatisfy_next_tail calls
+      have htail_term : SFunc.noSelfdestruct _ = true := terminal
+      have hactual := actual hrun
+      have hn_bal := by
+        cases n with
+        | exec x =>
+            simp only [SFunc.execsSatisfy, Bool.and_eq_true] at calls
+            cases x <;> simp only [Xinst.isStaticcall, Bool.false_eq_true, false_and] at calls
+            exact congrArg Prod.snd (Ninst.staticcall_logs_balances_any hactual)
+        | _ => exact Ninst.Run.getBal_of_balSilent rfl hactual
+      exact (ih htail_calls htail_term).trans hn_bal
+  | dest burn run ih =>
+      exact (ih calls terminal).trans (funext (getBal_eq_of_state_eq burn.state.symm))
+  | jump d lookup pop run ih =>
+      have htarget := closed _ (List.mem_of_getElem? lookup)
+      exact (ih htarget.1 htarget.2).trans (popBal pop)
+  | ret d pop =>
+      exact popBal pop
+  | callHalt d lookup pop run ih =>
+      have htarget := closed _ (List.mem_of_getElem? lookup)
+      exact (ih htarget.1 htarget.2).trans (popBal pop)
+  | callRet d lookup pop run tail ihRun ihTail =>
+      have htarget := closed _ (List.mem_of_getElem? lookup)
+      exact (ihTail calls terminal).trans ((ihRun htarget.1 htarget.2).trans (popBal pop))
+  | pcAt hrun _ run ih =>
+      exact (ih calls terminal).trans
+        (Ninst.Run.getBal_of_balSilent (n := .reg .pc) rfl (actual hrun))
+
+/-- **No successful frame at certified `STATICCALL`-only code without `SELFDESTRUCT` changes any
+account balance**, for any caller, depth, and rule set. -/
+theorem frame_keeps_balances_of_staticcalls {code : ByteArray} {c : Cert}
+    (hc : Cert.check code c = true)
+    (only : ∀ f ∈ c.prog, f.execsSatisfy Xinst.isStaticcall = true)
+    (nosd : c.noSelfdestruct = true)
+    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (exec : Exec 0 sevm pre (.ok post)) :
+    post.getBal = pre.getBal := by
+  have hstart : ∃ e f c', c = (e, f) :: c' ∧ e.pc = 0 ∧ e.frame = [] ∧
+      ([] : List MemMap).getD 0 [] = [] := by
+    cases c with
+    | nil => simp only [Cert.check, List.all_nil, Bool.and_true, Bool.false_eq_true] at hc
+    | cons p c' =>
+        rcases p with ⟨e, f⟩
+        simp only [Cert.check, List.beq_nil_eq, List.all_cons, Bool.and_eq_true, beq_iff_eq,
+          List.isEmpty_iff, List.all_eq_true, Prod.forall] at hc
+        exact ⟨e, f, c', rfl, hc.1.1, hc.1.2, rfl⟩
+  obtain ⟨f, hf, run⟩ := lift_sound_inM_staticcall (Cert.checkedM_of_check hc) hstart hcode
+    (fun x hx => by cases x <;> simp_all only [Xinst.isStaticcall, Bool.false_eq_true])
+    only exec
+  have hclosed : ∀ g ∈ c.prog,
+      g.execsSatisfy Xinst.isStaticcall = true ∧ g.noSelfdestruct = true :=
+    fun g hg => ⟨only g hg, Cert.noSelfdestruct_prog nosd g hg⟩
+  have hf_mem : f ∈ c.prog := List.mem_of_getElem? hf
+  exact SFunc.RunP.getBal_of_staticcalls StepIn.toRun hclosed
+    (only f hf_mem) (Cert.noSelfdestruct_prog nosd f hf_mem) run
 
 end Blanc.Lift

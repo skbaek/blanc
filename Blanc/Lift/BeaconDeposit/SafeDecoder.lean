@@ -39,11 +39,14 @@ body to halt successfully, and the body has no successful halting leaf — or ke
 note `callHalt` gives `.halted` directly, which the statement also covers by taking the body's
 result); the pushed words are `depositArgStack sevm [sel]` (`DepositArgs.lean`).  `t_01b8_c32`
 is `JUMPDEST; STOP`: `Burn.world` and `Linst.world_of_ok` (`Quiet.lean`). -/
-theorem safe_decoder_any_data {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
+theorem safe_decoder_effects_any_data {sevm : Sevm} {b post : Devm}
+    {sel : B256} {G : Nat}
     (run : SFunc.Run prog sevm (St b [sel] mem0 G) t_00a4_c32 (.halted post)) :
     DepositDecodable sevm ∧ ∃ G' d,
-      SFunc.Run prog sevm (St b (depositArgStack sevm [sel]) mem0 G') t_0304_c7 (.returned d) ∧
-      (∀ a, Devm.getStor post a = Devm.getStor d a) ∧ post.logs = d.logs := by
+      SFunc.Run prog sevm (St b (depositArgStack sevm [sel]) mem0 G')
+        t_0304_c7 (.returned d) ∧
+      (∀ a, Devm.getStor post a = Devm.getStor d a) ∧
+      post.logs = d.logs ∧ post.output = d.output := by
   have hlen_le : sevm.data.length.toB256.toNat ≤ sevm.data.length := by
     rw [B256.toNat_toB256]
     exact Nat.mod_le _ _
@@ -281,15 +284,21 @@ theorem safe_decoder_any_data {sevm : Sevm} {b post : Devm} {sel : B256} {G : Na
     | dest hburn hlast =>
         cases hlast with
         | last hstop =>
+            cases Except.ok.inj hstop
             have hburn_w := Burn.world hburn
-            have hstop_w := Linst.world_of_ok (by decide) hstop
             have hstor : ∀ a, Devm.getStor post a = Devm.getStor D a := by
               intro a
-              rw [hstop_w.1, hburn_w.1]
-            have hlogs : post.logs = D.logs := by
-              rw [hstop_w.2, hburn_w.2]
-            exact ⟨hdec, G', D, hrun_body, hstor, hlogs⟩
+              rw [hburn_w.1]
+            exact ⟨hdec, G', D, hrun_body, hstor, hburn_w.2, hburn.output.symm⟩
   · exact (SFunc.RunP.not_halted_entry (k := 7) bodySet_noHalt (by decide) rfl hrun_body rfl).elim
+
+theorem safe_decoder_any_data {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
+    (run : SFunc.Run prog sevm (St b [sel] mem0 G) t_00a4_c32 (.halted post)) :
+    DepositDecodable sevm ∧ ∃ G' d,
+      SFunc.Run prog sevm (St b (depositArgStack sevm [sel]) mem0 G') t_0304_c7 (.returned d) ∧
+      (∀ a, Devm.getStor post a = Devm.getStor d a) ∧ post.logs = d.logs := by
+  obtain ⟨hdec, G', d, hrun, hstor, hlogs, -⟩ := safe_decoder_effects_any_data run
+  exact ⟨hdec, G', d, hrun, hstor, hlogs⟩
 
 /-- Bounded compatibility projection of the original decoder walk. -/
 theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
