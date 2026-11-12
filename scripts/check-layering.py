@@ -843,6 +843,9 @@ COMPOSITION.update({
     "Composition.ConsolidationRequestDrainControl": ("beacon-roots", "history-storage", "withdrawal-request", "consolidation-request"),
 })
 
+# Exact deposit epoch/slot/ingress tagged mirrors reuse the original consensus transitions.
+COMPOSITION.update({"Composition.DepositLedgerMirrors": ("beacon-deposit",)})
+
 ROOTS = ["Blanc", "Main"]
 
 def composition_declaration_failures(declarations, contracts):

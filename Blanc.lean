@@ -88,6 +88,7 @@ import Blanc.Composition.Corpus.Proofs.RingValue
 import Blanc.Composition.DepositClassified
 import Blanc.Composition.DepositClassifiedControls
 import Blanc.Composition.DepositConsensusOutcomes
+import Blanc.Composition.DepositLedgerMirrors
 import Blanc.Composition.DepositParse
 import Blanc.Composition.DepositPendingPass
 import Blanc.Composition.DepositRequests
