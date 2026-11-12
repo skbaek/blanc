@@ -290,7 +290,7 @@ private theorem ledgerRun {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
         (tagged (appliedEntries fresh ++ tqF)).Perm
           (tagged tq ++ ds.flatMap requestEntries) ∧
         ((tagged (appliedEntries fresh ++ tqF)).map Prod.fst).Nodup ∧
-        (∀ x ∈ fresh, j ≤ x.1 ∧ ∃ post,
+        (∀ x ∈ fresh, j ≤ x.1 ∧ x.1 < j + ds.length ∧ ∃ post,
           applyPendingDeposit (jointCtx ccfg bls) x.2.2.pre x.2.2.deposit = .ok post) ∧
         (∀ k D dr, ds[k]? = some D → dr ∈ stepDepositRequests D →
           ∀ x ∈ fresh, x.2.2.tag = some dr.index.toNat → j + k < x.1) ∧
@@ -344,14 +344,14 @@ private theorem ledgerRun {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
       simpa only [result, stamped, tagged, appliedEntries, List.map_append,
         List.map_map, Function.comp_def, List.filter_append, List.flatMap_cons,
         List.append_assoc] using h1.trans h2'
-    have calls : ∀ x ∈ result, j ≤ x.1 ∧ ∃ post,
+    have calls : ∀ x ∈ result, j ≤ x.1 ∧ x.1 < j + (D :: ds).length ∧ ∃ post,
         applyPendingDeposit (jointCtx ccfg bls) x.2.2.pre x.2.2.deposit = .ok post := by
       intro x hx
       rcases List.mem_append.mp hx with hx | hx
       · obtain ⟨a, ha, rfl⟩ := List.mem_map.mp hx
-        exact ⟨Nat.le_refl _, callsN a ha⟩
-      · obtain ⟨hj, hc⟩ := callsTail x hx
-        exact ⟨by omega, hc⟩
+        exact ⟨Nat.le_refl _, by simp only [List.length_cons]; omega, callsN a ha⟩
+      · obtain ⟨hj, upper, hc⟩ := callsTail x hx
+        exact ⟨by omega, by simp only [List.length_cons]; omega, hc⟩
     have noFuture : ∀ a ∈ apN, ∀ dr ∈ (D :: ds).flatMap stepDepositRequests,
         a.2.tag ≠ some dr.index.toNat := by
       intro a ha dr hdr ht
@@ -370,7 +370,7 @@ private theorem ledgerRun {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
             by simpa only [List.map_append] using fresh)
       exact List.disjoint_left.mp disjoint hi ho
     refine ⟨tqF, result, ?_, alignedF, moved, (moved.map Prod.fst).nodup_iff.mpr fresh,
-      calls, ?_, principal ccfg bls (D :: ds) tq tqF result moved (fun x hx => (calls x hx).2)⟩
+      calls, ?_, principal ccfg bls (D :: ds) tq tqF result moved (fun x hx => (calls x hx).2.2)⟩
     · simp only [runLedger, step, ok_bind']
       simpa only [result, List.append_assoc] using run
     · intro k E dr hE hdr x hx ht
@@ -502,7 +502,7 @@ theorem depositFate : Blanc.Corpus.Freeze.Deposit.D9Fate := by
         omega
     · intro apIdx' j'' a' hap' ht'
       exact unique (atApplied hap') hAll ht' ht
-    · obtain ⟨post, applied⟩ := (calls (j', a) ha).2
+    · obtain ⟨post, applied⟩ := (calls (j', a) ha).2.2
       obtain ⟨o, outcome⟩ := DepositConsensusOutcomes.applyOutcome_of_success ccfg true
         a.2.pre post a.2.deposit applied
       refine ⟨o, post, ?_⟩
