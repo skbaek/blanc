@@ -397,6 +397,13 @@ def commitHeader (rules : ForkRules) (parent : Block) (template : Header)
     excessBlobGas := calculateExcessBlobGas rules.blob parent.header
     requestsHash := some (computeRequestsHash bout.requests) }
 
+/-- The block environment is independent of the committed body's state and output. -/
+theorem initBenv_commitHeader_body_eq (fork : Fork) (chain : BlockChain) (rules : ForkRules)
+    (parent : Block) (template : Header) (st1 st2 : State) (bout1 bout2 : BlockOutput) :
+    initBenv fork chain (commitHeader rules parent template st1 bout1) =
+      initBenv fork chain (commitHeader rules parent template st2 bout2) := by
+  simp only [initBenv, initBenvStat, commitHeader]
+
 /-- The committed header validates from its parent tip, base-fee equation,
 extra-data bound, and rule-dependent optional-field facts, at a covered fork. -/
 theorem commitHeader_ok {fork : Fork} {chain : BlockChain} {parent : Block}
