@@ -1360,7 +1360,8 @@ selected covered fork, `stateTransitionUsing`, the body run and the requests
 equality. `JointStepTrace` pins each step's `ConfiguredBlockTrace` block to
 `payloadToBlock req` and its body requests to `req.executionRequests`.
 To index a run by step, use `JointRun.steps` (each `JointRunStep` carries the step's
-endpoints, signed block and the chosen `JointStepTrace`). `JointRun.extendsBy_steps`
+endpoints, signed block and the chosen `JointStepTrace`). `JointRun.steps_linked` connects
+the initial, adjacent and final endpoints in order. `JointRun.extendsBy_steps`
 turns steps `i ≤ j` into configured histories through them with
 `ConfiguredHistoryTrace.ExtendsBy` of exactly `j - i` blocks and of the remaining
 `steps.length - 1 - j` blocks to `run.toExec pre`; `JointRun.extendsBy_toExec` is
@@ -2585,6 +2586,8 @@ a bare set-membership goal does not identify this execution-specific route.
   (same parents, blocks, forks and outputs), `ConfiguredHistoryTrace.keptHistory`, `ConfiguredHistoryTrace.splice`,
   `KeptHistory.append`; the kept carrier is determined by its start and blocks (`KeptStep.unique`,
   `KeptHistory.unique`, `ConfiguredHistoryTrace.kept_unique`), so frames read off it do not depend on the derivation.
+  `MessageRoots.keptAt_nil_of_entry_halt` discards retained frames at an address when the actual message
+  entry immediately halts at a different target, using that same root uniqueness.
   For the pre-execution system calls of a kept step (EIP-4788 beacon roots and EIP-2935 history storage, header
   parent/number/timestamp/block-hash links, and prefix/suffix/tip/step splits of `KeptHistory`), use
   [`Blanc/ExecutionKeptPreCalls.lean`](../Blanc/ExecutionKeptPreCalls.lean) (`PreRoots.output_of_calls`,

@@ -651,6 +651,16 @@ theorem JointRun.extendsBy_steps {P : Preset} {cfg : ChainConfig} {ccfg : Config
         · rw [show run.steps.length + 1 - 1 - j = 0 by omega]
           exact .refl
 
+/-- The chronological steps connect their initial, adjacent and final endpoints. -/
+theorem JointRun.steps_linked {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool}
+    {anchor final : JointState P} (run : JointRun cfg ccfg bls anchor final) :
+    run.steps.map JointRunStep.pre ++ [final] = anchor :: run.steps.map JointRunStep.post := by
+  induction run with
+  | nil => rfl
+  | @snoc before after run b step bound ih =>
+    simpa only [JointRun.steps, List.map_append, List.map_singleton, List.append_assoc,
+      List.cons_append] using congrArg (fun xs => xs ++ [after]) ih
+
 /-- Every step of a joint run is a successful joint step between its endpoints. -/
 theorem JointRun.steps_jointStep {P : Preset} {cfg : ChainConfig} {ccfg : Config}
     {bls : Bool} {s₀ : JointState P} :

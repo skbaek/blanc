@@ -846,6 +846,13 @@ COMPOSITION.update({
 # Exact deposit epoch/slot/ingress tagged mirrors reuse the original consensus transitions.
 COMPOSITION.update({"Composition.DepositLedgerMirrors": ("beacon-deposit",)})
 
+# Same signed builder history and the original deposit occurrence ledger.
+COMPOSITION.update({
+    "Composition.BuilderRequestApplicabilityTail": ("builder-request", "withdrawal-request"),
+    "Composition.BuilderRequestApplicabilityHistory": ("builder-request", "withdrawal-request"),
+    "Composition.DepositLedgerFate": ("beacon-deposit",),
+})
+
 ROOTS = ["Blanc", "Main"]
 
 def composition_declaration_failures(declarations, contracts):

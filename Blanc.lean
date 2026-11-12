@@ -34,7 +34,9 @@ import Blanc.Composition.BeaconRootsSlotControl
 import Blanc.Composition.BuilderRequestActualFeeBounds
 import Blanc.Composition.BuilderRequestApplicability.Checks
 import Blanc.Composition.BuilderRequestApplicabilityCalls
+import Blanc.Composition.BuilderRequestApplicabilityHistory
 import Blanc.Composition.BuilderRequestApplicabilityInput
+import Blanc.Composition.BuilderRequestApplicabilityTail
 import Blanc.Composition.BuilderRequestCarrier
 import Blanc.Composition.BuilderRequestClassification
 import Blanc.Composition.BuilderRequestCodesKept
@@ -88,6 +90,7 @@ import Blanc.Composition.Corpus.Proofs.RingValue
 import Blanc.Composition.DepositClassified
 import Blanc.Composition.DepositClassifiedControls
 import Blanc.Composition.DepositConsensusOutcomes
+import Blanc.Composition.DepositLedgerFate
 import Blanc.Composition.DepositLedgerMirrors
 import Blanc.Composition.DepositParse
 import Blanc.Composition.DepositPendingPass

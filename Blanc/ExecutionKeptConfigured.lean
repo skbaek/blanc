@@ -57,6 +57,24 @@ theorem MessageRoots.unique {msg : Msg} {state state' : State} {out out' : MsgCa
     (h : MessageRoots msg state out rs) (h' : MessageRoots msg state' out' rs') : rs = rs' :=
   roots_eq (h.2.trans h'.2.symm) (fun _ hr => (h.mem_entry hr).2) (fun _ hr => (h'.mem_entry hr).2)
 
+/-- A message that enters a halting machine away from an address keeps no frames there. -/
+theorem MessageRoots.keptAt_nil_of_entry_halt
+    {msg : Msg} {state : State} {out : MsgCallOutput} {rs : List Root}
+    {frame : Frame} {evm : Evm} {raw : Execution} {a : Adr}
+    (roots : MessageRoots msg state out rs)
+    (entry : messageEntry msg = some (frame,evm))
+    (stop : Evm.step evm = .halt raw) (away : evm.sta.currentTarget ≠ a) :
+    rs.flatMap (Root.keptAt a) = [] := by
+  let r : Root := ⟨frame,evm,raw,.halt stop⟩
+  have selected : MessageRoots msg state out [r] := ⟨roots.1,by rw [entry]; rfl⟩
+  rw [roots.unique selected]
+  simp only [List.flatMap_cons,List.flatMap_nil,List.append_nil]
+  unfold Root.keptAt
+  split
+  · change Exec.keptAt a (.halt stop) = []
+    rw [Exec.keptAt]
+  · rfl
+
 /-- A transaction determines its post-state, output, sender and roots. -/
 theorem TransactionRoots.unique {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {state state' : State}
     {bout₁ bout₂ : BlockOutput} {sender sender' : Adr} {rs rs' : List Root}
