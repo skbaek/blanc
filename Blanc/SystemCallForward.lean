@@ -62,6 +62,36 @@ theorem systemContracts_nonempty {p : Adr × ByteArray} (member : p ∈ systemCo
   simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false] at member
   rcases member with rfl | rfl | rfl | rfl <;> decide +kernel
 
+/-- A clean raw system frame forwards under its actual routing and code guards. -/
+theorem processSystemTransaction_of_exec_nondelegated {benv : Benv}
+    {target : Adr} {code : ByteArray} {data : Bytes} {post : Devm}
+    (fork : CoveredFork benv.stat.fork)
+    (notPrecompile : ¬ benv.stat.rules.isPrecomp target)
+    (nondelegated : getDelegatedCodeAddress code = none)
+    (run : exec (initEvm (systemCallMsg benv target code data)) = .ok post)
+    (clean : post.error = none) (nonneg : 0 ≤ post.refundCounter) :
+    processSystemTransaction benv target code data = .ok (post.state, systemCallOutput post) := by
+  have entry : (systemCallMsg benv target code data).benvAfterTransfer =
+      .ok benv.beginTransaction := rfl
+  have codeEntry : executeCode.enter
+      ((systemCallMsg benv target code data).withBenv benv.beginTransaction) =
+      .inl (initEvm ((systemCallMsg benv target code data).withBenv benv.beginTransaction)) := by
+    change (if (!false && (benv.stat.rules.isPrecomp target)) then _ else _) = _
+    simp only [Bool.not_false, Bool.true_and, notPrecompile, decide_false,
+      Bool.false_eq_true, ite_false]
+  have self : (systemCallMsg benv target code data).withBenv benv.beginTransaction =
+      systemCallMsg benv target code data := rfl
+  have message : processMessage (systemCallMsg benv target code data) = .ok post :=
+    MessageExecution.processMessage_clean_of_exec_afterTransfer_of_codeEntry
+      _ _ _ entry codeEntry fork.rules_touchedSweep (by rw [self]; exact run) clean
+  have call := processMessageCall_call_of_message
+    (msg := systemCallMsg benv target code data) (post := post)
+    (fork.rules_stateGas_none (s := benv.beginTransaction.stat)) rfl rfl
+    nondelegated message clean
+    (Int.toNat?_eq_some_of_nonneg nonneg)
+  simp only [Nat.zero_add, Int.toNat_of_nonneg nonneg] at call
+  exact call
+
 /-- **The system-call wrapper over a successful raw frame.** -/
 theorem processSystemTransaction_of_exec {benv : Benv} {p : Adr × ByteArray}
     (member : p ∈ systemContracts) {data : Bytes} {post : Devm}
@@ -69,28 +99,9 @@ theorem processSystemTransaction_of_exec {benv : Benv} {p : Adr × ByteArray}
     (run : exec (initEvm (systemCallMsg benv p.1 p.2 data)) = .ok post)
     (clean : post.error = none) (nonneg : 0 ≤ post.refundCounter) :
     processSystemTransaction benv p.1 p.2 data = .ok (post.state, systemCallOutput post) := by
-  have entry : (systemCallMsg benv p.1 p.2 data).benvAfterTransfer =
-      .ok benv.beginTransaction := rfl
-  have codeEntry : executeCode.enter
-      ((systemCallMsg benv p.1 p.2 data).withBenv benv.beginTransaction) =
-      .inl (initEvm ((systemCallMsg benv p.1 p.2 data).withBenv benv.beginTransaction)) := by
-    have notPrecompile : ¬ benv.stat.rules.isPrecomp p.1 :=
-      systemContracts_not_precompile member fork
-    change (if (!false && (benv.stat.rules.isPrecomp p.1)) then _ else _) = _
-    simp only [Bool.not_false, Bool.true_and, notPrecompile, decide_false,
-      Bool.false_eq_true, ite_false]
-  have self : (systemCallMsg benv p.1 p.2 data).withBenv benv.beginTransaction =
-      systemCallMsg benv p.1 p.2 data := rfl
-  have message : processMessage (systemCallMsg benv p.1 p.2 data) = .ok post :=
-    MessageExecution.processMessage_clean_of_exec_afterTransfer_of_codeEntry
-      _ _ _ entry codeEntry fork.rules_touchedSweep (by rw [self]; exact run) clean
-  have call := processMessageCall_call_of_message
-    (msg := systemCallMsg benv p.1 p.2 data) (post := post)
-    (fork.rules_stateGas_none (s := benv.beginTransaction.stat)) rfl rfl
-    (systemContracts_nondelegated member) message clean
-    (Int.toNat?_eq_some_of_nonneg nonneg)
-  simp only [Nat.zero_add, Int.toNat_of_nonneg nonneg] at call
-  exact call
+  exact processSystemTransaction_of_exec_nondelegated fork
+    (systemContracts_not_precompile member fork) (systemContracts_nondelegated member)
+    run clean nonneg
 
 /-- The unchecked block-level system call over installed canonical code. -/
 theorem processUncheckedSystemTransaction_of_exec {benv : Benv} {p : Adr × ByteArray}
@@ -104,6 +115,22 @@ theorem processUncheckedSystemTransaction_of_exec {benv : Benv} {p : Adr × Byte
   simp only [installed]
   exact processSystemTransaction_of_exec member fork run clean nonneg
 
+/-- The checked entry forwards when its installed code is nonempty and the
+actual raw frame is clean; canonical membership is not needed. -/
+theorem processCheckedSystemTransaction_of_exec_nondelegated {benv : Benv}
+    {target : Adr} {code : ByteArray} {data : Bytes} {post : Devm}
+    (fork : CoveredFork benv.stat.fork)
+    (installed : benv.state.getCode target = code) (nonempty : code.isEmpty = false)
+    (notPrecompile : ¬ benv.stat.rules.isPrecomp target)
+    (nondelegated : getDelegatedCodeAddress code = none)
+    (run : exec (initEvm (systemCallMsg benv target code data)) = .ok post)
+    (clean : post.error = none) (nonneg : 0 ≤ post.refundCounter) :
+    processCheckedSystemTransaction benv target data = .ok (post.state, systemCallOutput post) := by
+  unfold processCheckedSystemTransaction
+  simp only [installed, nonempty, Bool.false_eq_true, ite_false]
+  rw [processSystemTransaction_of_exec_nondelegated fork notPrecompile nondelegated run clean nonneg]
+  rfl
+
 /-- The checked block-level system call over installed canonical code: neither
 checked error arm is reachable. -/
 theorem processCheckedSystemTransaction_of_exec {benv : Benv} {p : Adr × ByteArray}
@@ -113,10 +140,9 @@ theorem processCheckedSystemTransaction_of_exec {benv : Benv} {p : Adr × ByteAr
     (clean : post.error = none) (nonneg : 0 ≤ post.refundCounter) :
     processCheckedSystemTransaction benv p.1 data =
       .ok (post.state, systemCallOutput post) := by
-  unfold processCheckedSystemTransaction
-  simp only [installed, systemContracts_nonempty member, Bool.false_eq_true, ite_false]
-  rw [processSystemTransaction_of_exec member fork run clean nonneg]
-  rfl
+  exact processCheckedSystemTransaction_of_exec_nondelegated fork installed
+    (systemContracts_nonempty member) (systemContracts_not_precompile member fork)
+    (systemContracts_nondelegated member) run clean nonneg
 
 /-- A selected `SSTORE` writes the world state exactly at the executing account. -/
 theorem afterSstore_state (sevm : Sevm) (base : Devm) (key value : B256) :
