@@ -66,6 +66,7 @@ import Blanc.Composition.BuilderRequestPublicBounds
 import Blanc.Composition.BuilderRequestPublicFindings
 import Blanc.Composition.BuilderRequestPublicGuarantees
 import Blanc.Composition.BuilderRequestPublicObservers
+import Blanc.Composition.BuilderRequestPublicStorage
 import Blanc.Composition.ConsolidationRequestPublicHeadlines
 import Blanc.Composition.ConsolidationRequestPublicHistory
 import Blanc.Composition.ConsolidationRequestPublicObservers
@@ -87,8 +88,10 @@ import Blanc.Composition.DepositClassifiedControls
 import Blanc.Composition.DepositConsensusOutcomes
 import Blanc.Composition.DepositParse
 import Blanc.Composition.DepositPendingPass
+import Blanc.Composition.DepositRequests
 import Blanc.Composition.DepositShortLogControl
 import Blanc.Composition.DepositShortLogInput
+import Blanc.Composition.DepositValue
 import Blanc.Composition.RequestPhaseAmsterdam
 import Blanc.Composition.RequestPhaseAmsterdamBal
 import Blanc.Composition.RequestPhaseOrder

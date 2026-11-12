@@ -824,6 +824,7 @@ COMPOSITION.update({'Composition.Corpus.Proofs.RingHistoryControls': ('beacon-ro
 # Reviewed guarded withdrawal-prefix and cap-one queue support.
 SHARED += ['GloasWithdrawalPrefix', 'Lift.RequestQueue.Batch']
 COMPOSITION.update({'Composition.BuilderRequestJointGDebitOnce': ('builder-request', 'withdrawal-request')})
+COMPOSITION.update({'Composition.BuilderRequestPublicStorage': ('builder-request', 'withdrawal-request'), 'Composition.DepositValue': ('beacon-deposit',), 'Composition.DepositRequests': ('beacon-deposit',)})
 
 # Reviewed D-S2 historical frame classification and mutant controls.
 CONTRACTS["beacon-deposit"].extend([

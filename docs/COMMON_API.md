@@ -4278,6 +4278,8 @@ rather than restating them:
   [`Blanc/ExecutionAccountingStoragePrefix.lean`](../Blanc/ExecutionAccountingStoragePrefix.lean).
   `GuardedStorageReplay.split` retains both guarded segments at the computed
   prefix storage; `.head_guard` exposes the first event's incoming guard.
+  `.find_guard_of_filter_one` gives the unique selected event's guard at
+  the storage computed from the exact prefix before that event.
   The registered recipe triggers do not recognize this custom relation or
   carrier-construction need, so discovery remains in this branch.
 
