@@ -71,6 +71,7 @@ import Blanc.Composition.BuilderRequestPublicObservers
 import Blanc.Composition.BuilderRequestPublicStorage
 import Blanc.Composition.ConsolidationRequestDrainControl
 import Blanc.Composition.ConsolidationRequestDrainInput
+import Blanc.Composition.ConsolidationRequestJoint
 import Blanc.Composition.ConsolidationRequestPublicHeadlines
 import Blanc.Composition.ConsolidationRequestPublicHistory
 import Blanc.Composition.ConsolidationRequestPublicObservers
@@ -90,6 +91,7 @@ import Blanc.Composition.Corpus.Proofs.RingValue
 import Blanc.Composition.DepositClassified
 import Blanc.Composition.DepositClassifiedControls
 import Blanc.Composition.DepositConsensusOutcomes
+import Blanc.Composition.DepositJoint
 import Blanc.Composition.DepositLedgerFate
 import Blanc.Composition.DepositLedgerMirrors
 import Blanc.Composition.DepositParse
@@ -108,6 +110,8 @@ import Blanc.Composition.WithdrawalRequestFeeRefutation
 import Blanc.ConcreteRun
 import Blanc.ConcreteRunKept
 import Blanc.ConsensusSsz
+import Blanc.ConsensusSszConsolidation
+import Blanc.ConsensusSszDeposit
 import Blanc.ContractAdmission
 import Blanc.ContractAdmissionSem
 import Blanc.Corpus.Freeze.BeaconRoots
@@ -526,6 +530,7 @@ import Blanc.Lift.ConsolidationRequest.Fee
 import Blanc.Lift.ConsolidationRequest.Frames
 import Blanc.Lift.ConsolidationRequest.Occurrence
 import Blanc.Lift.ConsolidationRequest.Queue
+import Blanc.Lift.ConsolidationRequest.RequestCodec
 import Blanc.Lift.ConsolidationRequest.Submission
 import Blanc.Lift.ConsolidationRequest.System
 import Blanc.Lift.ConsolidationRequest.SystemFrame

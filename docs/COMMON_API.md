@@ -1456,6 +1456,9 @@ fixed-size elements serializes to the concatenation of its elements). For a cons
 `WithdrawalRequest`, `serialize_withdrawalRequest` gives its serialization field by field
 (source address, public key, little-endian amount), `serialize_withdrawalRequest_length`
 its 76 bytes, and `serialize_withdrawalRequest_injective` its injectivity.
+For the consolidation and deposit request SSZ fields, lengths, and injectivity, use
+[`Blanc/ConsensusSszConsolidation.lean`](../Blanc/ConsensusSszConsolidation.lean) and
+[`Blanc/ConsensusSszDeposit.lean`](../Blanc/ConsensusSszDeposit.lean).
 
 To turn a block's transaction or receipt trie entries into body and receipt
 facts, use [`Blanc/ExecutionTrieBinding.lean`](../Blanc/ExecutionTrieBinding.lean).

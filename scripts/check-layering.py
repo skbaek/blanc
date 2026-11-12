@@ -142,7 +142,7 @@ SHARED = ["Basic", "BytePattern", "Semantics", "HistoricalFork", "ShanghaiOnward
           "AbstractStackTransfer", "CodeTrie", "GasErasure", "RunPrefix", "PrefixTransport",
           "RevertPayload", "CompiledWalkInversion", "CompiledFixedInvariance", "ExecDeterminism", "ExecIdentification", "ExecutionSettlement", "ExecutionPath",
           "ExecutionStateTrace", "ExecutionTrace", "ExecutionStagedBodyTrace", "ExecutionStagedBodyStateTrace", "RequestsOutput", "ExecutionMessageStateTrace",
-          "ExecutionTransactionStateTrace", "ExecutionSelectedTransactionStateTrace", "ExecutionTransactionGas", "ExecutionBodyGas", "ExecutionBodyStateTrace", "ExecutionHistory", "JointHistory", "ConsensusSsz", "ExecutionHistoryExtension",
+          "ExecutionTransactionStateTrace", "ExecutionSelectedTransactionStateTrace", "ExecutionTransactionGas", "ExecutionBodyGas", "ExecutionBodyStateTrace", "ExecutionHistory", "JointHistory", "ConsensusSsz", "ConsensusSszConsolidation", "ConsensusSszDeposit", "ExecutionHistoryExtension",
           "ExecutionHistoryStateTrace", "ExecutionHistoryInStateTrace", "ExecutionOccurrence", "ExecutionNoninterference", "TransientSettlement", "TransientInvariance", "ExecutionCreateGuard",
                                  "ExecutionDeletionProvenance",
                                  "ExecutionEmptyContext",
@@ -657,6 +657,7 @@ CONTRACTS["builder-request"].extend(["Lift.BuilderRequest.RequestCodecG", "Lift.
 # EIP-7251 consolidation requests: fee and user frames under covered forks.
 CONTRACTS.setdefault("consolidation-request", []).extend([
     "Lift.ConsolidationRequest.Fee", "Lift.ConsolidationRequest.Submission",
+    "Lift.ConsolidationRequest.RequestCodec",
     "Lift.ConsolidationRequest.Frames",
 ])
 
@@ -851,6 +852,12 @@ COMPOSITION.update({
     "Composition.BuilderRequestApplicabilityTail": ("builder-request", "withdrawal-request"),
     "Composition.BuilderRequestApplicabilityHistory": ("builder-request", "withdrawal-request"),
     "Composition.DepositLedgerFate": ("beacon-deposit",),
+})
+
+# Original consolidation classifier/trace and deposit joint request seam.
+COMPOSITION.update({
+    "Composition.ConsolidationRequestJoint": ("consolidation-request",),
+    "Composition.DepositJoint": ("beacon-deposit",),
 })
 
 ROOTS = ["Blanc", "Main"]

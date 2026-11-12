@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-590 shared modules, 562 with a module summary.
+592 shared modules, 564 with a module summary.
 
 ## `Blanc/`
 
@@ -38,6 +38,8 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`ConcreteRun.lean`](../Blanc/ConcreteRun.lean) | Concrete stepping glue for kernel-checked existential executions. | [C9.2](COMMON_API.md#c92-i-need-to-connect-a-real-execution-with-a-lifted-run) |
 | [`ConcreteRunKept.lean`](../Blanc/ConcreteRunKept.lean) | Continuing prefixes do not add retained frames. | [C9.2](COMMON_API.md#c92-i-need-to-connect-a-real-execution-with-a-lifted-run) |
 | [`ConsensusSsz.lean`](../Blanc/ConsensusSsz.lean) | **SSZ serialization facts for consensus containers.** Contract-neutral equations for Jaune's consensus SSZ: little-endian `uint64` bytes against Jaune's big-endian `UInt64.toBytes`, the byte vector, lists of fixed-size elements, and the electra withdrawal request. | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
+| [`ConsensusSszConsolidation.lean`](../Blanc/ConsensusSszConsolidation.lean) | **SSZ bytes of consensus consolidation requests.** The actual consensus container is three fixed-size fields, in source-address, source-key, target-key order. | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
+| [`ConsensusSszDeposit.lean`](../Blanc/ConsensusSszDeposit.lean) | Field equations and exact projections for the actual consensus deposit request. | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
 | [`ContractAdmission.lean`](../Blanc/ContractAdmission.lean) | **Contract preservation with trace-local frame admission.** This module extends the ordinary `ContractSpec` ladder with positive entry conditions attached to the concrete execution's actual target-frame roots. | [T2a](COMMON_API.md#t2a-i-need-a-frame-invariant-under-trace-local-entry-premises) |
 | [`ContractAdmissionSem.lean`](../Blanc/ContractAdmissionSem.lean) | **Contract preservation with trace-local frame admission.** This module extends the ordinary `ContractSpec` ladder with positive entry conditions attached to the concrete execution's actual target-frame roots. | [C9.13](COMMON_API.md#c913-i-need-a-whole-contract-property-without-per-path-walks) |
 | [`DelegatecallEnvelope.lean`](../Blanc/DelegatecallEnvelope.lean) | **Contract-neutral `DELEGATECALL` envelope vocabulary.** The descriptor below is a proof-carrying name for the exact child constructed by Jaune's `.delegatecall` arm. | [E2](COMMON_API.md#e2-the-walk-crosses-a-child-frame) |
