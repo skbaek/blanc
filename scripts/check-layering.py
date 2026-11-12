@@ -825,6 +825,17 @@ COMPOSITION.update({'Composition.Corpus.Proofs.RingHistoryControls': ('beacon-ro
 SHARED += ['GloasWithdrawalPrefix', 'Lift.RequestQueue.Batch']
 COMPOSITION.update({'Composition.BuilderRequestJointGDebitOnce': ('builder-request', 'withdrawal-request')})
 
+# Reviewed D-S2 historical frame classification and mutant controls.
+CONTRACTS["beacon-deposit"].extend([
+    "Lift.BeaconDeposit.ClassifyRootView",
+    "Lift.BeaconDeposit.ClassifyViews",
+    "Lift.BeaconDeposit.HistEntryPrefix",
+])
+COMPOSITION.update({
+    "Composition.DepositClassified": ("beacon-deposit",),
+    "Composition.DepositClassifiedControls": ("beacon-deposit",),
+})
+
 ROOTS = ["Blanc", "Main"]
 
 def composition_declaration_failures(declarations, contracts):

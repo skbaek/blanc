@@ -81,6 +81,8 @@ import Blanc.Composition.Corpus.Proofs.RingHistoryControls
 import Blanc.Composition.Corpus.Proofs.RingRoots
 import Blanc.Composition.Corpus.Proofs.RingTotality
 import Blanc.Composition.Corpus.Proofs.RingValue
+import Blanc.Composition.DepositClassified
+import Blanc.Composition.DepositClassifiedControls
 import Blanc.Composition.DepositConsensusOutcomes
 import Blanc.Composition.DepositParse
 import Blanc.Composition.DepositPendingPass
@@ -336,6 +338,8 @@ import Blanc.Lift.BeaconDeposit.BodySpec
 import Blanc.Lift.BeaconDeposit.Cert
 import Blanc.Lift.BeaconDeposit.Check
 import Blanc.Lift.BeaconDeposit.CheckTries
+import Blanc.Lift.BeaconDeposit.ClassifyRootView
+import Blanc.Lift.BeaconDeposit.ClassifyViews
 import Blanc.Lift.BeaconDeposit.CommittedExec
 import Blanc.Lift.BeaconDeposit.CommittedHistory
 import Blanc.Lift.BeaconDeposit.CommittedReplay
@@ -361,6 +365,7 @@ import Blanc.Lift.BeaconDeposit.HistCommittedHistory
 import Blanc.Lift.BeaconDeposit.HistDeployment
 import Blanc.Lift.BeaconDeposit.HistDepositEntries
 import Blanc.Lift.BeaconDeposit.HistDepositLogs
+import Blanc.Lift.BeaconDeposit.HistEntryPrefix
 import Blanc.Lift.BeaconDeposit.HistLadder
 import Blanc.Lift.BeaconDeposit.HistSafe
 import Blanc.Lift.BeaconDeposit.HistSafeCount
