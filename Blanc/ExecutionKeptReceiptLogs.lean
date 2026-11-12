@@ -123,6 +123,87 @@ theorem Root.keptAt_logs {a : Adr} {keep : Log → Bool}
         (Frame.raw_commits_of_settlementCommits committed) hsg target [] 0).symm
   next rolled => rfl
 
+private theorem Exec.keptAt_filter_descendantFrames_of_leaves
+    {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (leaves : ∀ fr ∈ Exec.descendantFrames run, fr.sevm.currentTarget = a →
+      Exec.descendantFrames fr.run = []) :
+    Exec.keptAt a run = (Exec.descendantFrames run).filter
+      (fun fr => decide (fr.sevm.currentTarget = a)) := by
+  induction run with
+  | halt _ => simp only [Exec.keptAt, Exec.descendantFrames, List.filter_nil]
+  | cont _ next ih =>
+    simp only [Exec.keptAt, Exec.descendantFrames] at leaves ⊢
+    exact ih leaves
+  | doneErr _ _ _ => simp only [Exec.keptAt, Exec.descendantFrames, List.filter_nil]
+  | doneOk _ _ _ next ih =>
+    simp only [Exec.keptAt, Exec.descendantFrames] at leaves ⊢
+    exact ih leaves
+  | runErr _ _ _ _ => simp only [Exec.keptAt, Exec.descendantFrames, List.filter_nil]
+  | @runOk pc sevm pre frame resume pcNext childEvm raw inter out step enter child resumed next
+      childIH nextIH =>
+    by_cases settles : Frame.settlementCommits frame raw = true
+    · simp only [Exec.keptAt, Exec.descendantFrames, dite_eq_left settles] at leaves ⊢
+      have childLeaves : ∀ fr ∈ Exec.descendantFrames child, fr.sevm.currentTarget = a →
+          Exec.descendantFrames fr.run = [] := fun fr member target =>
+        leaves fr (List.mem_cons_of_mem _ (List.mem_append_left _ member)) target
+      have nextLeaves : ∀ fr ∈ Exec.descendantFrames next, fr.sevm.currentTarget = a →
+          Exec.descendantFrames fr.run = [] := fun fr member target =>
+        leaves fr (List.mem_cons_of_mem _ (List.mem_append_right _ member)) target
+      rw [List.filter_append, List.filter_cons, nextIH nextLeaves]
+      by_cases target : childEvm.sta.currentTarget = a
+      · have empty : Exec.descendantFrames child = [] := leaves _ List.mem_cons_self target
+        rw [ite_eq_left target, empty, List.filter_nil]
+        have selected : decide ((Exec.Frame.ofRun child
+            (Frame.raw_commits_of_settlementCommits settles)).sevm.currentTarget = a) = true :=
+          decide_eq_true target
+        simp only [selected, ↓reduceIte]
+      · rw [ite_eq_right target, childIH childLeaves]
+        have selected : decide ((Exec.Frame.ofRun child
+            (Frame.raw_commits_of_settlementCommits settles)).sevm.currentTarget = a) = false :=
+          decide_eq_false target
+        simp only [selected, Bool.false_eq_true, ↓reduceIte]
+    · simp only [Exec.keptAt, Exec.descendantFrames, dite_eq_right settles,
+        List.nil_append] at leaves ⊢
+      exact nextIH leaves
+
+/-- On a selected address whose retained frames are leaves, pruning at that address
+selects exactly the address-filtered committed frame list. -/
+private theorem Root.keptAt_filter_frames_of_leaves {a : Adr} (root : Root)
+    (leaves : ∀ fr ∈ root.frames, fr.sevm.currentTarget = a →
+      Exec.descendantFrames fr.run = []) :
+    root.keptAt a = root.frames.filter (fun fr => decide (fr.sevm.currentTarget = a)) := by
+  by_cases settles : Frame.settlementCommits root.frame root.raw = true
+  · have committed := Frame.raw_commits_of_settlementCommits settles
+    simp only [Root.keptAt, Root.frames, dite_eq_left settles, ite_eq_left settles,
+      Exec.committedFrames, dite_eq_left committed] at leaves ⊢
+    by_cases target : root.evm.sta.currentTarget = a
+    · have empty : Exec.descendantFrames root.run = [] := leaves _ List.mem_cons_self target
+      rw [ite_eq_left target, empty]
+      simp only [Exec.Frame.ofRun, List.filter_cons, decide_eq_true target, ↓reduceIte,
+        List.filter_nil]
+    · rw [ite_eq_right target]
+      rw [Exec.keptAt_filter_descendantFrames_of_leaves root.run
+        (fun fr member selected => leaves fr (List.mem_cons_of_mem _ member) selected)]
+      simp only [Exec.Frame.ofRun, List.filter_cons, decide_eq_false target,
+        Bool.false_eq_true, ↓reduceIte]
+  · simp only [Root.keptAt, Root.frames, dite_eq_right settles, ite_eq_right settles,
+      List.filter_nil]
+
+private theorem roots_keptAt_filter_frames_of_leaves {a : Adr} (rs : List Root)
+    (leaves : ∀ fr ∈ rs.flatMap Root.frames, fr.sevm.currentTarget = a →
+      Exec.descendantFrames fr.run = []) :
+    rs.flatMap (Root.keptAt a) =
+      (rs.flatMap Root.frames).filter (fun fr => decide (fr.sevm.currentTarget = a)) := by
+  induction rs with
+  | nil => rfl
+  | cons r rs ih =>
+    simp only [List.flatMap_cons] at leaves
+    simp only [List.flatMap_cons, List.filter_append]
+    rw [Root.keptAt_filter_frames_of_leaves r
+        (fun fr hfr => leaves fr (List.mem_append_left _ hfr)),
+      ih (fun fr hfr => leaves fr (List.mem_append_right _ hfr))]
+
 namespace ExecutionTrace
 
 private def RetainedXlot.rootList (frame : Frame) {slot : Xlot} :
@@ -298,6 +379,262 @@ private theorem TransactionTrace.receipt_keptAt_logs {a : Adr} {keep : Log → B
   have outcome := Prod.mk.inj (Except.ok.inj (message.1.symm.trans trace.message.result))
   obtain ⟨rfl, rfl⟩ := outcome
   exact message.keptAt_logs address (by rw [prepareMessage_benv trace.prepared]; exact hsg)
+
+private theorem MessageCallTrace.rootList_frames {msg : Msg} {state : State} {out : MsgCallOutput}
+    (trace : MessageCallTrace msg state out) :
+    trace.rootList.flatMap Root.frames = trace.settledFrames := by
+  cases trace with
+  | createCollision target collision result => rfl
+  | createRun target collision evm core trace result =>
+    rcases trace with ⟨slot, retained, process⟩
+    cases retained with
+    | none => rfl
+    | some body =>
+      simp only [MessageCallTrace.rootList, RetainedXlot.rootList, List.flatMap_cons,
+        List.flatMap_nil, List.append_nil, Root.frames, MessageCallTrace.settledFrames,
+        ProcessCreateMessageTrace.settledFrames]
+  | callRun target delegated refund delegation execMsg execEq evm core trace result =>
+    rcases trace with ⟨slot, retained, process⟩
+    cases retained with
+    | none => rfl
+    | some body =>
+      simp only [MessageCallTrace.rootList, RetainedXlot.rootList, List.flatMap_cons,
+        List.flatMap_nil, List.append_nil, Root.frames, MessageCallTrace.settledFrames,
+        ProcessMessageTrace.settledFrames]
+
+private theorem TransactionTrace.roots_frames
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout2 : BlockOutput} {sender : Adr} {roots : List Root}
+    (trace : TransactionTrace benv bout tx index state bout2)
+    (run : TransactionRoots benv bout tx index state bout2 sender roots)
+    (hsg : benv.stat.rules.stateGas = none) :
+    roots.flatMap Root.frames = trace.settledFrames := by
+  obtain ⟨msg, messageState, messageOut, prepared, message⟩ := run.2
+  have same := Prod.mk.inj (Except.ok.inj (prepared.symm.trans
+    (trace.transactionMessage_eq hsg)))
+  have msgEq := same.2
+  subst msg
+  have messageSg : trace.msg.benv.stat.rules.stateGas = none := by
+    rw [prepareMessage_benv trace.prepared]
+    exact hsg
+  rw [message.unique (trace.message.rootList_roots messageSg),
+    trace.message.rootList_frames]
+  rfl
+
+private theorem ApplyTransactionsTrace.roots_frames
+    {txs : List (Nat × Tx)} {benv finalBenv finalBenv2 : Benv} {bout finalBout finalBout2 : BlockOutput}
+    {senders : List (Adr × Tx)} {roots : List Root}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (run : TransactionsRoots txs benv bout finalBenv2 finalBout2 senders roots)
+    (hsg : benv.stat.rules.stateGas = none) :
+    (finalBenv2 = finalBenv ∧ finalBout2 = finalBout) ∧
+      roots.flatMap Root.frames = trace.settledFrames := by
+  induction trace generalizing senders roots with
+  | nil =>
+    cases run
+    exact ⟨⟨rfl, rfl⟩, rfl⟩
+  | cons head tail ih =>
+    cases run with
+    | cons first later =>
+      have same := Prod.mk.inj (Except.ok.inj (first.1.symm.trans head.result))
+      obtain ⟨rfl, rfl⟩ := same
+      obtain ⟨heq, hframes⟩ := ih later hsg
+      exact ⟨heq, by simp only [List.flatMap_append, ApplyTransactionsTrace.settledFrames,
+        head.roots_frames first hsg, hframes]⟩
+
+private theorem RequestsTrace.requestPass_frames
+    {benv : Benv} {bout boutPass : BlockOutput} {state : State} {bout2 : BlockOutput}
+    {actualState : State} {actualOut : BlockOutput} {steps : List RequestStep}
+    (trace : RequestsTrace benv bout state bout2)
+    (run : RequestPass benv boutPass actualState actualOut steps)
+    (hsg : benv.stat.rules.stateGas = none)
+    (enabled : benv.stat.rules.header.requestsHash = true) :
+    (requestRootsOf steps).flatMap Root.frames = trace.settledFrames := by
+  rw [RequestPass, ite_eq_left enabled] at run
+  obtain ⟨deposits, acc, bal, parsed, roots, output⟩ := run
+  rw [trace.requestShape] at roots
+  cases roots with
+  | cons withdrawalRun withdrawalRoots later =>
+    have same := Prod.mk.inj (Except.ok.inj (withdrawalRun.symm.trans trace.withdrawalRun))
+    obtain ⟨rfl, rfl⟩ := same
+    cases later with
+    | cons consolidationRun consolidationRoots tail =>
+      have same := Prod.mk.inj
+        (Except.ok.inj (consolidationRun.symm.trans trace.consolidationRun))
+      obtain ⟨rfl, rfl⟩ := same
+      cases tail
+      have withdrawalSg : (systemTransactionMessage benv
+          withdrawalRequestPredeployAddress []).benv.stat.rules.stateGas = none := hsg
+      have consolidationSg : (systemTransactionMessage (benv.withState trace.withdrawalState)
+          consolidationRequestPredeployAddress []).benv.stat.rules.stateGas = none := hsg
+      simp only [requestRootsOf, List.flatMap_cons, List.flatMap_nil, List.append_nil,
+        List.flatMap_append, RequestsTrace.settledFrames, SystemMessageTrace.settledFrames]
+      rw [withdrawalRoots.unique (trace.withdrawal.message.rootList_roots withdrawalSg),
+        consolidationRoots.unique (trace.consolidation.message.rootList_roots consolidationSg),
+        trace.withdrawal.message.rootList_frames,
+        trace.consolidation.message.rootList_frames]
+
+private theorem AppliedBodyTrace.preRoots_frames
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
+    {state2 : State} {bout2 : BlockOutput} {preState : State} {preBal : BalBuilder}
+    {preRoots : List Root}
+    (trace : AppliedBodyTrace benv txs ommers wds state2 bout2)
+    (pre : PreRoots benv preState preBal preRoots)
+    (fork : CoveredFork benv.stat.fork) :
+    preState = trace.historyState ∧
+      ({BlockOutput.init with bal := preBal} : BlockOutput) = .init ∧
+      preRoots.flatMap Root.frames =
+        trace.beacon.settledFrames ++ trace.history.settledFrames := by
+  have hbal : benv.stat.rules.bal = none := fork.rules_bal_none
+  have hsg : benv.stat.rules.stateGas = none := fork.rules_stateGas_none
+  have hbeacon : benv.stat.rules.sys.beaconRoots = true :=
+    fork.cases (motive := fun f => f.ruleSet.sys.beaconRoots = true) rfl rfl rfl rfl
+  have hhistory : benv.stat.rules.sys.historyStorage = true :=
+    fork.cases (motive := fun f => f.ruleSet.sys.historyStorage = true) rfl rfl rfl rfl
+  obtain ⟨beacon, beaconBal, beaconRoots, historyRoots, hb, cb, hh, ch, rfl⟩ := pre
+  simp only [beaconRootsCall, hbeacon, ↓reduceIte, BalBuilder.incorporateSystem, hbal] at hb
+  obtain ⟨⟨st, out⟩, hrun, hb⟩ := Except.bind_eq_ok hb
+  simp only [Except.ok.injEq, Prod.mk.injEq] at hb
+  obtain ⟨rfl, rfl⟩ := hb
+  rw [Except.mapError_eq_ok_iff] at hrun
+  obtain ⟨rfl, -⟩ := Prod.mk.inj (Except.ok.inj (hrun.symm.trans trace.beacon.run))
+  simp only [historyStorageCall, hhistory, ↓reduceIte, BalBuilder.incorporateSystem, hbal] at hh
+  obtain ⟨lastHash, hlast, hh⟩ := Except.bind_eq_ok hh
+  obtain ⟨⟨st2, out2⟩, hrun2, hh⟩ := Except.bind_eq_ok hh
+  simp only [Except.ok.injEq, Prod.mk.injEq] at hh
+  obtain ⟨hpre, hpreBal⟩ := hh
+  obtain rfl := Except.ok.inj (hlast.symm.trans trace.lastHashRun)
+  rw [Except.mapError_eq_ok_iff] at hrun2
+  obtain ⟨hst2, -⟩ := Prod.mk.inj (Except.ok.inj (hrun2.symm.trans trace.history.run))
+  have hstateEq : preState = trace.historyState := hpre.symm.trans hst2
+  subst hstateEq
+  rw [PreCall, ite_eq_left hbeacon] at cb
+  obtain ⟨_, bMsgRoots⟩ := cb
+  have hdata : historyData benv = trace.lastHash.toBytes := by
+    unfold historyData
+    have hsome : benv.stat.blockHashes.getLast? = some trace.lastHash :=
+      Option.toExcept_eq_ok trace.lastHashRun
+    rw [hsome]
+  rw [PreCall, ite_eq_left hhistory, hdata] at ch
+  obtain ⟨_, hMsgRoots⟩ := ch
+  have bSg : (systemTransactionMessage benv beaconRootsAddress
+      benv.stat.parentBeaconBlockRoot.toBytes).benv.stat.rules.stateGas = none := hsg
+  have hSg : (systemTransactionMessage (benv.withState trace.beaconState) historyStorageAddress
+      trace.lastHash.toBytes).benv.stat.rules.stateGas = none := hsg
+  refine ⟨rfl, by rw [← hpreBal]; rfl, ?_⟩
+  rw [List.flatMap_append,
+    bMsgRoots.unique (trace.beacon.message.rootList_roots bSg),
+    hMsgRoots.unique (trace.history.message.rootList_roots hSg),
+    trace.beacon.message.rootList_frames,
+    trace.history.message.rootList_frames]
+  rfl
+
+private theorem AppliedBodyTrace.bodyRoots_frames
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
+    {state state2 : State} {bout bout2 : BlockOutput} {run : BodyRun}
+    (trace : AppliedBodyTrace benv txs ommers wds state2 bout2)
+    (body : BodyRoots benv txs ommers wds state bout run)
+    (fork : CoveredFork benv.stat.fork) :
+    run.preRoots.flatMap Root.frames =
+      trace.beacon.settledFrames ++ trace.history.settledFrames ∧
+    run.txRoots.flatMap Root.frames = trace.transactions.settledFrames ∧
+    (requestRootsOf run.requests).flatMap Root.frames = trace.requests.settledFrames ∧
+    run.roots.flatMap Root.frames = trace.settledFrames := by
+  have hsg : benv.stat.rules.stateGas = none := fork.rules_stateGas_none
+  have hwds : benv.stat.rules.header.withdrawalsRoot = true :=
+    fork.cases (motive := fun f => f.ruleSet.header.withdrawalsRoot = true) rfl rfl rfl rfl
+  have hreq : benv.stat.rules.header.requestsHash = true :=
+    fork.cases (motive := fun f => f.ruleSet.header.requestsHash = true) rfl rfl rfl rfl
+  obtain ⟨hpreState, hpreBal, hpreFrames⟩ := trace.preRoots_frames body.pre fork
+  obtain ⟨decoded, hd, txRoots⟩ := body.transactions
+  obtain rfl : decoded = trace.decodedTxs := Except.ok.inj (hd.symm.trans trace.decodeRun)
+  rw [hpreState, hpreBal] at txRoots
+  obtain ⟨⟨htxEnv, htxOut⟩, htxFrames⟩ := trace.transactions.roots_frames txRoots hsg
+  obtain ⟨reqSt, reqOut, reqPass⟩ := body.requests
+  rw [htxEnv, htxOut] at reqPass
+  simp only [withdrawalsPass, hwds, ↓reduceIte, processWithdrawals] at reqPass
+  have hsgReq : (trace.transactionBenv.withState
+      (processWithdrawalsState trace.transactionBenv.state wds)).stat.rules.stateGas = none := by
+    change trace.transactionBenv.stat.rules.stateGas = none
+    rw [trace.transactions.stat_eq]
+    exact hsg
+  have hreqOn : (trace.transactionBenv.withState
+      (processWithdrawalsState trace.transactionBenv.state wds)).stat.rules.header.requestsHash =
+      true := by
+    change trace.transactionBenv.stat.rules.header.requestsHash = true
+    rw [trace.transactions.stat_eq]
+    exact hreq
+  have hreqFrames := trace.requests.requestPass_frames reqPass hsgReq hreqOn
+  refine ⟨hpreFrames, htxFrames, hreqFrames, ?_⟩
+  simp only [BodyRun.roots, List.flatMap_append, hpreFrames, htxFrames, hreqFrames,
+    AppliedBodyTrace.settledFrames, List.append_assoc]
+
+/-- The frames of a configured block's kept roots are its settled frames. -/
+theorem ConfiguredBlockTrace.kept_roots_frames {cfg : ChainConfig} {pre post : BlockChain}
+    (t : ConfiguredBlockTrace cfg pre post) :
+    t.kept.run.roots.flatMap Root.frames = t.settledFrames :=
+  (t.bodyTrace.bodyRoots_frames t.keptStep.body t.covered).2.2.2
+
+/-- The frames of a configured block's system pre-call and post-call request roots are its
+settled system frames. -/
+theorem ConfiguredBlockTrace.kept_systemRoots_frames {cfg : ChainConfig} {pre post : BlockChain}
+    (t : ConfiguredBlockTrace cfg pre post) :
+    (t.kept.run.preRoots ++ requestRootsOf t.kept.run.requests).flatMap Root.frames =
+      t.bodyTrace.beacon.settledFrames ++ t.bodyTrace.history.settledFrames ++
+        t.bodyTrace.requests.settledFrames := by
+  obtain ⟨hpre, _, hreq, _⟩ := t.bodyTrace.bodyRoots_frames t.keptStep.body t.covered
+  simp only [List.flatMap_append, hpre, hreq, List.append_assoc]
+
+/-- On an address whose settled frames in a configured block are leaves, the kept traversal
+selects precisely the address-filtered settled frames. -/
+theorem ConfiguredBlockTrace.keptAt_eq_filter_settledFrames_of_leaves
+    {cfg : ChainConfig} {pre post : BlockChain}
+    (t : ConfiguredBlockTrace cfg pre post) (a : Adr)
+    (leaves : ∀ fr ∈ t.settledFrames, fr.sevm.currentTarget = a →
+      Exec.descendantFrames fr.run = []) :
+    t.kept.keptAt a = t.settledFrames.filter (fun fr => decide (fr.sevm.currentTarget = a)) := by
+  unfold KeptBlock.keptAt
+  rw [roots_keptAt_filter_frames_of_leaves t.kept.run.roots
+      (by rw [t.kept_roots_frames]; exact leaves),
+    t.kept_roots_frames]
+
+/-- When no settled system frame targets `a`, the block's system roots keep no frames at `a`. -/
+theorem ConfiguredBlockTrace.kept_systemRoots_keptAt_nil
+    {cfg : ChainConfig} {pre post : BlockChain}
+    (t : ConfiguredBlockTrace cfg pre post) (a : Adr)
+    (noTarget : ∀ fr ∈ t.bodyTrace.beacon.settledFrames ++ t.bodyTrace.history.settledFrames ++
+      t.bodyTrace.requests.settledFrames, fr.sevm.currentTarget ≠ a) :
+    (t.kept.run.preRoots ++ requestRootsOf t.kept.run.requests).flatMap (Root.keptAt a) = [] := by
+  have sub : ∀ fr ∈ (t.kept.run.preRoots ++ requestRootsOf t.kept.run.requests).flatMap Root.frames,
+      fr.sevm.currentTarget = a → Exec.descendantFrames fr.run = [] := by
+    rw [t.kept_systemRoots_frames]
+    intro fr hfr htarget
+    exact False.elim (noTarget fr hfr htarget)
+  rw [roots_keptAt_filter_frames_of_leaves _ sub, t.kept_systemRoots_frames]
+  apply List.filter_eq_nil_iff.mpr
+  intro fr hfr
+  simp only [decide_eq_true_eq]
+  exact noTarget fr hfr
+
+/-- On an address whose settled frames along a configured history are leaves, the kept blocks'
+frames at `a` are precisely the address-filtered settled frames. -/
+theorem ConfiguredHistoryTrace.keptAt_eq_filter_settledFrames_of_leaves
+    {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (t : ConfiguredHistoryTrace cfg checkpoint future) (a : Adr)
+    (leaves : ∀ fr ∈ t.settledFrames, fr.sevm.currentTarget = a →
+      Exec.descendantFrames fr.run = []) :
+    t.kept.flatMap (KeptBlock.keptAt a) =
+      t.settledFrames.filter (fun fr => decide (fr.sevm.currentTarget = a)) := by
+  induction t with
+  | refl => rfl
+  | step prior block ih =>
+    simp only [ConfiguredHistoryTrace.settledFrames] at leaves
+    simp only [ConfiguredHistoryTrace.kept, ConfiguredHistoryTrace.settledFrames,
+      List.flatMap_append, List.flatMap_cons, List.flatMap_nil, List.append_nil,
+      List.filter_append]
+    rw [ih (fun fr hfr => leaves fr (List.mem_append_left _ hfr)),
+      block.keptAt_eq_filter_settledFrames_of_leaves a
+        (fun fr hfr => leaves fr (List.mem_append_right _ hfr))]
 
 end ExecutionTrace
 

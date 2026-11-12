@@ -53,4 +53,42 @@ theorem fields_of_record {dr : DepositRequest} {pk wc sig : Bytes} {amount index
     Nat.mod_eq_of_lt (by simpa only [Nat.reducePow] using hindex)] at indexEq
   exact ⟨hp, hw, hs, amountEq, indexEq⟩
 
+open Blanc.Lift.BeaconDeposit
+
+/-- A classified contract deposit contributes its exact occurrence-indexed request record. -/
+theorem frame_record (fr : Exec.Frame) (history : List B256)
+    (invariant : SolInv (fr.pre.getStor depositAddr) history)
+    (classified : Classified fr history .deposit) :
+    frameRecords fr = [depositRecord
+      ⟨argBytes fr.sevm 0, argBytes fr.sevm 1,
+        Blanc.BeaconDeposit.le64 (fr.sevm.value.toNat / Blanc.BeaconDeposit.oneGwei),
+        argBytes fr.sevm 2, Blanc.BeaconDeposit.le64 history.length⟩] ∧
+    (argBytes fr.sevm 0).length = 48 ∧ (argBytes fr.sevm 1).length = 32 ∧
+    (argBytes fr.sevm 2).length = 96 ∧
+    fr.sevm.value.toNat / Blanc.BeaconDeposit.oneGwei < 2 ^ 64 ∧
+    history.length < 2 ^ 32 - 1 ∧
+    (fr.sevm.value.toNat / Blanc.BeaconDeposit.oneGwei) * 10 ^ 9 = fr.sevm.value.toNat := by
+  obtain ⟨_, _, post, ev, executed, _, _, _, _, logs, _, _⟩ := classified
+  obtain ⟨pk, wc, sig, floor, multiple, amount, _, count, br, walk, postEq, eventEq⟩ :=
+    deposit_ok_facts executed
+  have countEq : (solAcc (fr.pre.getStor depositAddr)).count = history.length := invariant.2.1
+  rw [countEq] at count eventEq
+  subst ev
+  have amountLen : (Blanc.BeaconDeposit.le64
+      (fr.sevm.value.toNat / Blanc.BeaconDeposit.oneGwei)).length = 8 := by
+    rw [le64_eq_leBytes, length_leBytes]
+  have indexLen : (Blanc.BeaconDeposit.le64 history.length).length = 8 := by
+    rw [le64_eq_leBytes, length_leBytes]
+  have extracted := extractDepositData_abiDepositEvent
+    ⟨argBytes fr.sevm 0, argBytes fr.sevm 1,
+      Blanc.BeaconDeposit.le64 (fr.sevm.value.toNat / Blanc.BeaconDeposit.oneGwei),
+      argBytes fr.sevm 2, Blanc.BeaconDeposit.le64 history.length⟩ pk wc amountLen sig indexLen
+  refine ⟨?_, pk, wc, sig, by omega, count, ?_⟩
+  · simp only [frameRecords, depositLogs, logs, Blanc.BeaconDeposit.depositEventLog,
+      depositEventTopic_eq_signatureHash, List.filter_cons, List.filter_nil,
+      List.getElem?_cons_zero, eq_self, and_self, decide_true, ite_true,
+      List.filterMap_cons, List.filterMap_nil, extracted]
+    rfl
+  · exact Nat.div_mul_cancel (Nat.dvd_of_mod_eq_zero multiple)
+
 end Blanc.Lift.BeaconDeposit.RequestCodec
