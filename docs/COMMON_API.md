@@ -470,6 +470,10 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   and its explicit CALL admission premises. `post_facts`, `post_code` and
   `post_storage` expose the settled child effects and status one. The child law
   and a closed kept-history control remain separate obligations.
+  For the original fixed-word CALL spawn, use `SystemWordWriter.call_spawn`
+  in [`Blanc/SystemWordWriterKept.lean`](../Blanc/SystemWordWriterKept.lean).
+  It derives the spawn from the actual code and gas guards; it assumes no
+  successful child execution or settlement.
 - `accessDelegation_worldMeta` carries transient storage and the storage-access
   warm set through the exact delegation-resolution equation;
   `accessDelegation_createdAccounts` carries the created-account set.
@@ -4083,6 +4087,12 @@ consumer needs canonical interpreter ingress as one conjunct:
   `callOnlyReach_of_spawnFreeReach`. `Xinst.step_call_spawn` is the per-`CALL` fact: the child
   has a code address and runs the callee's own code when it holds no designator.
   `Lift.WithdrawalRequest.FeeCounterexample.blockOk_of` is the worked consumer.
+- For creation exclusion at an account with nonempty installed code, use
+  `Root.noCreateAt_of_code` and `MessageRoots.noCreateAt_of_code` in
+  [`Blanc/KeptCreateAvoid.lean`](../Blanc/KeptCreateAvoid.lean). They transport
+  the original execution exclusion to kept roots under `rules.stateGas = none`
+  and the stated entry/target guards; the message wrapper also requires
+  nondelegating code. They derive `NoCreateAt` from those actual roots.
 - To discharge the frame walks' entry premise `pre.gasMeasure < 2 ^ 256` for every raw frame of
   a configured history with no premise at all: `ConfiguredHistoryTrace.gas_bound` (`< 2 ^ 64`)
   and `ConfiguredHistoryTrace.frameAdmitted_gas`

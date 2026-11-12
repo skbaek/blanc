@@ -814,6 +814,12 @@ COMPOSITION.update({
     "Composition.BuilderRequestApplicabilityCalls": ("builder-request", "withdrawal-request"),
 })
 
+
+# Reviewed protocol-contract corpus kept-history controls and observed-root adapters.
+SHARED += ["SystemWordWriterKept", "KeptCreateAvoid"]
+CONTRACTS["history-storage"].append("Lift.HistoryStorage.Writer")
+COMPOSITION.update({'Composition.Corpus.Proofs.RingHistoryControls': ('beacon-roots', 'history-storage', 'withdrawal-request', 'consolidation-request'), 'Composition.Corpus.Proofs.RingRoots': ('beacon-roots', 'history-storage'), 'Composition.Corpus.Proofs.BuilderCheckpoint': ('builder-request', 'withdrawal-request'), 'Composition.Corpus.Proofs.BuilderObservedJoint': ('builder-request', 'withdrawal-request'), 'Composition.BuilderRequestApplicabilityInput': ('builder-request', 'withdrawal-request')})
+
 ROOTS = ["Blanc", "Main"]
 
 def composition_declaration_failures(declarations, contracts):

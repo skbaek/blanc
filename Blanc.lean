@@ -33,6 +33,7 @@ import Blanc.Composition.BeaconRootsSlotControl
 import Blanc.Composition.BuilderRequestActualFeeBounds
 import Blanc.Composition.BuilderRequestApplicability.Checks
 import Blanc.Composition.BuilderRequestApplicabilityCalls
+import Blanc.Composition.BuilderRequestApplicabilityInput
 import Blanc.Composition.BuilderRequestCarrier
 import Blanc.Composition.BuilderRequestClassification
 import Blanc.Composition.BuilderRequestCodesKept
@@ -70,9 +71,13 @@ import Blanc.Composition.ConsolidationRequestPublicStorage
 import Blanc.Composition.Corpus.Freeze.BuilderRequest
 import Blanc.Composition.Corpus.Freeze.ConsolidationExecution
 import Blanc.Composition.Corpus.Freeze.ConsolidationJoint
+import Blanc.Composition.Corpus.Proofs.BuilderCheckpoint
+import Blanc.Composition.Corpus.Proofs.BuilderObservedJoint
 import Blanc.Composition.Corpus.Proofs.ConsolidationExecution
 import Blanc.Composition.Corpus.Proofs.ConsolidationLatency
 import Blanc.Composition.Corpus.Proofs.RingHistory
+import Blanc.Composition.Corpus.Proofs.RingHistoryControls
+import Blanc.Composition.Corpus.Proofs.RingRoots
 import Blanc.Composition.Corpus.Proofs.RingTotality
 import Blanc.Composition.Corpus.Proofs.RingValue
 import Blanc.Composition.DepositConsensusOutcomes
@@ -295,6 +300,7 @@ import Blanc.JointGloasInvariants
 import Blanc.JointGloasReplayStep
 import Blanc.JointHistory
 import Blanc.JointTime
+import Blanc.KeptCreateAvoid
 import Blanc.Ladder
 import Blanc.LadderBase
 import Blanc.LadderReached
@@ -586,6 +592,7 @@ import Blanc.Lift.HistoryGas
 import Blanc.Lift.HistoryStorage.Frame
 import Blanc.Lift.HistoryStorage.Read
 import Blanc.Lift.HistoryStorage.Totality
+import Blanc.Lift.HistoryStorage.Writer
 import Blanc.Lift.IdentityCall
 import Blanc.Lift.IdentityCallGas
 import Blanc.Lift.InvWalk
@@ -912,6 +919,7 @@ import Blanc.SyntheticSystemWorld
 import Blanc.SystemCallEmpty
 import Blanc.SystemCallForward
 import Blanc.SystemContracts
+import Blanc.SystemWordWriterKept
 import Blanc.Tactics
 import Blanc.TerminalStorage
 import Blanc.TransactionAdmissionProjection
