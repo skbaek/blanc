@@ -4917,6 +4917,11 @@ For the converse (a system call *succeeds*, and I have its raw frame) use
 systemCallOutput post)` for any member of `systemContracts` on a covered fork, from
 `exec (initEvm (systemCallMsg benv target code data)) = .ok post` with no frame error and a
 non-negative refund counter (and, for the block-level forms, the canonical code installed).
+For other code, `processSystemTransaction_of_exec_nondelegated` uses the actual
+non-precompile and nondelegation guards with the same raw execution premises.
+The checked sibling `processCheckedSystemTransaction_of_exec_nondelegated`
+also requires that nonempty code to be installed. Both keep the covered-fork
+condition; neither supplies the raw execution or a successful history.
 `systemContracts_not_precompile`, `systemContracts_nondelegated` and
 `systemContracts_nonempty` are the envelope facts; `afterSstore_state`,
 `afterSstore_getAcct_ne`, `State.get_setStorVal_ne`, `State.get_setStorVal_self` and
