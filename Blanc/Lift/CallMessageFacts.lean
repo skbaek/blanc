@@ -34,6 +34,9 @@ theorem vcsm_memory : (initDevm (valueCallSpawnMsg sevm P f v c d ii is code dp)
 theorem vcsm_error : (initDevm (valueCallSpawnMsg sevm P f v c d ii is code dp)).error = none :=
   rfl
 
+theorem scsm_state : (initDevm (staticcallSpawnMsg sevm P f c d ii is code dp)).state = P.state :=
+  rfl
+
 end Msg
 
 theorem callSpawnParent_memory_data (d : Devm) (c ii is oi os : Nat) :

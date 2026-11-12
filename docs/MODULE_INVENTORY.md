@@ -10,12 +10,13 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-588 shared modules, 560 with a module summary.
+590 shared modules, 562 with a module summary.
 
 ## `Blanc/`
 
 | module | summary | cited in |
 |---|---|---|
+| [`AbiBytesTail.lean`](../Blanc/AbiBytesTail.lean) | Length-delimited ABI byte-tail cancellation | [M](COMMON_API.md#m--bytes-and-memory) |
 | [`AbstractStackSafety.lean`](../Blanc/AbstractStackSafety.lean) | A contract-neutral full-stack abstraction and forward primitive safety. | [E5](COMMON_API.md#e5-i-need-to-inspect-what-happened-in-an-exec), [E9](COMMON_API.md#e9-i-need-to-rule-out-an-operand-stack-fault-over-an-actual-walk) |
 | [`AbstractStackTransfer.lean`](../Blanc/AbstractStackTransfer.lean) | Forward stack safety for concrete regular and control-flow instructions. | [E5](COMMON_API.md#e5-i-need-to-inspect-what-happened-in-an-exec), [E9](COMMON_API.md#e9-i-need-to-rule-out-an-operand-stack-fault-over-an-actual-walk) |
 | [`AddressSlot.lean`](../Blanc/AddressSlot.lean) | **Solidity address-slot writes.** Contract-neutral executable vocabulary for assigning through an `address`-typed storage reference. | [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term) |
@@ -121,6 +122,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`ExecutionInstalledCertCuts.lean`](../Blanc/ExecutionInstalledCertCuts.lean) | **Checked installed runtimes across actual transaction cuts.** Transport starts immediately after an actual transaction, follows the remaining transactions, withdrawals, requests and rewards to block completion, then the existing selected-domain history spine and the target … | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionKeptBalSilent.lean`](../Blanc/ExecutionKeptBalSilent.lean) | **Balance-silent contracts on kept histories.** `Blanc.Lift.frame_keeps_balances` says a certified contract with no call-family, `CREATE` or `SELFDESTRUCT` node leaves every account's balance unchanged across any successful frame, on any fork. | [C9.13](COMMON_API.md#c913-i-need-a-whole-contract-property-without-per-path-walks) |
 | [`ExecutionKeptChain.lean`](../Blanc/ExecutionKeptChain.lean) | **Kept frames along a transaction, a body and a history.** The levels above `MessageRoots`. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
+| [`ExecutionKeptChildless.lean`](../Blanc/ExecutionKeptChildless.lean) | Retention for childless same-frame runs, without a byte-offset opcode scan. | [E7](COMMON_API.md#e7-i-need-stable-paths-to-settlement-retained-frames) |
 | [`ExecutionKeptClean.lean`](../Blanc/ExecutionKeptClean.lean) | **A kept history clean of SYSTEM_ADDRESS.** Three per-block premises about `SYSTEM_ADDRESS` over a kept history: no kept block's transaction is sent by it, no authorization recovers to it, and no kept frame creates at it. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionKeptConfigured.lean`](../Blanc/ExecutionKeptConfigured.lean) | **Configured histories as kept histories, and the kept carrier's uniqueness.** A covered-fork configured history (`ConfiguredHistoryTrace`, the carrier of the request-contract libraries before Amsterdam) is a kept history (`KeptHistory`, which also reaches Amsterdam) over the … | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionKeptEntered.lean`](../Blanc/ExecutionKeptEntered.lean) | Entry-output facts for the actual kept-frame carrier. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |

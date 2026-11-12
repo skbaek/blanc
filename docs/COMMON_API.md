@@ -1858,6 +1858,14 @@ says every retained frame at `ca` lies inside one frame that
 target and code address.
 
 
+For target-filtered retained executions, use
+[`Blanc/ExecutionKeptChildless.lean`](../Blanc/ExecutionKeptChildless.lean).
+`Exec.keptAt_nil_of_parent_noExec` gives an empty `keptAt` list when every
+actual `ParentPrefix` decodes no execution instruction.
+`Exec.keptAt_settled_away` splits a committed `runOk` at a child whose target
+differs from the selected address, retaining the child's descendants and the
+continuation in order.
+
 ### E8. I need an exact ordered replay of world-state changes
 
 Start with [`Blanc/ExecutionStateTrace.lean`](../Blanc/ExecutionStateTrace.lean):
@@ -3348,6 +3356,13 @@ The list lemma requires the actual recursive child parse. These
 equations do not assert whole-envelope canonicality or strict transaction acceptance.
 Select by the known header and payload length; the common equality head also
 covers unrelated encode/decode goals, so this remains a manual registry route.
+
+For length-delimited ABI byte tails, use
+[`Blanc/AbiBytesTail.lean`](../Blanc/AbiBytesTail.lean).
+`abiBytesTail_length` gives the exact padded length.
+`abiBytesTail_append_inj` cancels equal encoded tails with arbitrary suffixes
+when both payload lengths are less than `2 ^ 256`, recovering equality of
+both payloads and suffixes.
 
 ### M1. The goal is a `sliceD` normalization
 

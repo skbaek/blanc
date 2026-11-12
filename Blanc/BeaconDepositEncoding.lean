@@ -1,5 +1,6 @@
 import Blanc.BeaconDepositCore
 import Blanc.BytesWrite
+import Blanc.AbiBytesTail
 
 /-!
 # Beacon deposit ABI encoding facts
@@ -35,11 +36,8 @@ theorem depositEventTopic_eq :
 /-! ## Small ABI length and read lemmas -/
 
 theorem abiBytesTail_length (data : Bytes) :
-    (abiBytesTail data).length = 32 + ceil32 data.length := by
-  simp only [abiBytesTail, List.length_append, B256.length_toBytes,
-    List.length_replicate]
-  have hle := Nat.le_ceil32 data.length
-  omega
+    (abiBytesTail data).length = 32 + ceil32 data.length :=
+  Blanc.abiBytesTail_length data
 
 /-! ## Dynamic return and event images -/
 
