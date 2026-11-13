@@ -1393,7 +1393,22 @@ states, with `Admits` proving that one original `GJointRun` has exactly those in
 and states. It computes each pre-Gloas `PreBound` check and propagates coherence;
 `replayFromPre` supplies initial coherence and fixes real BLS to `true`. These
 certificates establish no additional anchor, history-cleanliness, value-accounting
-or nontrivial-activity conditions.
+or nontrivial-activity conditions. Pre-Gloas balance checks use the proven stored-State
+footprint sum rather than enumerating the address space.
+`builtBlock?` follows the original payload conversion, slots and parent settlement;
+`builtBlock_spec` identifies exactly each original step's built-upon block, excluding
+delivered payloads that the run has not built upon. `replayKeptStep` reconstructs the
+original body derivations and uses existing `KeptHistory.unique` to bind them to the
+original step. `replayFromPreKept` returns exact intermediate states and retained
+blocks with `AdmitsKept` proving they belong to the same original real-BLS run.
+
+The builder consumer `Checks.checkHistory` checks actual per-block exclusions,
+root-balance sums and credit bounds, plus aggregate deposit paid value and exit
+occurrences. `BuilderRequestApplicabilityInput.replayApplicable` combines that
+history with exact checkpoint, configuration, registry and pre-anchor checks.
+`applicable_valid` constructs every original `ValidJointG` field and preserves
+the exact checked inputs, states and blocks. This is checker soundness; it permits
+empty runs and proves no nontrivial P5 activity or independent-client agreement.
 
 For the beacon side of a step, `JointRun.steps_jointStep` recovers the successful
 `jointStep` of any indexed step; `jointBlockInput ccfg bls s b` is the beacon state the
@@ -5566,8 +5581,8 @@ every shared module with its own summary and the branches that cite it.
   when withdrawal bounds hold and the fee recipient differs from the protected
   address; it is a sufficient checker and makes no claim about rejected
   addresses. `Checks.replayKept` is the builder consumer of these checks.
-  Whole-history budgets, joint-run coupling and nontrivial activity remain
-  separate obligations.
+  Whole-history budgets and joint-run coupling are checked by the builder
+  applicability consumer described above; nontrivial activity remains separate.
 - A concrete frame run over a lifted certificate, as a gas-exact `SProg.RunExact`
   (an executable witness: liveness from one start state, by kernel evaluation): the
   interpreter `Witness.wrun` over the certificate's decoded tree, its single step

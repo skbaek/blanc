@@ -146,4 +146,75 @@ def replayAnchored {P : Preset} (cfg : ChainConfig) (ccfg : Config) (state : Joi
     some ⟨cert.val, cert.property.1, cert.property.2, anchor⟩
   else none
 
+/-- All computed applicability evidence, tied to the same original inputs,
+intermediate states and actual retained interpreter derivations. -/
+def Applicable {P : Preset} (cfg : ChainConfig) (ccfg : Config) (state : JointState P)
+    (inputs : List (Blanc.JointGloasReplayStep.Input P))
+    (out : GJointState P × List (GJointState P) × List Blanc.KeptBlock) : Prop :=
+  Blanc.JointGloasReplayStep.AdmitsKept cfg ccfg true (.pre state) out.1 inputs out.2.1 out.2.2 ∧
+  FiniteApplicability ccfg state.exec out.2.1 ∧ PreAnchor cfg state ∧ HistoryChecked out.2.2
+
+/-- Check full applicability from a supplied pre-Gloas checkpoint, using real
+BLS and only original interpreters. No successful trace, clean history, value
+bound or anchor invariant is an input. This permits empty runs; nontrivial P5
+activity and agreement of independent clients must still be established. -/
+def replayApplicable {P : Preset} (depth : Nat) (cfg : ChainConfig) (ccfg : Config) (state : JointState P)
+    (inputs : List (Blanc.JointGloasReplayStep.Input P)) :
+    Option {out : GJointState P × List (GJointState P) × List Blanc.KeptBlock //
+      Applicable cfg ccfg state inputs out} := do
+  if anchor : PreAnchor cfg state then do
+    let cert ← Blanc.JointGloasReplayStep.replayFromPreKept depth cfg ccfg state inputs
+    if finite : FiniteApplicability ccfg state.exec cert.val.2.1 then do
+      let history ← checkHistory cert.val.2.2
+      pure ⟨cert.val, cert.property, finite, anchor, history.property⟩
+    else none
+  else none
+
+/-- A checked certificate supplies every field of the original `ValidJointG`,
+with the exact checked input/state/block sequence. It assumes no activity or
+client agreement beyond that sequence's original successful transitions. -/
+theorem applicable_valid {P : Preset} {cfg : ChainConfig} {ccfg : Config} {state : JointState P}
+    {inputs : List (Blanc.JointGloasReplayStep.Input P)}
+    (cert : {out : GJointState P × List (GJointState P) × List Blanc.KeptBlock //
+      Applicable cfg ccfg state inputs out}) :
+    ∃ valid : BuilderRequest.ValidJointG cfg ccfg true state.exec (.pre state) cert.val.1,
+      valid.run.steps.map (fun D => (D.block, D.env?)) = inputs ∧
+      valid.run.states = cert.val.2.1 ∧ valid.run.blocks = cert.val.2.2 := by
+  obtain ⟨⟨run, inputsEq, statesEq, blocksEq⟩, finite, anchor, history⟩ := cert.property
+  obtain ⟨⟨sys, depositCode, depositStorage, exitCode, exitStorage⟩,
+    ⟨quorum, inclusion, delay, below, slots⟩, ⟨validators, builders⟩⟩ := finite
+  have checked : ∀ b ∈ run.blocks, KeptChecked b := by rw [blocksEq]; exact history.1
+  let valid : BuilderRequest.ValidJointG cfg ccfg true state.exec (.pre state) cert.val.1 := {
+    noSystemCode := sys
+    preBlocks := []
+    prefixHistory := .refl
+    run := run
+    anchorPending := True.intro
+    anchorInv := anchor.1
+    anchorWitness := PUnit.unit
+    anchorJoint := anchor.2
+    depositInstalled := depositCode
+    depositFresh := depositStorage
+    exitInstalled := exitCode
+    exitFresh := exitStorage
+    senders := fun b member => (checked b member).1.1
+    authorities := fun b member => (checked b member).1.2.1
+    creates := fun b member => (checked b member).1.2.2
+    depositBudget := by simpa only [List.nil_append, blocksEq] using history.2.1
+    exitFew := by simpa only [List.nil_append, blocksEq] using history.2.2
+    quorumPositive := quorum
+    inclusionDelay := inclusion
+    exitDelayPos := delay
+    exitDelayBelow := below
+    slotsPerEpoch := slots
+    validatorsBound := fun st member => validators st (statesEq ▸ member)
+    buildersBound := fun st member => builders st (statesEq ▸ member)
+    roots := fun b member => (checked b member).2.2.2.1
+    depositNoSender := fun b member => (checked b member).2.1
+    exitNoSender := fun b member => (checked b member).2.2.1
+    creditsFit := ⟨fun b member => (checked b member).2.2.2.2.1,
+      fun b member => (checked b member).2.2.2.2.2⟩
+    codes := ⟨run.keptHistory, depositCode, exitCode⟩ }
+  exact ⟨valid, inputsEq, statesEq, blocksEq⟩
+
 end Blanc.Composition.BuilderRequestApplicabilityInput

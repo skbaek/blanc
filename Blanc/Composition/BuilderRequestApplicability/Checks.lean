@@ -2,6 +2,7 @@ import Blanc.ConcreteRunKept
 import Blanc.JointGloasReplayStep
 import Blanc.Lift.BuilderRequest.Deposit.Latch
 import Blanc.Lift.BuilderRequest.Exit.Delivery
+import Blanc.Lift.BuilderRequest.Exit.ChainLink
 import Blanc.Lift.SystemWordWriter
 
 /-!
@@ -305,14 +306,9 @@ def KeptChecked (b : Blanc.KeptBlock) : Prop :=
   Blanc.ConcreteRun.BodyCreditsFit BuilderRequest.Deposit.Creation.address b.benv b.block.txs b.block.wds b.run ∧
   Blanc.ConcreteRun.BodyCreditsFit BuilderRequest.Exit.Creation.address b.benv b.block.txs b.block.wds b.run
 
-/-- Replay the original configured block, checking original finite exclusions,
-root-balance sums and withdrawal credits. Tip checks are sufficient: this
-accepts only fee recipients away from both protected builder addresses.
-Every retained root is computed; no successful block or execution is an input. -/
-def replayKept (depth : Nat) (cfg : ChainConfig) (parent : BlockChain) (block : Block) :
-    Option (Σ post : BlockChain, {b : Blanc.KeptBlock // b.parent = parent ∧ b.block = block ∧
-      Blanc.KeptStep cfg b post ∧ KeptChecked b}) := do
-  let ⟨post, b, parentEq, blockEq, step⟩ ← Blanc.ConcreteRun.deriveKept depth cfg parent block
+/-- Check the original clean/value predicates on already computed original
+kept data. This does not rerun the block or choose any ghost derivations. -/
+def checkKept (b : Blanc.KeptBlock) : Option {_u : Unit // KeptChecked b} := do
   letI := Blanc.ConcreteRun.bodyExcludesDecidable systemAddress b.run
   letI : Decidable (Blanc.NoSenderAt BuilderRequest.Deposit.Creation.address b.run.senders) := by
     unfold Blanc.NoSenderAt; infer_instance
@@ -326,8 +322,42 @@ def replayKept (depth : Nat) (cfg : ChainConfig) (parent : BlockChain) (block : 
       b.block.wds b.run
     let exit ← Blanc.ConcreteRun.checkBodyCredits BuilderRequest.Exit.Creation.address b.benv b.block.txs
       b.block.wds b.run
-    pure ⟨post, b, parentEq, blockEq, step, checked.1, checked.2.1, checked.2.2.1, checked.2.2.2,
-      deposit.property, exit.property⟩
+    pure ⟨(), checked.1, checked.2.1, checked.2.2.1, checked.2.2.2, deposit.property, exit.property⟩
+  else none
+
+/-- Replay the original configured block and check its actual retained data. -/
+def replayKept (depth : Nat) (cfg : ChainConfig) (parent : BlockChain) (block : Block) :
+    Option (Σ post : BlockChain, {b : Blanc.KeptBlock // b.parent = parent ∧ b.block = block ∧
+      Blanc.KeptStep cfg b post ∧ KeptChecked b}) := do
+  let ⟨post, b, parentEq, blockEq, step⟩ ← Blanc.ConcreteRun.deriveKept depth cfg parent block
+  let checked ← checkKept b
+  pure ⟨post, b, parentEq, blockEq, step, checked.property⟩
+
+private def checkKeptList : (blocks : List Blanc.KeptBlock) →
+    Option {_u : Unit // ∀ b ∈ blocks, KeptChecked b}
+  | [] => some ⟨(), by intro b member; cases member⟩
+  | b :: rest => do
+      let head ← checkKept b
+      let tail ← checkKeptList rest
+      pure ⟨(), by
+        intro value member
+        rcases List.mem_cons.mp member with rfl | later
+        · exact head.property
+        · exact tail.property value later⟩
+
+/-- Original per-block clean/value premises and both whole-history bounds. -/
+def HistoryChecked (blocks : List Blanc.KeptBlock) : Prop :=
+  (∀ b ∈ blocks, KeptChecked b) ∧
+  BuilderRequest.ChainLink.History.paid BuilderRequest.Deposit.Creation.address blocks ≤ 2 ^ 256 ∧
+  (BuilderRequest.ChainLink.History.submitted BuilderRequest.Exit.contract blocks).length ≤ 2 ^ 64
+
+/-- Check actual retained executions, their aggregate paid value and submitted
+exit occurrences. No successful body or numerical bound is an input. -/
+def checkHistory (blocks : List Blanc.KeptBlock) : Option {_u : Unit // HistoryChecked blocks} := do
+  let checked ← checkKeptList blocks
+  if budget : BuilderRequest.ChainLink.History.paid BuilderRequest.Deposit.Creation.address blocks ≤ 2 ^ 256 ∧
+      (BuilderRequest.ChainLink.History.submitted BuilderRequest.Exit.contract blocks).length ≤ 2 ^ 64 then
+    pure ⟨(), checked.property, budget⟩
   else none
 
 end Blanc.Composition.BuilderRequestApplicability.Checks
