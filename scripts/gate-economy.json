@@ -241,6 +241,19 @@
       "historical_catches": []
     },
     {
+      "id": "protocol-contract-corpus",
+      "work": [
+        "static-corpus",
+        "harness-self-test"
+      ],
+      "resource_class": "light",
+      "prerequisites": [
+        "claims",
+        "claim-hash"
+      ],
+      "historical_catches": []
+    },
+    {
       "id": "elab",
       "work": [
         "candidate-positive",

@@ -4,7 +4,7 @@ What Blanc proves about bytecode that is already on Ethereum mainnet, one
 section per live contract family (Section 5). A released family is documented
 at its release tag, listed in `scripts/live-set.toml`.
 Every headline below names the theorem that carries it, the premises it needs,
-and what it does not say. This page is about the exogenous bytes themselves.
+and what it does not say. This page is about the exogenous bytes themselves. For the unified ten-property matrix across the six core protocol contracts, see [Protocol-contract corpus](PROTOCOL_CONTRACT_CORPUS.md).
 
 Historical exhibits outside paper v2, including WETH9, Lido, Uniswap and Blanc-native programmes, are preserved in the [archived corpus](https://github.com/skbaek/blanc/blob/corpus-v1-20261105/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md). The section and disclosure labels below retain their historical numbering. The archive is outside the live corpus and is not promised to build against later revisions.
 
@@ -110,6 +110,8 @@ The shared finite separation checks retain their characterizations:
 - [EIP-8282 builder requests](claim-map/builder-request.md)
 - [EIP-7251 consolidation requests](claim-map/consolidation-request.md)
 - [Beacon deposit](claim-map/beacon-deposit.md)
+- [EIP-4788 beacon block root](claim-map/beacon-roots.md)
+- [EIP-2935 historical block hashes](claim-map/history-storage.md)
 
 ## 6. Summary matrix
 

@@ -20,7 +20,14 @@ REQUIRED_HEADLINES = ['Blanc.Composition.ConsolidationRequestPublic.system_call_
  'Blanc.Composition.ConsolidationRequestPublic.history_fifo',
  'Blanc.Composition.ConsolidationRequestPublic.history_fifo_mainnet',
  'Blanc.Composition.ConsolidationRequestPublic.submission_queued',
- 'Blanc.Composition.ConsolidationRequestPublic.submission_live']
+ 'Blanc.Composition.ConsolidationRequestPublic.submission_live',
+ 'Blanc.Corpus.Proofs.Consolidation.c_s2',
+ 'Blanc.Corpus.Proofs.Consolidation.c_s6',
+ 'Blanc.Corpus.Proofs.Consolidation.c_s8',
+ 'Blanc.Composition.ConsolidationRequestJoint.c_s9_authorization',
+ 'Blanc.Composition.ConsolidationRequestJoint.c_s9_fate',
+ 'Blanc.Composition.ConsolidationRequestBalance.c_s9_balance',
+ 'Blanc.Lift.SystemExecution.ConsolidationRequest.Amsterdam.system_call_ok']
 
 # Load-bearing non-claims of the file (normalized substrings).
 NONCLAIM_PHRASES = ['success is classified, failure is not',

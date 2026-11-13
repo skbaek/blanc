@@ -4,63 +4,220 @@
   "cells": [
     {
       "id": "D-S1",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "log-shape",
+            "parse"
+          ],
+          "theorem": "Blanc.Composition.DepositParse.d_s1",
+          "pin": "thm:Blanc.Composition.DepositParse.d_s1",
+          "frozen": "Blanc.Corpus.Freeze.Deposit.D_S1"
+        }
+      ]
     },
     {
       "id": "R-S1",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Corpus.Proofs.R.r_s1",
+          "pin": "thm:Blanc.Corpus.Proofs.R.r_s1",
+          "frozen": "Blanc.Corpus.Freeze.BeaconRoots.R_S1"
+        }
+      ]
     },
     {
       "id": "H-S1",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Corpus.Proofs.H.h_s1",
+          "pin": "thm:Blanc.Corpus.Proofs.H.h_s1",
+          "frozen": "Blanc.Corpus.Freeze.HistoryStorage.H_S1"
+        }
+      ]
     },
     {
       "id": "W-S1",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Lift.WithdrawalRequest.system_call_succeeds",
+          "pin": "thm:Blanc.Lift.WithdrawalRequest.system_call_succeeds"
+        }
+      ]
     },
     {
       "id": "C-S1",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Composition.ConsolidationRequestPublic.system_call_succeeds",
+          "pin": "thm:Blanc.Composition.ConsolidationRequestPublic.system_call_succeeds"
+        }
+      ]
     },
     {
       "id": "B-S1",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "deposit"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_deposit",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_deposit"
+        },
+        {
+          "covers": [
+            "exit"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_exit",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_exit"
+        }
+      ]
     },
     {
       "id": "D-S2",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "deposit",
+            "root-view",
+            "count-view",
+            "erc165"
+          ],
+          "theorem": "Blanc.Composition.DepositClassified.d_s2",
+          "pin": "thm:Blanc.Composition.DepositClassified.d_s2",
+          "frozen": "Blanc.Corpus.Freeze.Deposit.D_S2"
+        }
+      ]
     },
     {
       "id": "R-S2",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Corpus.Proofs.BeaconRoots.r_s2",
+          "pin": "thm:Blanc.Corpus.Proofs.BeaconRoots.r_s2",
+          "frozen": "Blanc.Corpus.Freeze.BeaconRoots.R_S2"
+        }
+      ]
     },
     {
       "id": "H-S2",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Corpus.Proofs.HistoryStorage.h_s2",
+          "pin": "thm:Blanc.Corpus.Proofs.HistoryStorage.h_s2",
+          "frozen": "Blanc.Corpus.Freeze.HistoryStorage.H_S2"
+        }
+      ]
     },
     {
       "id": "W-S2",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Lift.WithdrawalRequest.exec_frame_effect",
+          "pin": "thm:Blanc.Lift.WithdrawalRequest.exec_frame_effect"
+        }
+      ]
     },
     {
       "id": "C-S2",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "all-success-arms",
+            "unconditional-output",
+            "exact-effects"
+          ],
+          "theorem": "Blanc.Corpus.Proofs.Consolidation.c_s2",
+          "pin": "thm:Blanc.Corpus.Proofs.Consolidation.c_s2",
+          "frozen": "Blanc.Corpus.Freeze.Consolidation.C_S2"
+        }
+      ]
     },
     {
       "id": "B-S2",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "deposit-system-empty",
+            "deposit-system-latch",
+            "deposit-submission",
+            "deposit-fee-read"
+          ],
+          "theorem": "Blanc.Composition.BuilderRequestClassification.b_s2_deposit",
+          "pin": "thm:Blanc.Composition.BuilderRequestClassification.b_s2_deposit",
+          "frozen": "Blanc.Corpus.Freeze.Builder.B_S2_deposit"
+        },
+        {
+          "covers": [
+            "exit-system-empty",
+            "exit-system-latch",
+            "exit-submission",
+            "exit-fee-read"
+          ],
+          "theorem": "Blanc.Composition.BuilderRequestClassification.b_s2_exit",
+          "pin": "thm:Blanc.Composition.BuilderRequestClassification.b_s2_exit",
+          "frozen": "Blanc.Corpus.Freeze.Builder.B_S2_exit"
+        }
+      ]
     },
     {
       "id": "D-S3",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Lift.BeaconDeposit.beacon_deposits",
+          "pin": "thm:Blanc.Lift.BeaconDeposit.beacon_deposits"
+        }
+      ]
     },
     {
       "id": "R-S3",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Corpus.Proofs.RingHistory.R.r_s3",
+          "pin": "thm:Blanc.Corpus.Proofs.RingHistory.R.r_s3",
+          "frozen": "Blanc.Corpus.Freeze.BeaconRoots.R_S3"
+        }
+      ]
     },
     {
       "id": "H-S3",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Corpus.Proofs.RingHistory.H.h_s3",
+          "pin": "thm:Blanc.Corpus.Proofs.RingHistory.H.h_s3",
+          "frozen": "Blanc.Corpus.Freeze.HistoryStorage.H_S3"
+        }
+      ]
     },
     {
       "id": "W-S3",
@@ -76,23 +233,72 @@
     },
     {
       "id": "C-S3",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Composition.ConsolidationRequestPublic.history_fifo",
+          "pin": "thm:Blanc.Composition.ConsolidationRequestPublic.history_fifo"
+        }
+      ]
     },
     {
       "id": "B-S3",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "deposit"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_deposit",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_deposit"
+        },
+        {
+          "covers": [
+            "exit"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_exit",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_exit"
+        }
+      ]
     },
     {
       "id": "D-S4",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Lift.BeaconDeposit.BeaconDeploymentTo.solInv",
+          "pin": "thm:Blanc.Lift.BeaconDeposit.BeaconDeploymentTo.solInv"
+        }
+      ]
     },
     {
       "id": "R-S4",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Corpus.Proofs.RingRoots.r_s4",
+          "pin": "thm:Blanc.Corpus.Proofs.RingRoots.r_s4",
+          "frozen": "Blanc.Corpus.Freeze.BeaconRoots.R_S4"
+        }
+      ]
     },
     {
       "id": "H-S4",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Corpus.Proofs.RingRoots.h_s4",
+          "pin": "thm:Blanc.Corpus.Proofs.RingRoots.h_s4",
+          "frozen": "Blanc.Corpus.Freeze.HistoryStorage.H_S4"
+        }
+      ]
     },
     {
       "id": "W-S4",
@@ -120,7 +326,17 @@
     },
     {
       "id": "B-S4",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "deposit",
+            "exit"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.BuilderCheckpoint.b_s4",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.BuilderCheckpoint.b_s4",
+          "frozen": "Blanc.Corpus.Freeze.Builder.B_S4"
+        }
+      ]
     },
     {
       "id": "W-S5",
@@ -131,28 +347,100 @@
           ],
           "theorem": "Blanc.Lift.WithdrawalRequest.fee_eq_spec_iff",
           "pin": "thm:Blanc.Lift.WithdrawalRequest.fee_eq_spec_iff"
+        },
+        {
+          "covers": [
+            "first-divergence"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s5_first_divergence",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s5_first_divergence"
         }
       ]
     },
     {
       "id": "C-S5",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "fee-domain"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s5_fee_domain",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s5_fee_domain"
+        },
+        {
+          "covers": [
+            "first-divergence"
+          ],
+          "theorem": "Blanc.Composition.ConsolidationRequestPublic.fee_lt_spec_2893",
+          "pin": "thm:Blanc.Composition.ConsolidationRequestPublic.fee_lt_spec_2893"
+        }
+      ]
     },
     {
       "id": "B-S5",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "deposit-fee-domain"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_deposit_fee_domain",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_deposit_fee_domain"
+        },
+        {
+          "covers": [
+            "exit-fee-domain"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_exit_fee_domain",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_exit_fee_domain"
+        },
+        {
+          "covers": [
+            "reversible-latch"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_reversible_latch",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_reversible_latch"
+        }
+      ]
     },
     {
       "id": "D-S6",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "balance",
+            "paid-amount"
+          ],
+          "theorem": "Blanc.Composition.DepositValue.d_s6",
+          "pin": "thm:Blanc.Composition.DepositValue.d_s6",
+          "frozen": "Blanc.Corpus.Freeze.Deposit.D_S6"
+        }
+      ]
     },
     {
       "id": "R-S6",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Corpus.Proofs.R.r_s6",
+          "pin": "thm:Blanc.Corpus.Proofs.R.r_s6",
+          "frozen": "Blanc.Corpus.Freeze.BeaconRoots.R_S6"
+        }
+      ]
     },
     {
       "id": "H-S6",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Corpus.Proofs.H.h_s6",
+          "pin": "thm:Blanc.Corpus.Proofs.H.h_s6",
+          "frozen": "Blanc.Corpus.Freeze.HistoryStorage.H_S6"
+        }
+      ]
     },
     {
       "id": "W-S6",
@@ -168,47 +456,168 @@
     },
     {
       "id": "C-S6",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Corpus.Proofs.Consolidation.c_s6",
+          "pin": "thm:Blanc.Corpus.Proofs.Consolidation.c_s6",
+          "frozen": "Blanc.Corpus.Freeze.Consolidation.C_S6"
+        }
+      ]
     },
     {
       "id": "B-S6",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "deposit"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_deposit",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_deposit"
+        },
+        {
+          "covers": [
+            "exit"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_exit",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_exit"
+        }
+      ]
     },
     {
       "id": "D-S7",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Lift.BeaconDeposit.configuredHistory_deposit_live",
+          "pin": "thm:Blanc.Lift.BeaconDeposit.configuredHistory_deposit_live"
+        }
+      ]
     },
     {
       "id": "R-S7",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Corpus.Proofs.BeaconRoots.r_s7",
+          "pin": "thm:Blanc.Corpus.Proofs.BeaconRoots.r_s7",
+          "frozen": "Blanc.Corpus.Freeze.BeaconRoots.R_S7"
+        }
+      ]
     },
     {
       "id": "H-S7",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Corpus.Proofs.HistoryStorage.h_s7",
+          "pin": "thm:Blanc.Corpus.Proofs.HistoryStorage.h_s7",
+          "frozen": "Blanc.Corpus.Freeze.HistoryStorage.H_S7"
+        }
+      ]
     },
     {
       "id": "W-S7",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s7_headline",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s7_headline"
+        }
+      ]
     },
     {
       "id": "C-S7",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s7_headline",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s7_headline"
+        }
+      ]
     },
     {
       "id": "B-S7",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "deposit-acceptance-gas"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_deposit_acceptance_gas",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_deposit_acceptance_gas"
+        },
+        {
+          "covers": [
+            "exit-acceptance-gas"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_exit_acceptance_gas",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_exit_acceptance_gas"
+        }
+      ]
     },
     {
       "id": "D-S8",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "record-shape",
+            "same-block-list",
+            "request-order",
+            "frame-phase"
+          ],
+          "theorem": "Blanc.Composition.DepositRequests.d_s8",
+          "pin": "thm:Blanc.Composition.DepositRequests.d_s8",
+          "frozen": "Blanc.Corpus.Freeze.Deposit.D_S8"
+        }
+      ]
     },
     {
       "id": "R-S8",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "time"
+          ],
+          "theorem": "Blanc.Composition.BeaconRootsRetention.r_s8_time",
+          "pin": "thm:Blanc.Composition.BeaconRootsRetention.r_s8_time",
+          "frozen": "Blanc.Corpus.Freeze.BeaconRoots.R_S8_time"
+        },
+        {
+          "covers": [
+            "slot"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.RingJointRetention.r_s8_slot",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.RingJointRetention.r_s8_slot",
+          "frozen": "Blanc.Corpus.Freeze.BeaconRoots.R_S8_slot"
+        }
+      ]
     },
     {
       "id": "H-S8",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "retention",
+            "endpoint-rejection",
+            "unwritten-slot"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.RingJointRetention.h_s8",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.RingJointRetention.h_s8",
+          "frozen": "Blanc.Corpus.Freeze.HistoryStorage.H_S8"
+        }
+      ]
     },
     {
       "id": "W-S8",
@@ -224,59 +633,347 @@
     },
     {
       "id": "C-S8",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "occurrence",
+            "delivery-block",
+            "record-position"
+          ],
+          "theorem": "Blanc.Corpus.Proofs.Consolidation.c_s8",
+          "pin": "thm:Blanc.Corpus.Proofs.Consolidation.c_s8",
+          "frozen": "Blanc.Corpus.Freeze.Consolidation.C_S8"
+        }
+      ]
     },
     {
       "id": "B-S8",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "deposit-history-queue-budget"
+          ],
+          "theorem": "Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_every_boundary",
+          "pin": "thm:Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_every_boundary"
+        },
+        {
+          "covers": [
+            "exit-history-queue-budget"
+          ],
+          "theorem": "Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_every_boundary",
+          "pin": "thm:Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_every_boundary"
+        },
+        {
+          "covers": [
+            "deposit-conditional-delivery"
+          ],
+          "theorem": "Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_delivery",
+          "pin": "thm:Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_delivery"
+        },
+        {
+          "covers": [
+            "exit-conditional-delivery"
+          ],
+          "theorem": "Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_delivery",
+          "pin": "thm:Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_delivery"
+        }
+      ]
     },
     {
       "id": "D-S9",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "joined-delivery"
+          ],
+          "theorem": "Blanc.Composition.DepositJoint.d9_delivery",
+          "pin": "thm:Blanc.Composition.DepositJoint.d9_delivery",
+          "frozen": "Blanc.Corpus.Freeze.Deposit.D9Delivery"
+        },
+        {
+          "covers": [
+            "joined-fate-credit"
+          ],
+          "theorem": "Blanc.Composition.DepositJoint.d9_fate_joined",
+          "pin": "thm:Blanc.Composition.DepositJoint.d9_fate_joined",
+          "frozen": "Blanc.Corpus.Freeze.Deposit.D9FateJoined"
+        },
+        {
+          "covers": [
+            "joined-conservation"
+          ],
+          "theorem": "Blanc.Composition.DepositJoint.d9_conservation_joined",
+          "pin": "thm:Blanc.Composition.DepositJoint.d9_conservation_joined",
+          "frozen": "Blanc.Corpus.Freeze.Deposit.D9ConservationJoined"
+        }
+      ]
     },
     {
       "id": "R-S9",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.RingJointRetention.r_s9",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.RingJointRetention.r_s9",
+          "frozen": "Blanc.Corpus.Freeze.BeaconRoots.R_S9"
+        }
+      ]
     },
     {
       "id": "H-S9",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.RingJointRetention.h_s9",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.RingJointRetention.h_s9",
+          "frozen": "Blanc.Corpus.Freeze.HistoryStorage.H_S9"
+        }
+      ]
     },
     {
       "id": "W-S9",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "authorization-position"
+          ],
+          "theorem": "Blanc.Lift.WithdrawalRequest.ValidJoint.authorization",
+          "pin": "thm:Blanc.Lift.WithdrawalRequest.ValidJoint.authorization"
+        },
+        {
+          "covers": [
+            "occurrence-fate"
+          ],
+          "theorem": "Blanc.Lift.WithdrawalRequest.ValidJoint.fate",
+          "pin": "thm:Blanc.Lift.WithdrawalRequest.ValidJoint.fate"
+        },
+        {
+          "covers": [
+            "outcome"
+          ],
+          "theorem": "Blanc.Lift.WithdrawalRequest.ValidJoint.fate_outcome",
+          "pin": "thm:Blanc.Lift.WithdrawalRequest.ValidJoint.fate_outcome"
+        },
+        {
+          "covers": [
+            "retained-budget"
+          ],
+          "theorem": "Blanc.Lift.WithdrawalRequest.ValidJoint.fee_budget_retained_aggregate",
+          "pin": "thm:Blanc.Lift.WithdrawalRequest.ValidJoint.fee_budget_retained_aggregate"
+        },
+        {
+          "covers": [
+            "crediting-recipient"
+          ],
+          "theorem": "Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_recipient",
+          "pin": "thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_recipient"
+        },
+        {
+          "covers": [
+            "crediting-loop1"
+          ],
+          "theorem": "Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1",
+          "pin": "thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1"
+        },
+        {
+          "covers": [
+            "crediting-floor"
+          ],
+          "theorem": "Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_floor",
+          "pin": "thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_floor"
+        },
+        {
+          "covers": [
+            "crediting-compounding"
+          ],
+          "theorem": "Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1_compounding",
+          "pin": "thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1_compounding"
+        },
+        {
+          "covers": [
+            "crediting-address"
+          ],
+          "theorem": "Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_address",
+          "pin": "thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_address"
+        }
+      ]
     },
     {
       "id": "C-S9",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "authorization"
+          ],
+          "theorem": "Blanc.Composition.ConsolidationRequestJoint.c_s9_authorization",
+          "pin": "thm:Blanc.Composition.ConsolidationRequestJoint.c_s9_authorization",
+          "frozen": "Blanc.Corpus.Freeze.ConsolidationJoint.C_S9_authorization"
+        },
+        {
+          "covers": [
+            "fate"
+          ],
+          "theorem": "Blanc.Composition.ConsolidationRequestJoint.c_s9_fate",
+          "pin": "thm:Blanc.Composition.ConsolidationRequestJoint.c_s9_fate",
+          "frozen": "Blanc.Corpus.Freeze.ConsolidationJoint.C_S9_fate"
+        },
+        {
+          "covers": [
+            "balance"
+          ],
+          "theorem": "Blanc.Composition.ConsolidationRequestBalance.c_s9_balance",
+          "pin": "thm:Blanc.Composition.ConsolidationRequestBalance.c_s9_balance",
+          "frozen": "Blanc.Corpus.Freeze.ConsolidationJoint.C_S9_balance"
+        }
+      ]
     },
     {
       "id": "B-S9",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "deposit-position-fate"
+          ],
+          "theorem": "Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate",
+          "pin": "thm:Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate"
+        },
+        {
+          "covers": [
+            "exit-position-fate"
+          ],
+          "theorem": "Blanc.Lift.BuilderRequest.ValidJointG.exit_fate",
+          "pin": "thm:Blanc.Lift.BuilderRequest.ValidJointG.exit_fate"
+        },
+        {
+          "covers": [
+            "registration-authorization-credit"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s9_registration_authorization_credit",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s9_registration_authorization_credit"
+        },
+        {
+          "covers": [
+            "exit-authorization-caller"
+          ],
+          "theorem": "Blanc.Lift.BuilderRequest.ValidJointG.exit_authorization_caller",
+          "pin": "thm:Blanc.Lift.BuilderRequest.ValidJointG.exit_authorization_caller"
+        },
+        {
+          "covers": [
+            "exit-resolution"
+          ],
+          "theorem": "Blanc.Lift.BuilderRequest.ValidJointG.exit_resolution_unique",
+          "pin": "thm:Blanc.Lift.BuilderRequest.ValidJointG.exit_resolution_unique"
+        },
+        {
+          "covers": [
+            "payment-debit-at-most-once"
+          ],
+          "theorem": "Blanc.Lift.BuilderRequest.ValidJointG.payment_debit_at_most_once",
+          "pin": "thm:Blanc.Lift.BuilderRequest.ValidJointG.payment_debit_at_most_once"
+        },
+        {
+          "covers": [
+            "deposit-focused-fate-no-preanchor"
+          ],
+          "theorem": "Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate_no_pre_anchor_emissions",
+          "pin": "thm:Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate_no_pre_anchor_emissions"
+        },
+        {
+          "covers": [
+            "exit-focused-fate-no-preanchor"
+          ],
+          "theorem": "Blanc.Lift.BuilderRequest.ValidJointG.exit_fate_no_pre_anchor_emissions",
+          "pin": "thm:Blanc.Lift.BuilderRequest.ValidJointG.exit_fate_no_pre_anchor_emissions"
+        }
+      ]
     },
     {
       "id": "D-S10",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "log-shape",
+            "parse"
+          ],
+          "theorem": "Blanc.Composition.DepositParse.d_s10",
+          "pin": "thm:Blanc.Composition.DepositParse.d_s10",
+          "frozen": "Blanc.Corpus.Freeze.Deposit.D_S10"
+        }
+      ]
     },
     {
       "id": "R-S10",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Corpus.Proofs.R.r_s10",
+          "pin": "thm:Blanc.Corpus.Proofs.R.r_s10",
+          "frozen": "Blanc.Corpus.Freeze.BeaconRoots.R_S10"
+        }
+      ]
     },
     {
       "id": "H-S10",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Corpus.Proofs.H.h_s10",
+          "pin": "thm:Blanc.Corpus.Proofs.H.h_s10",
+          "frozen": "Blanc.Corpus.Freeze.HistoryStorage.H_S10"
+        }
+      ]
     },
     {
       "id": "W-S10",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s10_headline",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s10_headline"
+        }
+      ]
     },
     {
       "id": "C-S10",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "headline"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s10_headline",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s10_headline"
+        }
+      ]
     },
     {
       "id": "B-S10",
-      "bindings": []
+      "bindings": [
+        {
+          "covers": [
+            "deposit"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_deposit",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_deposit"
+        },
+        {
+          "covers": [
+            "exit"
+          ],
+          "theorem": "Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_exit",
+          "pin": "thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_exit"
+        }
+      ]
     }
   ]
 }

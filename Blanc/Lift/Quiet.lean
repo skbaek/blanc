@@ -887,6 +887,45 @@ private theorem Xinst.step_shapePair (sevm : Sevm) (devm : Devm) (x : Xinst) :
       refine PairShape.bindE prePair (PairShape.chargeGas _ completed.2) fun charged kept => ?_
       exact PairShape.call lane (PairShape.memExtends.trans kept) (fun _ => Or.inr (Or.inl rfl))
 
+/-- Every executable instruction on any fork has a log-list shape covering both legacy and state-gas lanes. -/
+def Xinst.ShapeLogsAny (sevm : Sevm) (devm : Devm) (creates : Prop) (s : XStep) : Prop :=
+  (∃ ex, s = .done ex ∧ Execution.Rel Devm.LogsEq devm ex) ∨
+  (creates ∧ ∃ (state : Option StateGasRules), ∃ d endowment newAddress mi ms,
+      sevm.benvStat.rules.stateGas = state ∧ d.logs = devm.logs ∧
+      s = match state with
+        | none => genericCreate.step sevm d endowment newAddress mi ms
+        | some state => genericCreateAmsterdam.step sevm state d endowment newAddress mi ms) ∨
+  (∃ (state : Option StateGasRules), ∃ d gas reservoir value caller target codeAddress
+      stv isSt ii isz oi osz code dp charged insufficient,
+    sevm.benvStat.rules.stateGas = state ∧ d.logs = devm.logs ∧
+    s = match state with
+      | none => genericCall.step sevm d gas value caller target codeAddress stv isSt
+          ii isz oi osz code dp
+      | some state => genericCallAmsterdam.step sevm state d gas reservoir value caller
+          target codeAddress stv isSt ii isz oi osz code dp charged insufficient)
+
+/-- **Every executable instruction on any fork has an all-fork log-list shape.** -/
+lemma Xinst.step_shapeLogs_any (sevm : Sevm) (devm : Devm) (x : Xinst) :
+    Xinst.ShapeLogsAny sevm devm (x = .create ∨ x = .create2) (Xinst.step sevm devm x) := by
+  rcases Xinst.step_shapePair sevm devm x with
+    ⟨ex, step, pair⟩ | ⟨kind, state, base, val, target, mi, ms, selected, pair, _, step⟩ |
+    ⟨state, base, gas, reservoir, val, caller, target, address, stv, isSt, ii, isz, oi, osz,
+      code, dp, charged, insufficient, selected, pair, _, step⟩
+  · refine Or.inl ⟨ex, step, ?_⟩
+    cases ex <;> exact congrArg Prod.fst pair
+  · cases state with
+    | none =>
+      exact Or.inr (Or.inl ⟨kind, none, base, val, target, mi, ms, selected, congrArg Prod.fst pair, step⟩)
+    | some state =>
+      exact Or.inr (Or.inl ⟨kind, some state, base, val, target, mi, ms, selected, congrArg Prod.fst pair, step⟩)
+  · cases state with
+    | none =>
+      exact Or.inr (Or.inr ⟨none, base, gas, reservoir, val, caller, target, address, stv, isSt,
+        ii, isz, oi, osz, code, dp, charged, insufficient, selected, congrArg Prod.fst pair, step⟩)
+    | some state =>
+      exact Or.inr (Or.inr ⟨some state, base, gas, reservoir, val, caller, target, address,
+        stv, isSt, ii, isz, oi, osz, code, dp, charged, insufficient, selected, congrArg Prod.fst pair, step⟩)
+
 /-- Compatibility projection of the same structural routing proof. -/
 lemma Xinst.step_shapeLogs_noStateGas (sevm : Sevm) (devm : Devm) (x : Xinst)
     {b : Bool} {a : AccessSchedule}

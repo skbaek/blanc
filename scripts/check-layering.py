@@ -861,6 +861,32 @@ COMPOSITION.update({
     "Composition.DepositJoint": ("beacon-deposit",),
 })
 
+# Protocol contract corpus closure (Waves 1-4): deposit codec/ledger controls, consolidation
+# balance conservation, ring joint retention/controls, Amsterdam request-phase base split,
+# builder focused minimal-premise headlines, and distinct matrix component pin wrappers.
+CONTRACTS["beacon-deposit"].append("Lift.BeaconDeposit.RequestCodec")
+COMPOSITION.update({
+    "Composition.DepositLedgerControls": ("beacon-deposit",),
+    "Composition.ConsolidationRequestBalance": ("consolidation-request",),
+    "Composition.ConsolidationRequestBalanceControls": ("consolidation-request",),
+    "Composition.Corpus.Proofs.RingJointRetention": ("beacon-roots", "history-storage"),
+    "Composition.Corpus.Proofs.RingJointControls": (
+        "beacon-roots",
+        "history-storage",
+        "withdrawal-request",
+        "consolidation-request",
+    ),
+    "Composition.RequestPhaseAmsterdamBase": ("builder-request", "withdrawal-request"),
+    "Composition.RequestPhaseAmsterdam": ("beacon-deposit", "builder-request", "withdrawal-request"),
+    "Composition.BuilderRequestFocusedHeadlines": ("builder-request", "withdrawal-request"),
+    "Composition.Corpus.Proofs.MatrixComponentPins": (
+        "beacon-deposit",
+        "withdrawal-request",
+        "consolidation-request",
+        "builder-request",
+    ),
+})
+
 ROOTS = ["Blanc", "Main"]
 
 def composition_declaration_failures(declarations, contracts):

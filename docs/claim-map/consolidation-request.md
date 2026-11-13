@@ -50,12 +50,22 @@ read from the final storage. Equality keeps order and multiplicity.
 **No transaction-level liveness**: sender funding, intrinsic gas, block room and call forwarding are
 not covered.
 
-**Non-claims.** Consensus-layer processing, including validator authorization: the emitted source
+**Protocol-contract corpus extensions (`C-S2`, `C-S6`, `C-S8`, `C-S9`, `C-S10`)**
+
+| Claim | Theorem | Level / kind | Premises | Notes |
+|---|---|---|---|---|
+| **C-S2. Kept-history frame classification.** Every settled frame at the predeploy across a covered-fork kept history is a system dequeue (with unconditional output), a 96-byte submission, or a fee read, with exact storage, log and output effects | `Blanc.Corpus.Proofs.Consolidation.c_s2` (`Blanc/Composition/Corpus/Proofs/ConsolidationExecution.lean:19`) | Kept history / classification | Kept history on covered forks; canonical code at start | Includes unconditional word-arithmetic dequeue output even when head exceeds tail |
+| **C-S6. Kept-history balance retention.** Over a covered-fork kept history, the predeploy's balance never decreases and retains its starting balance plus all value carried by kept frames (and committed submissions) | `Blanc.Corpus.Proofs.Consolidation.c_s6` (`Blanc/Composition/Corpus/Proofs/ConsolidationExecution.lean:56`) | Kept history / value | Kept history on covered forks; canonical code; no sender at the predeploy; credit/root bounds | Balance-silent certificate discharges intra-frame outflow |
+| **C-S8. Conditional queue delivery bound.** On a clean covered-fork kept history from `CheckpointStart`, queue entry `q` at block `j` is published in block `j + q / 2` at record index `q % 2` whenever that extension block exists | `Blanc.Corpus.Proofs.Consolidation.c_s8` (`Blanc/Composition/Corpus/Proofs/ConsolidationLatency.lean:36`) | Checkpoint-rooted history / latency | `CheckpointStart`; `HistoryClean`; covered forks; `≤ 2^253` submissions; block `j + q / 2` in history | Conditional on the extension block existing; proves no wall-clock latency |
+| **C-S9. Joint Electra/Fulu authorization, occurrence fate, and balance conservation.** On a valid Electra/Fulu joint run, every accepted or rejected consolidation request is tied to its committed caller and validator credentials (`c_s9_authorization`), every committed submission has a unique pre-anchor, step-applied, or final-queue fate (`c_s9_fate`), and `ValidJointCBalance` conserves validator balances across immediate and pending consolidation epochs (`c_s9_balance`) | `Blanc.Composition.ConsolidationRequestJoint.c_s9_authorization` (`Blanc/Composition/ConsolidationRequestJoint.lean:327`), `Blanc.Composition.ConsolidationRequestJoint.c_s9_fate` (`Blanc/Composition/ConsolidationRequestJoint.lean:340`), `Blanc.Composition.ConsolidationRequestBalance.c_s9_balance` (`Blanc/Composition/ConsolidationRequestBalance.lean:977`) | Joint execution–consensus history / authorization, fate, balance | `ValidJointC` (`CheckpointStart`, `HistoryClean`, `≤ 2^253` cap); `ValidJointCBalance` adds `PendingDistinct` and ordered acceptance/consumption traces | Electra and Fulu only (not Gloas); target validator signature is not required by the spec |
+| **C-S10. Amsterdam checked system call.** At the Amsterdam fork with canonical code installed, the checked system call succeeds from arbitrary storage within 75,000 regular gas | `Blanc.Lift.SystemExecution.ConsolidationRequest.Amsterdam.system_call_ok` (`Blanc/Lift/SystemExecution/ConsolidationRequest/AmsterdamSystem.lean:221`) | Frame / totality (Amsterdam) | `fork = .amsterdam`; canonical code | Regular execution gas only; user frames at Amsterdam remain outside C1–C5 |
+
+**Non-claims.** Validator authorization on the execution-only C1–C5 rows (the emitted source
 address is the immediate caller, and whether a request may act on the named validators is decided
-there; economic soundness of the parameters; the failure outcome of a rejected call and its gas;
-a delivery bound (how many blocks a queued record waits); the contract's balance; state growth
+on the joint chain in C-S9); economic soundness of the parameters; the failure outcome of a rejected call and its gas;
+wall-clock delivery latency beyond C-S8's conditional block-index bound; state growth
 (dequeued queue slots are not cleared, and the stored queue ignores them); deployment of the
-contract; historical inclusion of the checkpoint; Amsterdam; anything beyond 2^253 committed
+contract; historical inclusion of the checkpoint; Gloas consensus consolidation processing and Amsterdam user frames; anything beyond 2^253 committed
 submissions. Rolled-back frames are not counted: the submissions are the frames a history commits,
 and a frame rolled back by its own or an ancestor's failure is not among them.
 
@@ -75,7 +85,7 @@ read returned these bytes. That read is recorded, not re-fetched by any gate.
 
 | | M1 | M2 | M3 | M4 | M5 | M6 | M7 | M8 |
 |---|---|---|---|---|---|---|---|---|
-| EIP-7251 | ✓ | ✓ [n] | ✓ | ✓ none | ✗ [o] | ✓ [p] | ✗ | ✓ |
+| EIP-7251 | ✓ | ✓ [n] | ✓ | ✓ | ✗ [o] | ✓ [p] | ✓ | ✓ |
 
 [n] Up to 2^253 committed submissions after the checkpoint; the fee is the bytes' quoted fee, which
 departs from the EIP's fake_exponential at excess 2893 (Section 7 item 59).

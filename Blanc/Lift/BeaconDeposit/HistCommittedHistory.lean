@@ -5,6 +5,7 @@ import Blanc.ExecutionHistoryInAppend
 import Blanc.ExecutionImmutableCode
 import Blanc.ExecutionHistorySupport
 import Blanc.ExecutionNoDelHistory
+import Blanc.ExecutionKeptRuntime
 
 /-! Exact ordered settlement-retained Beacon extraction over HistFork.
 The admitted core is kept separate from the derived environment headline. -/
@@ -165,6 +166,21 @@ theorem committedNodesIn_append {ca : Adr} {cfg : ChainConfig}
     (right : ConfiguredHistoryTraceIn HistFork cfg middle future) :
     committedNodesIn ca (left.append right) = committedNodesIn ca left ++ committedNodesIn ca right := by
   simp only [committedNodesIn, ConfiguredHistoryTraceIn.settledFrames_append, List.flatMap_append]
+
+/-- Any fork's kept transaction fold preserves installed Beacon Deposit code and transports it to
+every kept target frame, using only raw staticcall terminal safety. -/
+theorem transactions_runtime_any
+    {txis : List (Nat × Tx)} {benv final : Benv} {bout out : BlockOutput}
+    {senders : List (Adr × Tx)} {roots : List Root}
+    (run : TransactionsRoots txis benv bout final out senders roots) {a : Adr}
+    (installed : benv.state.getCode a = code) :
+    final.state.getCode a = code ∧
+      ∀ frame ∈ roots.flatMap (Root.keptAt a),
+        frame.pc = 0 ∧ frame.sevm.currentTarget = a ∧ frame.sevm.code = code ∧
+          frame.sevm.benvStat.fork = benv.stat.fork ∧ Blanc.Exec.FreshEntry frame.sevm frame.pre :=
+  run.runtime_of_rawSafety (fun _ => True) beaconInstalledCertH.nonempty
+    beaconInstalledCertH.notDelegation
+    (fun r _ inst root => raw_terminal_safe_of_installed r inst root) trivial installed
 
 end Blanc.Lift.BeaconDeposit
 

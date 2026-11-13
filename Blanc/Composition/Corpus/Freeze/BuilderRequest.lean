@@ -6,8 +6,8 @@ import Blanc.Lift.BuilderRequest.Latch
 /-!
 # Freeze record (G0, part cb): EIP-8282 cells B-S2 and B-S4
 
-Statements only, against Blanc main `7f2a69ba` and Jaune `c30cf0a5`. Nothing here is proved, registered in the
-layering classification, or imported by the root.
+Frozen statement definitions (`def … : Prop`) from G0 against Blanc `7f2a69ba` and Jaune `c30cf0a5`,
+classified in `scripts/check-layering.py`, imported by `Blanc.lean`, and proved in `Blanc/Composition/`.
 
 * `B_S2`: unrestricted Form B, selected by the user on 2026-11-11 (goal revision 3, section 13).
   Every frame a kept history keeps at either contract is a SYSTEM_ADDRESS empty-calldata dequeue, a SYSTEM_ADDRESS

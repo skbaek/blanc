@@ -17,6 +17,44 @@ import Blanc.Composition.ConsolidationRequestPublicHistory
 import Blanc.Lift.BeaconDeposit.BeaconEnv
 import Blanc.Lift.BeaconDeposit.Creation.Deploy
 import Blanc.Lift.BeaconDeposit.HistDeployment
+import Blanc.Composition.BeaconRootsRetention
+import Blanc.Composition.BuilderRequestActualFeeBounds
+import Blanc.Composition.BuilderRequestClassification
+import Blanc.Composition.BuilderRequestJointGDebitOnce
+import Blanc.Composition.BuilderRequestJointGExitUnique
+import Blanc.Composition.BuilderRequestJointGFate
+import Blanc.Composition.BuilderRequestJointGFateFocused
+import Blanc.Composition.ConsolidationRequestBalance
+import Blanc.Composition.ConsolidationRequestJoint
+import Blanc.Composition.Corpus.Freeze.BuilderRequest
+import Blanc.Composition.Corpus.Freeze.ConsolidationExecution
+import Blanc.Composition.Corpus.Freeze.ConsolidationJoint
+import Blanc.Composition.Corpus.Proofs.BuilderCheckpoint
+import Blanc.Composition.Corpus.Proofs.ConsolidationExecution
+import Blanc.Composition.Corpus.Proofs.ConsolidationLatency
+import Blanc.Composition.Corpus.Proofs.MatrixComponentPins
+import Blanc.Composition.Corpus.Proofs.RingHistory
+import Blanc.Composition.Corpus.Proofs.RingJointRetention
+import Blanc.Composition.Corpus.Proofs.RingRoots
+import Blanc.Composition.Corpus.Proofs.RingTotality
+import Blanc.Composition.Corpus.Proofs.RingValue
+import Blanc.Composition.DepositClassified
+import Blanc.Composition.DepositJoint
+import Blanc.Composition.DepositParse
+import Blanc.Composition.DepositRequests
+import Blanc.Composition.DepositShortLogControl
+import Blanc.Composition.DepositValue
+import Blanc.Corpus.Freeze.BeaconRoots
+import Blanc.Corpus.Freeze.DepositCells
+import Blanc.Corpus.Freeze.HistoryStorage
+import Blanc.Corpus.Proofs.BeaconRootsClassification
+import Blanc.Corpus.Proofs.BeaconRootsFrames
+import Blanc.Corpus.Proofs.HistoryStorage
+import Blanc.Lift.BeaconDeposit.Liveness
+import Blanc.Lift.WithdrawalRequest.FrameEffects
+import Blanc.Lift.WithdrawalRequest.JointAuthorization
+import Blanc.Lift.WithdrawalRequest.JointCrediting
+import Blanc.Lift.WithdrawalRequest.JointFate
 -- `open private` below; no longer reached transitively under mathlib 4.35.
 import Batteries.Tactic.OpenPrivate
 
@@ -2586,3 +2624,1811 @@ example {B : BlockChain} (pre D C C1 P : BlockChain)
     modernNoFrame⟩
 
 end Blanc.Lift.BeaconDeposit
+
+-- BEGIN PROTOCOL CONTRACT CORPUS PINS
+
+/-! ## Protocol-contract corpus: frozen statement pins (37) -/
+
+-- Corpus frozen pin: Blanc.Composition.DepositParse.d_s1
+example : Blanc.Corpus.Freeze.Deposit.D_S1 :=
+  Blanc.Composition.DepositParse.d_s1
+
+-- Corpus frozen pin: Blanc.Corpus.Proofs.R.r_s1
+example : Blanc.Corpus.Freeze.BeaconRoots.R_S1 :=
+  Blanc.Corpus.Proofs.R.r_s1
+
+-- Corpus frozen pin: Blanc.Corpus.Proofs.H.h_s1
+example : Blanc.Corpus.Freeze.HistoryStorage.H_S1 :=
+  Blanc.Corpus.Proofs.H.h_s1
+
+-- Corpus frozen pin: Blanc.Composition.DepositClassified.d_s2
+example : Blanc.Corpus.Freeze.Deposit.D_S2 :=
+  Blanc.Composition.DepositClassified.d_s2
+
+-- Corpus frozen pin: Blanc.Corpus.Proofs.BeaconRoots.r_s2
+example : Blanc.Corpus.Freeze.BeaconRoots.R_S2 :=
+  Blanc.Corpus.Proofs.BeaconRoots.r_s2
+
+-- Corpus frozen pin: Blanc.Corpus.Proofs.HistoryStorage.h_s2
+example : Blanc.Corpus.Freeze.HistoryStorage.H_S2 :=
+  Blanc.Corpus.Proofs.HistoryStorage.h_s2
+
+-- Corpus frozen pin: Blanc.Corpus.Proofs.Consolidation.c_s2
+example : Blanc.Corpus.Freeze.Consolidation.C_S2 :=
+  Blanc.Corpus.Proofs.Consolidation.c_s2
+
+-- Corpus frozen pin: Blanc.Composition.BuilderRequestClassification.b_s2_deposit
+example : Blanc.Corpus.Freeze.Builder.B_S2_deposit :=
+  Blanc.Composition.BuilderRequestClassification.b_s2_deposit
+
+-- Corpus frozen pin: Blanc.Composition.BuilderRequestClassification.b_s2_exit
+example : Blanc.Corpus.Freeze.Builder.B_S2_exit :=
+  Blanc.Composition.BuilderRequestClassification.b_s2_exit
+
+-- Corpus frozen pin: Blanc.Corpus.Proofs.RingHistory.R.r_s3
+example : Blanc.Corpus.Freeze.BeaconRoots.R_S3 :=
+  Blanc.Corpus.Proofs.RingHistory.R.r_s3
+
+-- Corpus frozen pin: Blanc.Corpus.Proofs.RingHistory.H.h_s3
+example : Blanc.Corpus.Freeze.HistoryStorage.H_S3 :=
+  Blanc.Corpus.Proofs.RingHistory.H.h_s3
+
+-- Corpus frozen pin: Blanc.Corpus.Proofs.RingRoots.r_s4
+example : Blanc.Corpus.Freeze.BeaconRoots.R_S4 :=
+  Blanc.Corpus.Proofs.RingRoots.r_s4
+
+-- Corpus frozen pin: Blanc.Corpus.Proofs.RingRoots.h_s4
+example : Blanc.Corpus.Freeze.HistoryStorage.H_S4 :=
+  Blanc.Corpus.Proofs.RingRoots.h_s4
+
+-- Corpus frozen pin: Blanc.Composition.Corpus.Proofs.BuilderCheckpoint.b_s4
+example : Blanc.Corpus.Freeze.Builder.B_S4 :=
+  Blanc.Composition.Corpus.Proofs.BuilderCheckpoint.b_s4
+
+-- Corpus frozen pin: Blanc.Composition.DepositValue.d_s6
+example : Blanc.Corpus.Freeze.Deposit.D_S6 :=
+  Blanc.Composition.DepositValue.d_s6
+
+-- Corpus frozen pin: Blanc.Corpus.Proofs.R.r_s6
+example : Blanc.Corpus.Freeze.BeaconRoots.R_S6 :=
+  Blanc.Corpus.Proofs.R.r_s6
+
+-- Corpus frozen pin: Blanc.Corpus.Proofs.H.h_s6
+example : Blanc.Corpus.Freeze.HistoryStorage.H_S6 :=
+  Blanc.Corpus.Proofs.H.h_s6
+
+-- Corpus frozen pin: Blanc.Corpus.Proofs.Consolidation.c_s6
+example : Blanc.Corpus.Freeze.Consolidation.C_S6 :=
+  Blanc.Corpus.Proofs.Consolidation.c_s6
+
+-- Corpus frozen pin: Blanc.Corpus.Proofs.BeaconRoots.r_s7
+example : Blanc.Corpus.Freeze.BeaconRoots.R_S7 :=
+  Blanc.Corpus.Proofs.BeaconRoots.r_s7
+
+-- Corpus frozen pin: Blanc.Corpus.Proofs.HistoryStorage.h_s7
+example : Blanc.Corpus.Freeze.HistoryStorage.H_S7 :=
+  Blanc.Corpus.Proofs.HistoryStorage.h_s7
+
+-- Corpus frozen pin: Blanc.Composition.DepositRequests.d_s8
+example : Blanc.Corpus.Freeze.Deposit.D_S8 :=
+  Blanc.Composition.DepositRequests.d_s8
+
+-- Corpus frozen pin: Blanc.Composition.BeaconRootsRetention.r_s8_time
+example : Blanc.Corpus.Freeze.BeaconRoots.R_S8_time :=
+  Blanc.Composition.BeaconRootsRetention.r_s8_time
+
+-- Corpus frozen pin: Blanc.Composition.Corpus.Proofs.RingJointRetention.r_s8_slot
+example : Blanc.Corpus.Freeze.BeaconRoots.R_S8_slot :=
+  Blanc.Composition.Corpus.Proofs.RingJointRetention.r_s8_slot
+
+-- Corpus frozen pin: Blanc.Composition.Corpus.Proofs.RingJointRetention.h_s8
+example : Blanc.Corpus.Freeze.HistoryStorage.H_S8 :=
+  Blanc.Composition.Corpus.Proofs.RingJointRetention.h_s8
+
+-- Corpus frozen pin: Blanc.Corpus.Proofs.Consolidation.c_s8
+example : Blanc.Corpus.Freeze.Consolidation.C_S8 :=
+  Blanc.Corpus.Proofs.Consolidation.c_s8
+
+-- Corpus frozen pin: Blanc.Composition.DepositJoint.d9_delivery
+example : Blanc.Corpus.Freeze.Deposit.D9Delivery :=
+  Blanc.Composition.DepositJoint.d9_delivery
+
+-- Corpus frozen pin: Blanc.Composition.DepositJoint.d9_fate_joined
+example : Blanc.Corpus.Freeze.Deposit.D9FateJoined :=
+  Blanc.Composition.DepositJoint.d9_fate_joined
+
+-- Corpus frozen pin: Blanc.Composition.DepositJoint.d9_conservation_joined
+example : Blanc.Corpus.Freeze.Deposit.D9ConservationJoined :=
+  Blanc.Composition.DepositJoint.d9_conservation_joined
+
+-- Corpus frozen pin: Blanc.Composition.Corpus.Proofs.RingJointRetention.r_s9
+example : Blanc.Corpus.Freeze.BeaconRoots.R_S9 :=
+  Blanc.Composition.Corpus.Proofs.RingJointRetention.r_s9
+
+-- Corpus frozen pin: Blanc.Composition.Corpus.Proofs.RingJointRetention.h_s9
+example : Blanc.Corpus.Freeze.HistoryStorage.H_S9 :=
+  Blanc.Composition.Corpus.Proofs.RingJointRetention.h_s9
+
+-- Corpus frozen pin: Blanc.Composition.ConsolidationRequestJoint.c_s9_authorization
+example : Blanc.Corpus.Freeze.ConsolidationJoint.C_S9_authorization :=
+  Blanc.Composition.ConsolidationRequestJoint.c_s9_authorization
+
+-- Corpus frozen pin: Blanc.Composition.ConsolidationRequestJoint.c_s9_fate
+example : Blanc.Corpus.Freeze.ConsolidationJoint.C_S9_fate :=
+  Blanc.Composition.ConsolidationRequestJoint.c_s9_fate
+
+-- Corpus frozen pin: Blanc.Composition.ConsolidationRequestBalance.c_s9_balance
+example : Blanc.Corpus.Freeze.ConsolidationJoint.C_S9_balance :=
+  Blanc.Composition.ConsolidationRequestBalance.c_s9_balance
+
+-- Corpus frozen pin: Blanc.Composition.DepositParse.d_s10
+example : Blanc.Corpus.Freeze.Deposit.D_S10 :=
+  Blanc.Composition.DepositParse.d_s10
+
+-- Corpus frozen pin: Blanc.Corpus.Proofs.R.r_s10
+example : Blanc.Corpus.Freeze.BeaconRoots.R_S10 :=
+  Blanc.Corpus.Proofs.R.r_s10
+
+-- Corpus frozen pin: Blanc.Corpus.Proofs.H.h_s10
+example : Blanc.Corpus.Freeze.HistoryStorage.H_S10 :=
+  Blanc.Corpus.Proofs.H.h_s10
+
+-- Corpus frozen pin: Blanc.Composition.DepositShortLogControl.d10_control
+example : Blanc.Corpus.Freeze.Deposit.D10Control :=
+  Blanc.Composition.DepositShortLogControl.d10_control
+
+/-! ## Protocol-contract corpus: frozen definition unfolding pins (37) -/
+
+namespace Blanc.Corpus.Freeze.Deposit
+open Jaune JauneConsensus Blanc Blanc.ExecutionTrace Blanc.Lift.BeaconDeposit
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.Deposit.D_S1
+example : D_S1 ↔ (
+    LogShape CoveredFork ∧ ParseSucceeds CoveredFork
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.Deposit.D_S2
+example : D_S2 ↔ (
+      ∀ {B : BlockChain} (d : BeaconDeploymentTo B) (idx : Nat) (fr : Exec.Frame),
+        d.trace.settledFrames[idx]? = some fr →
+        fr.sevm.currentTarget = depositAddr →
+        let history := (d.trace.settledFrames.take idx).flatMap (committedFrameNodes depositAddr)
+        SolInv (fr.pre.getStor depositAddr) history ∧
+          ∃! o : DepositOutcome, Classified fr history o
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.Deposit.D_S6
+example : D_S6 ↔ (
+      ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock},
+        KeptHistory cfg start blocks stop →
+        KeptAtForks CoveredFork blocks →
+        DepositCodeAt start.state →
+        (∀ b ∈ blocks, NoSenderAt depositAddr b.run.senders) →
+        HistoryRootsFit blocks → HistoryCreditsFit depositAddr blocks →
+        (start.state.bal depositAddr).toNat +
+            ((blocks.flatMap (KeptBlock.keptAt depositAddr)).map fun f => f.sevm.value.toNat).sum ≤
+          (stop.state.bal depositAddr).toNat ∧
+        ∀ b ∈ blocks, ∀ fr ∈ b.keptAt depositAddr, Sevm.selector fr.sevm = BeaconDeposit.depositSelector →
+          BeaconDeposit.oneEther ≤ fr.sevm.value.toNat ∧ fr.sevm.value.toNat % BeaconDeposit.oneGwei = 0 ∧
+          fr.sevm.value.toNat / BeaconDeposit.oneGwei ≤ 2 ^ 64 - 1 ∧
+          ∀ ev, frameLogs fr = [BeaconDeposit.depositEventLog depositAddr ev] →
+            ev.amount = BeaconDeposit.le64 (fr.sevm.value.toNat / BeaconDeposit.oneGwei)
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.Deposit.D_S8
+example : D_S8 ↔ (
+      ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock},
+        KeptHistory cfg start blocks stop →
+        KeptAtForks CoveredFork blocks →
+        DepositCodeAt start.state →
+        ∀ b ∈ blocks,
+          let txFrames := b.run.txRoots.flatMap (Root.keptAt depositAddr)
+          let records := txFrames.flatMap frameRecords
+          (∀ r ∈ records, r.length = 192) ∧
+          b.output.requests =
+            (if records.flatten.length > 0 then [Jaune.depositRequestType ++ records.flatten] else []) ++
+              b.run.requests.flatMap RequestStep.bytes ∧
+          (∀ entry ∈ b.run.requests.flatMap RequestStep.bytes,
+            entry.head? ≠ some JauneConsensus.depositRequestType) ∧
+          ((b.run.preRoots ++ requestRootsOf b.run.requests).flatMap (Root.keptAt depositAddr) = [] →
+            b.keptAt depositAddr = txFrames)
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.Deposit.D9Delivery
+example : D9Delivery ↔ (
+      ∀ {P : Preset} {ccfg : Config} {bls : Bool} {anchor final : JointState P}
+        (v : DepositJoint (P := P) ccfg bls anchor final),
+        (∀ (j : Nat) (D : JointRunStep (P := P) mainnetChainConfig ccfg bls),
+          v.ingress.steps[j]? = some D →
+          (stepDepositRequests D).map Ssz.serialize =
+            (D.stepTrace.trace.kept.keptAt depositAddr).flatMap frameRecords) ∧
+        (ingressDepositRequests v.ingress).map (fun dr => dr.index.toNat) =
+          List.range' v.E₀ (ingressDepositRequests v.ingress).length ∧
+        v.E_final = v.E₀ + (ingressDepositRequests v.ingress).length
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.Deposit.D9FateJoined
+example : D9FateJoined ↔ (
+      ∀ {P : Preset} {ccfg : Config} {anchor final : JointState P}
+        (v : DepositJoint (P := P) ccfg true anchor final) (tq₀ : TQueue)
+        (preApplied : List PreAnchorApplied),
+        AnchorLedgerD v tq₀ preApplied →
+        let deposits := committedDepositDataIn v.fullTrace
+        RunIndicesFreshIngress v.ingress tq₀ ∧
+        v.cutoverCount ≤ v.E₀ ∧ v.E₀ ≤ v.E_final ∧
+        v.E_final = v.E₀ + (ingressDepositRequests v.ingress).length ∧
+        deposits.length = v.E_final ∧
+        deposits.take v.cutoverCount = committedDepositDataIn v.deployment.trace ∧
+        (∀ k < v.cutoverCount,
+          (∀ rec ∈ preApplied, rec.index ≠ k) ∧
+          (∀ e ∈ tq₀, e.1 ≠ some k) ∧
+          (∀ dr ∈ ingressDepositRequests v.ingress, dr.index.toNat ≠ k)) ∧
+        (∀ (j : Nat) (D : JointRunStep (P := P) mainnetChainConfig ccfg true),
+          v.ingress.steps[j]? = some D →
+          ∀ (rIdx : Nat) (dr : DepositRequest), (stepDepositRequests D)[rIdx]? = some dr →
+            v.E₀ ≤ dr.index.toNat ∧ dr.index.toNat < v.E_final ∧
+            ∃ fr ∈ D.stepTrace.trace.kept.keptAt depositAddr,
+              Sevm.selector fr.sevm = BeaconDeposit.depositSelector ∧
+              dr.amount.toNat * 10 ^ 9 = fr.sevm.value.toNat ∧
+              dr.pubkey.toArray.toList = argBytes fr.sevm 0 ∧
+              dr.withdrawal_credentials.toBytes = argBytes fr.sevm 1 ∧
+              dr.signature.toArray.toList = argBytes fr.sevm 2 ∧
+              deposits[dr.index.toNat]? = some (frameDepositData fr)) ∧
+        ∃ tqF ap, runLedger 0 v.ingress.steps tq₀ [] = .ok (tqF, ap) ∧
+          pendingList final = .ok (tqF.map Prod.snd) ∧
+          ∀ k : Nat, v.cutoverCount ≤ k → k < v.E_final →
+            ∃ pkBytes wcBytes sigBytes amtGwei,
+              deposits[k]? = some (pkBytes, wcBytes, sigBytes, amtGwei) ∧
+              ((k < v.E₀ ∧
+                (∃ idx : Nat, ∃ rec : PreAnchorApplied,
+                  preApplied[idx]? = some rec ∧ rec.index = k ∧
+                  ∀ idx' rec', preApplied[idx']? = some rec' → rec'.index = k → idx' = idx) ∧
+                (∀ a ∈ ap, a.2.2.tag ≠ some k) ∧
+                (∀ e ∈ tqF, e.1 ≠ some k)) ∨
+               ((∀ rec ∈ preApplied, rec.index ≠ k) ∧
+                (∀ e ∈ tqF, e.1 ≠ some k) ∧
+                ∃ (apIdx stepIdx : Nat) (a : AppliedAt P),
+                  ap[apIdx]? = some (stepIdx, a) ∧
+                  stepIdx < v.ingress.steps.length ∧
+                  a.2.tag = some k ∧
+                  (∀ apIdx' stepIdx' a',
+                    ap[apIdx']? = some (stepIdx', a') → a'.2.tag = some k → apIdx' = apIdx) ∧
+                  a.2.deposit.pubkey.toArray.toList = pkBytes ∧
+                  a.2.deposit.withdrawal_credentials.toBytes = wcBytes ∧
+                  a.2.deposit.signature.toArray.toList = sigBytes ∧
+                  a.2.deposit.amount.toNat = amtGwei ∧
+                  a.2.deposit.slot ≠ GENESIS_SLOT ∧
+                  (∀ (emitStep : Nat) (D : JointRunStep (P := P) mainnetChainConfig ccfg true),
+                    v.ingress.steps[emitStep]? = some D →
+                    k ∈ (stepDepositRequests D).map (fun dr => dr.index.toNat) →
+                    emitStep < stepIdx) ∧
+                  ∃ (o : ApplyOutcome) (s' : BeaconState P a.1),
+                    ApplyOutcomeSpec ccfg true a.2.pre s' a.2.deposit o) ∨
+               ((∀ rec ∈ preApplied, rec.index ≠ k) ∧
+                (∀ a ∈ ap, a.2.2.tag ≠ some k) ∧
+                ∃ (p : Nat) (d : PendingDeposit),
+                  tqF[p]? = some (some k, d) ∧
+                  (∀ p' : Nat, (tqF[p']?.map Prod.fst) = some (some k) → p' = p) ∧
+                  d.pubkey.toArray.toList = pkBytes ∧
+                  d.withdrawal_credentials.toBytes = wcBytes ∧
+                  d.signature.toArray.toList = sigBytes ∧
+                  d.amount.toNat = amtGwei ∧
+                  d.slot ≠ GENESIS_SLOT))
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.Deposit.D9ConservationJoined
+example : D9ConservationJoined ↔ (
+      ∀ {P : Preset} {ccfg : Config} {anchor final : JointState P}
+        (v : DepositJoint (P := P) ccfg true anchor final) (tq₀ : TQueue)
+        (preApplied : List PreAnchorApplied),
+        AnchorLedgerD v tq₀ preApplied →
+        let runPaidWei :=
+          ((v.ingress.steps.flatMap fun D => D.stepTrace.trace.kept.keptAt depositAddr).filter
+            (fun fr => decide (Sevm.selector fr.sevm = BeaconDeposit.depositSelector))).foldr
+            (fun fr acc => fr.sevm.value.toNat + acc) 0
+        ∃ tqF ap, runLedger 0 v.ingress.steps tq₀ [] = .ok (tqF, ap) ∧
+          (creditedTotal (jointCtx ccfg true) ap +
+            uncreditedTotal (jointCtx ccfg true) ap +
+            taggedTotal tqF) * 10 ^ 9 =
+            taggedTotal tq₀ * 10 ^ 9 + runPaidWei ∧
+          creditedTotal (jointCtx ccfg true) ap * 10 ^ 9 ≤
+            taggedTotal tq₀ * 10 ^ 9 + runPaidWei
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.Deposit.D_S10
+example : D_S10 ↔ (
+    LogShape (· = .amsterdam) ∧ ParseSucceeds (· = .amsterdam)
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.Deposit.D10Control
+example : D10Control ↔ (
+    ShortLogControl (· = .amsterdam)
+  ) :=
+  Iff.rfl
+
+end Blanc.Corpus.Freeze.Deposit
+
+namespace Blanc.Corpus.Freeze.BeaconRoots
+open Jaune Blanc ExecutionTrace JauneConsensus
+open Blanc.Corpus.Freeze
+open Blanc.Lift.RequestSystem (RegularGasWithin)
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.BeaconRoots.R_S1
+example : R_S1 ↔ (
+      ∀ (benv : Benv)
+        -- the block's fork is Prague, Osaka, BPO1 or BPO2
+        (_fork : CoveredFork benv.stat.fork)
+        -- the canonical code is at the address
+        (_installed : benv.state.getCode addr = beaconRootsCode),
+        ∃ out, processUncheckedSystemTransaction benv addr benv.stat.parentBeaconBlockRoot.toBytes =
+            .ok (writeState benv.state benv.stat.time benv.stat.parentBeaconBlockRoot, out) ∧
+          RegularGasWithin out.gasLeft 44251 ∧ out.returnData = [] ∧
+          ∃ bal, beaconRootsCall benv.stat.rules benv =
+            .ok (writeState benv.state benv.stat.time benv.stat.parentBeaconBlockRoot, bal)
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.BeaconRoots.R_S2
+example : R_S2 ↔ (
+      ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
+        -- the kept history: successful transitions at kept forks with their retained stages
+        (_history : KeptHistory cfg start blocks stop)
+        -- every block at a covered fork (no Amsterdam claim)
+        (_covered : ∀ b ∈ blocks, CoveredFork b.fork)
+        -- the canonical code at the address when the history starts
+        (_code : start.state.getCode addr = beaconRootsCode),
+        ∀ f ∈ keptAtAddr addr blocks, Frame f
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.BeaconRoots.R_S3
+example : R_S3 ↔ (
+      ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
+        -- the kept history
+        (_history : KeptHistory cfg start blocks stop)
+        -- every block at a covered fork
+        (_covered : ∀ b ∈ blocks, CoveredFork b.fork)
+        -- the canonical code at the start
+        (_code : start.state.getCode addr = beaconRootsCode)
+        -- no code at SYSTEM_ADDRESS at the start
+        (_systemEmpty : start.state.getCode systemAddress = ByteArray.empty)
+        -- no SYSTEM_ADDRESS sender, authority or creation in any block
+        (_clean : HistoryClean blocks),
+        StorageIsHistory start stop blocks
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.BeaconRoots.R_S4
+example : R_S4 ↔ (
+      ∀ {checkpoint final : BlockChain} {blocks : List KeptBlock}
+        -- a kept mainnet history from the checkpoint
+        (_history : KeptHistory mainnetChainConfig checkpoint blocks final)
+        -- the observation record
+        (_obs : BeaconRootsCheckpointObservation checkpoint)
+        -- no SYSTEM_ADDRESS sender, authority or creation in any block
+        (_clean : HistoryClean blocks),
+        StorageIsHistory checkpoint final blocks
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.BeaconRoots.R_S6
+example : R_S6 ↔ (
+      ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
+        -- the kept history
+        (_history : KeptHistory cfg start blocks stop)
+        -- every block at a covered fork
+        (_covered : ∀ b ∈ blocks, CoveredFork b.fork)
+        -- the canonical code at the start
+        (_code : start.state.getCode addr = beaconRootsCode)
+        -- no transaction is sent from the contract's address
+        (_noSender : ∀ b ∈ blocks, NoSenderAt addr b.run.senders)
+        -- every root message opens on a world whose balances sum below 2^256 (as B2's `value_kept`)
+        (_roots : HistoryRootsFit blocks)
+        -- no tip or withdrawal credit to the contract wraps its balance (as B2's `value_kept`)
+        (_credits : HistoryCreditsFit addr blocks),
+        (start.state.bal addr).toNat + ((keptAtAddr addr blocks).map fun f => f.sevm.value.toNat).sum ≤
+          (stop.state.bal addr).toNat
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.BeaconRoots.R_S7
+example : R_S7 ↔ (
+      ∀ {sevm : Sevm} {pre : Devm} {w : B256}
+        -- the canonical code runs
+        (_code : sevm.code = beaconRootsCode)
+        -- a covered fork
+        (_fork : CoveredFork sevm.benvStat.fork)
+        -- an ordinary caller
+        (_caller : sevm.caller ≠ systemAddress)
+        -- exactly 32 bytes
+        (_length : sevm.data.length = 32)
+        -- a fresh frame
+        (_stack : pre.stack = []) (_memory : pre.memory = .empty)
+        -- the read guard passes, returning `w`
+        (_accepts : read (Devm.getStor pre sevm.currentTarget).get (Sevm.dataWord sevm 0) = some w)
+        -- enough gas
+        (_gas : readGas pre sevm.currentTarget (Sevm.dataWord sevm 0) ≤ pre.gasLeft),
+        ∃ post, Nonempty (Exec 0 sevm pre (.ok post)) ∧
+          post.gasLeft = pre.gasLeft - readGas pre sevm.currentTarget (Sevm.dataWord sevm 0) ∧
+          post.output = w.toBytes ∧ post.state = pre.state
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.BeaconRoots.R_S8_time
+example : R_S8_time ↔ (
+      ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
+        -- the kept history
+        (_history : KeptHistory cfg start blocks stop)
+        -- every block at a covered fork
+        (_covered : ∀ b ∈ blocks, CoveredFork b.fork)
+        -- the canonical code at the start
+        (_code : start.state.getCode addr = beaconRootsCode)
+        -- no code at SYSTEM_ADDRESS at the start
+        (_systemEmpty : start.state.getCode systemAddress = ByteArray.empty)
+        -- no SYSTEM_ADDRESS sender, authority or creation in any block
+        (_clean : HistoryClean blocks),
+        ∀ i (hi : i < blocks.length), (blockWrite blocks[i]).1 ≠ 0 →
+          -- the window's timestamps fit in a word (Jaune's header validation bounds no timestamp)
+          blocks[i].block.header.timestamp + 8191 ≤ 2 ^ 256 →
+          (∀ j (hj : j < blocks.length), i < j →
+            blocks[j].block.header.timestamp < blocks[i].block.header.timestamp + 8191) →
+          read (storOf stop.state addr) (blockWrite blocks[i]).1 = some (blockWrite blocks[i]).2
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.BeaconRoots.R_S8_slot
+example : R_S8_slot ↔ (
+      ∀ {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain}
+        {anchor final : JointState P}
+        -- the joint-chain premises
+        (v : RingJoint cfg ccfg bls addr beaconRootsCode checkpoint anchor final)
+        -- the configured slot duration is whole seconds
+        (_whole : ccfg.SLOT_DURATION_MS % 1000 = 0)
+        -- and 8191 does not divide it
+        (_coprime : ¬ 8191 ∣ ccfg.SLOT_DURATION_MS / 1000),
+        ∀ i (hi : i < v.run.steps.length),
+          (∀ j (hj : j < v.run.steps.length), i < j → stepSlot v.run.steps[j] < stepSlot v.run.steps[i] + 8191) →
+          read (storOf final.exec.state addr) (stepTime v.run.steps[i]) =
+            some v.run.steps[i].block.2.message.parent_root
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.BeaconRoots.R_S9
+example : R_S9 ↔ (
+      ∀ {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain}
+        {anchor final : JointState P}
+        -- the joint-chain premises
+        (v : RingJoint cfg ccfg bls addr beaconRootsCode checkpoint anchor final),
+        (∀ st ∈ v.run.steps,
+          storOf st.post.exec.state addr (timeKey (stepTime st)) = stepTime st ∧
+          storOf st.post.exec.state addr (rootKey (stepTime st)) = st.block.2.message.parent_root ∧
+          (stepTime st ≠ 0 → read (storOf st.post.exec.state addr) (stepTime st) = some st.block.2.message.parent_root)) ∧
+        (∀ h : 0 < v.run.steps.length,
+          let first := v.run.steps[0]'h
+          (∃ st : BeaconState P first.block.1, jointBlockInput ccfg bls anchor first.block = .ok st ∧
+            first.block.2.message.parent_root = Ssz.hashTreeRoot st.latest_block_header) ∧
+          FirstStepAnchorRoot ccfg anchor first.block first.block.2.message.parent_root) ∧
+        (∀ k (hk : k + 1 < v.run.steps.length),
+          let prev := v.run.steps[k]'(Nat.lt_of_succ_lt hk)
+          let curr := v.run.steps[k + 1]'hk
+          (∃ st : BeaconState P curr.block.1, jointBlockInput ccfg bls prev.post curr.block = .ok st ∧
+            curr.block.2.message.parent_root = Ssz.hashTreeRoot st.latest_block_header) ∧
+          ((stepSlot curr = stepSlot prev + 1 ∨ prev.block.2.message.state_root ≠ 0) →
+            curr.block.2.message.parent_root = Ssz.hashTreeRoot prev.block.2.message))
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.BeaconRoots.R_S10
+example : R_S10 ↔ (
+      ∀ (benv : Benv)
+        -- the block's fork is Amsterdam
+        (_fork : benv.stat.fork = .amsterdam)
+        -- the canonical code is at the address
+        (_installed : benv.state.getCode addr = beaconRootsCode),
+        ∃ out, processUncheckedSystemTransaction benv addr benv.stat.parentBeaconBlockRoot.toBytes =
+            .ok (writeState benv.state benv.stat.time benv.stat.parentBeaconBlockRoot, out) ∧
+          RegularGasWithin out.gasLeft 30000 ∧
+          ∃ bal, beaconRootsCall benv.stat.rules benv =
+            .ok (writeState benv.state benv.stat.time benv.stat.parentBeaconBlockRoot, bal)
+  ) :=
+  Iff.rfl
+
+end Blanc.Corpus.Freeze.BeaconRoots
+
+namespace Blanc.Corpus.Freeze.HistoryStorage
+open Jaune Blanc ExecutionTrace JauneConsensus
+open Blanc.Corpus.Freeze
+open Blanc.Lift.RequestSystem (RegularGasWithin)
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.HistoryStorage.H_S1
+example : H_S1 ↔ (
+      ∀ (benv : Benv) (bal : BalBuilder) {lastHash : B256}
+        -- the block's fork is Prague, Osaka, BPO1 or BPO2
+        (_fork : CoveredFork benv.stat.fork)
+        -- the canonical code is at the address
+        (_installed : benv.state.getCode addr = historyStorageCode)
+        -- the block has a parent: the hash the call passes (every block after genesis)
+        (_last : benv.stat.blockHashes.getLast? = some lastHash),
+        ∃ out, processUncheckedSystemTransaction benv addr lastHash.toBytes =
+            .ok (benv.state.setStorVal addr (key benv.stat.number.toB256) lastHash, out) ∧
+          RegularGasWithin out.gasLeft 22143 ∧ out.returnData = [] ∧
+          ∃ bal', historyStorageCall benv.stat.rules benv bal =
+            .ok (benv.state.setStorVal addr (key benv.stat.number.toB256) lastHash, bal')
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.HistoryStorage.H_S2
+example : H_S2 ↔ (
+      ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
+        -- the kept history
+        (_history : KeptHistory cfg start blocks stop)
+        -- every block at a covered fork (no Amsterdam claim)
+        (_covered : ∀ b ∈ blocks, CoveredFork b.fork)
+        -- the canonical code at the address when the history starts
+        (_code : start.state.getCode addr = historyStorageCode),
+        ∀ f ∈ keptAtAddr addr blocks, Frame f
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.HistoryStorage.H_S3
+example : H_S3 ↔ (
+      ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
+        -- the kept history
+        (_history : KeptHistory cfg start blocks stop)
+        -- every block at a covered fork
+        (_covered : ∀ b ∈ blocks, CoveredFork b.fork)
+        -- the canonical code at the start
+        (_code : start.state.getCode addr = historyStorageCode)
+        -- no code at SYSTEM_ADDRESS at the start
+        (_systemEmpty : start.state.getCode systemAddress = ByteArray.empty)
+        -- no SYSTEM_ADDRESS sender, authority or creation in any block
+        (_clean : HistoryClean blocks),
+        StorageIsHistory start stop blocks
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.HistoryStorage.H_S4
+example : H_S4 ↔ (
+      ∀ {checkpoint final : BlockChain} {blocks : List KeptBlock}
+        -- a kept mainnet history from the checkpoint
+        (_history : KeptHistory mainnetChainConfig checkpoint blocks final)
+        -- the observation record
+        (_obs : HistoryStorageCheckpointObservation checkpoint)
+        -- no SYSTEM_ADDRESS sender, authority or creation in any block
+        (_clean : HistoryClean blocks),
+        StorageIsHistory checkpoint final blocks
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.HistoryStorage.H_S6
+example : H_S6 ↔ (
+      ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
+        -- the kept history
+        (_history : KeptHistory cfg start blocks stop)
+        -- every block at a covered fork
+        (_covered : ∀ b ∈ blocks, CoveredFork b.fork)
+        -- the canonical code at the start
+        (_code : start.state.getCode addr = historyStorageCode)
+        -- no transaction is sent from the contract's address
+        (_noSender : ∀ b ∈ blocks, NoSenderAt addr b.run.senders)
+        -- every root message opens on a world whose balances sum below 2^256 (as B2's `value_kept`)
+        (_roots : HistoryRootsFit blocks)
+        -- no tip or withdrawal credit to the contract wraps its balance (as B2's `value_kept`)
+        (_credits : HistoryCreditsFit addr blocks),
+        (start.state.bal addr).toNat + ((keptAtAddr addr blocks).map fun f => f.sevm.value.toNat).sum ≤
+          (stop.state.bal addr).toNat
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.HistoryStorage.H_S7
+example : H_S7 ↔ (
+      ∀ {sevm : Sevm} {pre : Devm}
+        -- the canonical code runs
+        (_code : sevm.code = historyStorageCode)
+        -- a covered fork
+        (_fork : CoveredFork sevm.benvStat.fork)
+        -- an ordinary caller
+        (_caller : sevm.caller ≠ systemAddress)
+        -- exactly 32 bytes
+        (_length : sevm.data.length = 32)
+        -- a fresh frame
+        (_stack : pre.stack = []) (_memory : pre.memory = .empty)
+        -- the window guard passes
+        (_window : InWindow sevm.benvStat.number.toB256 (Sevm.dataWord sevm 0))
+        -- enough gas
+        (_gas : readGas pre sevm.currentTarget (Sevm.dataWord sevm 0) ≤ pre.gasLeft),
+        ∃ post, Nonempty (Exec 0 sevm pre (.ok post)) ∧
+          post.gasLeft = pre.gasLeft - readGas pre sevm.currentTarget (Sevm.dataWord sevm 0) ∧
+          post.output = ((Devm.getStor pre sevm.currentTarget).get (Sevm.dataWord sevm 0 % ring)).toBytes ∧
+          post.state = pre.state
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.HistoryStorage.H_S8
+example : H_S8 ↔ (
+      (∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
+        -- the kept history
+        (_history : KeptHistory cfg start blocks stop)
+        -- every block at a covered fork
+        (_covered : ∀ b ∈ blocks, CoveredFork b.fork)
+        -- the canonical code at the start
+        (_code : start.state.getCode addr = historyStorageCode)
+        -- no code at SYSTEM_ADDRESS at the start
+        (_systemEmpty : start.state.getCode systemAddress = ByteArray.empty)
+        -- no SYSTEM_ADDRESS sender, authority or creation in any block
+        (_clean : HistoryClean blocks),
+        ∀ i (hi : i < blocks.length),
+          -- the window's numbers fit in a word (Jaune's header validation bounds no number)
+          blocks[i].block.header.number + 8191 < 2 ^ 256 →
+          (∀ j (hj : j < blocks.length), i ≤ j →
+            blocks[j].block.header.number ≤ blocks[i].block.header.number - 1 + 8191 →
+            read (storOf blocks[j].run.preState addr) blocks[j].block.header.number.toB256
+              (blocks[i].block.header.number - 1).toB256 = some blocks[i].block.header.parentHash) ∧
+          (∀ (s : B256 → B256) (m : Nat), blocks[i].block.header.number - 1 + 8192 ≤ m → m < 2 ^ 256 →
+            read s m.toB256 (blocks[i].block.header.number - 1).toB256 = none)) ∧
+      ∀ (s : B256 → B256) (N q : B256), InWindow N q → read s N q = some (s (q % ring))
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.HistoryStorage.H_S9
+example : H_S9 ↔ (
+      ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
+        -- the kept history
+        (_history : KeptHistory cfg start blocks stop)
+        -- every block at a covered fork
+        (_covered : ∀ b ∈ blocks, CoveredFork b.fork)
+        -- the canonical code at the start
+        (_code : start.state.getCode addr = historyStorageCode)
+        -- no code at SYSTEM_ADDRESS at the start
+        (_systemEmpty : start.state.getCode systemAddress = ByteArray.empty)
+        -- no SYSTEM_ADDRESS sender, authority or creation in any block
+        (_clean : HistoryClean blocks),
+        ∀ i (hi : i < blocks.length),
+          -- the window's numbers fit in a word
+          blocks[i].block.header.number + 8191 < 2 ^ 256 →
+          ∃ hdr, prevHeader start blocks i = some hdr ∧ hdr.number + 1 = blocks[i].block.header.number ∧
+            ∀ j (hj : j < blocks.length), i ≤ j → blocks[j].block.header.number ≤ hdr.number + 8191 →
+              read (storOf blocks[j].run.preState addr) blocks[j].block.header.number.toB256 hdr.number.toB256 =
+                some hdr.hash
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.HistoryStorage.H_S10
+example : H_S10 ↔ (
+      ∀ (benv : Benv) (bal : BalBuilder) {lastHash : B256}
+        -- the block's fork is Amsterdam
+        (_fork : benv.stat.fork = .amsterdam)
+        -- the canonical code is at the address
+        (_installed : benv.state.getCode addr = historyStorageCode)
+        -- the block has a parent
+        (_last : benv.stat.blockHashes.getLast? = some lastHash),
+        ∃ out, processUncheckedSystemTransaction benv addr lastHash.toBytes =
+            .ok (benv.state.setStorVal addr (key benv.stat.number.toB256) lastHash, out) ∧
+          RegularGasWithin out.gasLeft 15000 ∧
+          ∃ bal', historyStorageCall benv.stat.rules benv bal =
+            .ok (benv.state.setStorVal addr (key benv.stat.number.toB256) lastHash, bal')
+  ) :=
+  Iff.rfl
+
+end Blanc.Corpus.Freeze.HistoryStorage
+
+namespace Blanc.Corpus.Freeze.Consolidation
+open Jaune Blanc
+open Blanc.Composition.ConsolidationRequestPublic
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.Consolidation.C_S2
+example : C_S2 ↔ (
+      ∀ {cfg : ChainConfig} {start final : BlockChain} {blocks : List KeptBlock}
+        -- kept: the blocks are a kept history from `start` to `final`
+        (_kept : KeptHistory cfg start blocks final)
+        -- code: the canonical 414 bytes sit at the predeploy at the start
+        (_code : installed start.state)
+        -- covered: every block is at Prague, Osaka, BPO1 or BPO2
+        (_covered : ∀ b ∈ blocks, CoveredFork b.fork),
+        ∀ b ∈ blocks, ∀ f ∈ b.keptAt addr, Settled f
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.Consolidation.C_S6
+example : C_S6 ↔ (
+      ∀ {cfg : ChainConfig} {start final : BlockChain} {blocks : List KeptBlock}
+        -- kept: the blocks are a kept history from `start` to `final`
+        (_kept : KeptHistory cfg start blocks final)
+        -- code: the canonical 414 bytes sit at the predeploy at the start
+        (_code : installed start.state)
+        -- covered: every block is at Prague, Osaka, BPO1 or BPO2
+        (_covered : ∀ b ∈ blocks, CoveredFork b.fork)
+        -- noSender: no kept block's transaction is sent by the predeploy
+        (_noSender : ∀ b ∈ blocks, NoSenderAt addr b.run.senders)
+        -- roots: every root message opens on a world whose balances sum below 2^256
+        (_roots : HistoryRootsFit blocks)
+        -- credits: no tip and no withdrawal credit to the predeploy wraps its balance
+        (_credits : HistoryCreditsFit addr blocks),
+        (start.state.bal addr).toNat + submissionsValue blocks ≤ (final.state.bal addr).toNat ∧
+        (start.state.bal addr).toNat + keptValue blocks ≤ (final.state.bal addr).toNat
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.Consolidation.C_S8
+example : C_S8 ↔ (
+      ∀ {cfg : ChainConfig} {start final : BlockChain} {blocks : List KeptBlock}
+        -- kept: the blocks are a kept history from `start` to `final`
+        (_kept : KeptHistory cfg start blocks final)
+        -- covered: every block is at Prague, Osaka, BPO1 or BPO2
+        (_covered : ∀ b ∈ blocks, CoveredFork b.fork)
+        -- root: canonical code, slots 0 to 3 at the inhibitor, 0, 0, 0, and no code at SYSTEM_ADDRESS, at the start
+        (_root : CheckpointStart start.state)
+        -- clean: no kept block has SYSTEM_ADDRESS as a sender or a 7702 authority, and none creates it
+        (_clean : HistoryClean blocks)
+        -- cap: at most 2^253 committed submissions, so no record slot wraps onto slots 0 to 3
+        (_cap : (submissions blocks).length ≤ 2 ^ 253)
+        {j q : Nat} {B D : KeptBlock} {r : Bytes}
+        -- atB: B is block `j` of the history
+        (_atB : blocks[j]? = some B)
+        -- atD: the history contains the destination block, `q / 2` blocks after B
+        (_atD : blocks[j + q / 2]? = some D)
+        -- queued: `r` is at position `q` of the stored queue at B's request boundary
+        (_queued : (queueAtRequests B)[q]? = some r),
+        (blockRecords D)[q % 2]? = some r ∧
+        (∀ i ≤ q % 2, (blockRecords D)[i]? = (queueAtRequests B)[2 * (q / 2) + i]?) ∧
+        (submissions blocks)[(emissions (blocks.take j)).length + q]? = some r
+  ) :=
+  Iff.rfl
+
+end Blanc.Corpus.Freeze.Consolidation
+
+namespace Blanc.Corpus.Freeze.Builder
+open Jaune Blanc Blanc.Lift.BuilderRequest
+open Blanc.Lift.RequestSystem (sysState drainCount)
+open Blanc.Composition.BuilderRequestPublic
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.Builder.B_S2_deposit
+example : B_S2_deposit ↔ (
+      ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
+        -- kept: a kept history (covered forks and Amsterdam) from a start holding both builder codes
+        (_kept : CodesKept cfg start blocks stop),
+        ∀ b ∈ blocks, ∀ f ∈ b.keptAt depositAddr, DepositSettled b f
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.Builder.B_S2_exit
+example : B_S2_exit ↔ (
+      ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
+        -- kept: a kept history (covered forks and Amsterdam) from a start holding both builder codes
+        (_kept : CodesKept cfg start blocks stop),
+        ∀ b ∈ blocks, ∀ f ∈ b.keptAt exitAddr, ExitSettled b f
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.Builder.B_S4
+example : B_S4 ↔ (
+    ∀ expectedStateRoot : B256, B_S4_at expectedStateRoot
+  ) :=
+  Iff.rfl
+
+end Blanc.Corpus.Freeze.Builder
+
+namespace Blanc.Corpus.Freeze.ConsolidationJoint
+open Jaune JauneConsensus ExecutionTrace Blanc
+open Blanc.Composition.ConsolidationRequestPublic
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.ConsolidationJoint.C_S9_authorization
+example : C_S9_authorization ↔ (
+      ∀ {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain}
+        {anchor final : JointState P}
+        -- v: a valid joint chain for EIP-7251
+        (v : ValidJointC cfg ccfg bls checkpoint anchor final)
+        {j : Nat} {D : JointRunStep (P := P) cfg ccfg bls}
+        -- step: `D` is step `j` of the run
+        (_step : v.run.steps[j]? = some D)
+        {requests : ExecutionRequests P}
+        -- read: the beacon block's execution requests
+        (_read : Gated.read D.block.2.message.body.execution_requests
+          "NewPayloadRequest: execution_requests" = .ok requests)
+        {k : Nat} {cr : ConsolidationRequest}
+        -- request: `cr` is consolidation request `k` of the block
+        (_request : requests.consolidations.toArray[k]? = some cr)
+        {tr : List (BeaconState P D.block.1)}
+        -- trace: the step's mid-list states
+        (_trace : jointConsolidationTrace ccfg bls D.pre D.block = .ok tr)
+        {m : BeaconState P D.block.1}
+        -- mid: `m` is the state at which request `k` is processed
+        (_mid : tr[k]? = some m)
+        {o : Outcome} {V : ValidatorIndex}
+        -- class: the request's outcome in `m`
+        (_class : classify ccfg m cr = .ok o)
+        -- acts: the outcome acts on source validator `V`
+        (_acts : o = .switchToCompounding V ∨ ∃ T, o = .pendingConsolidation V T),
+        (∃ m', tr[k + 1]? = some m' ∧ applyOutcome ccfg m cr o = .ok m') ∧
+        (consolidationFeed v.run)[feedPosition v.run j k]? = some cr ∧
+        (submissions v.blocks)[(emissions v.preBlocks).length + feedPosition v.run j k]? =
+          some (Ssz.serialize cr) ∧
+        validatorIndexOf m cr.source_pubkey = .ok (some V) ∧
+        ∃ validator, m.validators.toArray[V.toNat]? = some validator ∧
+          hasExecutionWithdrawalCredential validator = true ∧
+          validator.withdrawal_credentials.toBytes.drop 12 = cr.source_address.toBytes ∧
+          validator.withdrawal_credentials.toBytes.drop 12 = (Ssz.serialize cr).take 20
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.ConsolidationJoint.C_S9_fate
+example : C_S9_fate ↔ (
+      ∀ {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain}
+        {anchor final : JointState P}
+        -- v: a valid joint chain for EIP-7251
+        (v : ValidJointC cfg ccfg bls checkpoint anchor final)
+        {n : Nat}
+        -- occurrence: `n` indexes a committed submission of the joint history
+        (hn : n < (submissions v.blocks).length),
+        (n < (emissions v.preBlocks).length ∧ (emissions v.preBlocks)[n]? = some (submissions v.blocks)[n]) ∨
+        ((emissions v.preBlocks).length ≤ n ∧ n < (emissions v.blocks).length ∧
+          ∃ j k, ∃ D : JointRunStep (P := P) cfg ccfg bls, ∃ requests : ExecutionRequests P,
+          ∃ cr, ∃ tr : List (BeaconState P D.block.1), ∃ m : BeaconState P D.block.1,
+            v.run.steps[j]? = some D ∧
+            Gated.read D.block.2.message.body.execution_requests
+              "NewPayloadRequest: execution_requests" = .ok requests ∧
+            requests.consolidations.toArray[k]? = some cr ∧
+            feedPosition v.run j k = n - (emissions v.preBlocks).length ∧
+            Ssz.serialize cr = (submissions v.blocks)[n] ∧
+            jointConsolidationTrace ccfg bls D.pre D.block = .ok tr ∧ tr[k]? = some m ∧
+            ∃ o, classify ccfg m cr = .ok o ∧
+              (∀ o', classify ccfg m cr = .ok o' → o' = o) ∧
+              ∃ m', tr[k + 1]? = some m' ∧ applyOutcome ccfg m cr o = .ok m' ∧ OutcomeMeans m m' cr o ∧
+              (∀ j' k' (D' : JointRunStep (P := P) cfg ccfg bls) (cr' : ConsolidationRequest),
+                v.run.steps[j']? = some D' → (stepConsolidationRequests D')[k']? = some cr' →
+                  feedPosition v.run j' k' = n - (emissions v.preBlocks).length → j' = j ∧ k' = k)) ∨
+        ((emissions v.blocks).length ≤ n ∧
+          (remainingQueue final.exec.state)[n - (emissions v.blocks).length]? = some (submissions v.blocks)[n])
+  ) :=
+  Iff.rfl
+
+-- Corpus frozen def: Blanc.Corpus.Freeze.ConsolidationJoint.C_S9_balance
+example : C_S9_balance ↔ (
+      PendingConsolidationsLaw ∧ PendingConsolidationsWindow ∧
+      ∀ {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain}
+        {anchor final : JointState P}
+        (v : ValidJointCBalance cfg ccfg bls checkpoint anchor final),
+        (∀ (idx₁ idx₂ j₁ k₁ j₂ k₂ : Nat) (pc₁ pc₂ : PendingConsolidation),
+          idx₁ < idx₂ →
+          (runAcceptedRecords v.run)[idx₁]? = some (j₁, k₁, pc₁) →
+          (runAcceptedRecords v.run)[idx₂]? = some (j₂, k₂, pc₂) →
+          j₁ < j₂ ∨ (j₁ = j₂ ∧ k₁ < k₂)) ∧
+        (∀ (idx j k : Nat) (pc : PendingConsolidation),
+          (runAcceptedRecords v.run)[idx]? = some (j, k, pc) →
+          AcceptedRecordWitness v.run j k pc) ∧
+        ∃ runConsumed : List (List (List PendingConsolidation)),
+          runConsumed.length = v.run.steps.length ∧
+          (∀ {j : Nat} {D : JointRunStep (P := P) cfg ccfg bls} {perCallConsumed : List (List PendingConsolidation)},
+            v.run.steps[j]? = some D →
+            runConsumed[j]? = some perCallConsumed →
+            let consumedBefore := ((runConsumed.take j).flatten).flatten
+            acceptedStreamUpTo v.run j = consumedBefore ++ pendingList D.pre.beacon ∧
+            PendingDistinct D.pre.beacon ∧
+            ∃ (stIn : BeaconState P D.block.1) (stepCalls : List (AnyConsolidationCall P)),
+              jointBlockInput ccfg bls D.pre D.block = .ok stIn ∧
+              StepConsolidationCalls ccfg bls D.pre D.block stIn stepCalls ∧
+              perCallConsumed.length = stepCalls.length ∧
+              (∀ (m : Nat), m < stepCalls.length →
+                ∀ (c : AnyConsolidationCall P) (cs : List PendingConsolidation),
+                stepCalls[m]? = some c → perCallConsumed[m]? = some cs →
+                acceptedStreamUpTo v.run j = (consumedBefore ++ (perCallConsumed.take m).flatten) ++ pendingList c.pre ∧
+                acceptedStreamUpTo v.run j =
+                  (consumedBefore ++ (perCallConsumed.take (m + 1)).flatten) ++ pendingList c.post ∧
+                CallConsolidationEffect ccfg c.pre c.post cs) ∧
+              pendingList D.pre.beacon = perCallConsumed.flatten ++ pendingList stIn ∧
+              pendingList D.post.beacon = pendingList stIn ++ stepAccepted D) ∧
+          acceptedStream v.run = (runConsumed.flatten).flatten ++ pendingList final.beacon ∧
+          PendingDistinct final.beacon
+  ) :=
+  Iff.rfl
+
+end Blanc.Corpus.Freeze.ConsolidationJoint
+
+/-! ## Protocol-contract corpus: explicit statement pins (43) -/
+
+namespace Blanc.Composition.Corpus.Proofs.MatrixComponentPins
+open Jaune JauneConsensus ExecutionTrace Blanc JauneConsensus.Facts.Gloas
+open Blanc.Lift
+open Blanc.Lift.BuilderRequest
+open ChainLink
+open Blanc.Composition.BuilderRequestPublic
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_deposit
+example :
+    ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock},
+          CodesKept cfg start blocks stop → ∀ benv : Benv,
+            benv.state = stop.state → benv.stat.fork = .amsterdam →
+            ∃ out, processCheckedSystemTransaction benv depositAddr [] =
+                .ok (Blanc.Lift.RequestSystem.sysState Deposit.sysShape benv.state depositAddr, out) ∧
+              Blanc.Lift.RequestSystem.RegularGasWithin out.gasLeft 888000
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_deposit
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_exit
+example :
+    ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock},
+          CodesKept cfg start blocks stop → ∀ benv : Benv,
+            benv.state = stop.state → benv.stat.fork = .amsterdam →
+            ∃ out, processCheckedSystemTransaction benv exitAddr [] =
+                .ok (Blanc.Lift.RequestSystem.sysState Exit.sysShape benv.state exitAddr, out) ∧
+              Blanc.Lift.RequestSystem.RegularGasWithin out.gasLeft 161000
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_exit
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_deposit
+example :
+    ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock},
+          CodesKept cfg start blocks stop → DeployedStart start → HistoryClean blocks →
+          SystemCodeAbsent start → feesPaidAt blocks depositAddr ≤ 2 ^ 256 →
+          depositRequests blocks <+: (depositSubmitted blocks).flatMap Deposit.contract.out ∧
+            Deposit.Indexed.submissions blocks =
+              Deposit.Indexed.emissions blocks ++ Deposit.Indexed.remainingQueue stop
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_deposit
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_exit
+example :
+    ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock},
+          CodesKept cfg start blocks stop → DeployedStart start → HistoryClean blocks →
+          SystemCodeAbsent start → (exitSubmitted blocks).length ≤ 2 ^ 64 →
+          exitRequests blocks <+: (exitSubmitted blocks).flatMap Exit.contract.out ∧
+            Exit.Indexed.submissions blocks =
+              Exit.Indexed.emissions blocks ++ Exit.Indexed.remainingQueue stop
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_exit
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s5_first_divergence
+example :
+    (∀ {excess : B256} {iterations : Nat} {output : B256},
+          excess.toNat < 2893 →
+          WordFakeExponential.Run excess 17 1 17 0 iterations output →
+          WithdrawalRequest.WordFee output = WithdrawalRequest.SpecFee excess ∧
+            iterations ≤ 462) ∧
+        (∃ iterations output,
+          WordFakeExponential.Run (2893 : Nat).toB256 17 1 17 0 iterations output) ∧
+        (∀ {excess : B256} {iterations : Nat} {output : B256},
+          excess.toNat = 2893 →
+          WordFakeExponential.Run excess 17 1 17 0 iterations output →
+          WithdrawalRequest.WordFee output < WithdrawalRequest.SpecFee excess)
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s5_first_divergence
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s5_fee_domain
+example :
+    (∀ {excess : B256} {iterations : Nat} {output : B256},
+          WordFakeExponential.Run excess 17 1 17 0 iterations output →
+          (Blanc.Lift.ConsolidationRequest.WordFee output =
+            Blanc.Lift.ConsolidationRequest.SpecFee excess ↔
+            RequestFeeWord.NoWrapDomain excess iterations)) ∧
+        (∀ {excess : B256}, excess.toNat ≤ 2892 →
+          Blanc.Composition.ConsolidationRequestPublic.quotedFee excess =
+            Blanc.Composition.ConsolidationRequestPublic.SpecFee excess) ∧
+        (∀ excess : B256,
+          Blanc.Composition.ConsolidationRequestPublic.quotedFee excess ≤
+            Blanc.Composition.ConsolidationRequestPublic.SpecFee excess)
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s5_fee_domain
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_deposit_fee_domain
+example :
+    ((∀ {s : Sevm} {b : Devm} {n : Nat} {out : B256},
+          (BuilderRequest.storedExcess 8 s b).toNat < 2893 →
+          WordFakeExponential.Run (BuilderRequest.storedExcess 8 s b) 17 1 17 0 n out →
+          (out / (17 : B256)).toNat =
+            fakeExp 1 (BuilderRequest.storedExcess 8 s b).toNat 17 ∧ n ≤ 462) ∧
+        (∀ {s : Sevm} {b : Devm} {n : Nat} {out : B256},
+          WordFakeExponential.Run (BuilderRequest.storedExcess 8 s b) 17 1 17 0 n out →
+          (out / (17 : B256)).toNat ≤
+            fakeExp 1 (BuilderRequest.storedExcess 8 s b).toNat 17) ∧
+        (∀ {s : Sevm} {b : Devm} {n : Nat} {out : B256},
+          (BuilderRequest.storedExcess 8 s b).toNat = 2893 →
+          WordFakeExponential.Run (BuilderRequest.storedExcess 8 s b) 17 1 17 0 n out →
+          (out / (17 : B256)).toNat <
+            fakeExp 1 (BuilderRequest.storedExcess 8 s b).toNat 17)) ∧
+        feeReadWorks depositAddr Deposit.code 8
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_deposit_fee_domain
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_exit_fee_domain
+example :
+    ((∀ {s : Sevm} {b : Devm} {n : Nat} {out : B256},
+          (BuilderRequest.storedExcess 2 s b).toNat < 2893 →
+          WordFakeExponential.Run (BuilderRequest.storedExcess 2 s b) 17 1 17 0 n out →
+          (out / (17 : B256)).toNat =
+            fakeExp 1 (BuilderRequest.storedExcess 2 s b).toNat 17 ∧ n ≤ 462) ∧
+        (∀ {s : Sevm} {b : Devm} {n : Nat} {out : B256},
+          WordFakeExponential.Run (BuilderRequest.storedExcess 2 s b) 17 1 17 0 n out →
+          (out / (17 : B256)).toNat ≤
+            fakeExp 1 (BuilderRequest.storedExcess 2 s b).toNat 17) ∧
+        (∀ {s : Sevm} {b : Devm} {n : Nat} {out : B256},
+          (BuilderRequest.storedExcess 2 s b).toNat = 2893 →
+          WordFakeExponential.Run (BuilderRequest.storedExcess 2 s b) 17 1 17 0 n out →
+          (out / (17 : B256)).toNat <
+            fakeExp 1 (BuilderRequest.storedExcess 2 s b).toNat 17)) ∧
+        feeReadWorks exitAddr Exit.code 2
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_exit_fee_domain
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_reversible_latch
+example :
+    kill_switch_reversible ∧ unlock_resets_fee
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_reversible_latch
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_deposit
+example :
+    (∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock},
+          CodesKept cfg start blocks stop → HistoryRootsFit blocks →
+          ChainLink.History.NoSender depositAddr blocks →
+          HistoryCreditsFit depositAddr blocks →
+          ((start.state.get depositAddr).bal).toNat + feesPaidAt blocks depositAddr ≤
+            ((stop.state.get depositAddr).bal).toNat) ∧
+        stake_funded
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_deposit
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_exit
+example :
+    ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock},
+          CodesKept cfg start blocks stop → HistoryRootsFit blocks →
+          ChainLink.History.NoSender exitAddr blocks →
+          HistoryCreditsFit exitAddr blocks →
+          ((start.state.get exitAddr).bal).toNat + feesPaidAt blocks exitAddr ≤
+            ((stop.state.get exitAddr).bal).toNat
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_exit
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s7_headline
+example :
+    (∀ {sevm : Sevm} {b : Devm} {M : Mem} {G iterations : Nat} {finalOutput : B256},
+          sevm.code = Blanc.withdrawalRequestCode →
+          CoveredFork sevm.benvStat.fork →
+          sevm.caller ≠ systemAddress →
+          sevm.data.length = 56 →
+          sevm.isStatic = false →
+          gCallStipend < G →
+          b.getStorVal sevm.currentTarget 0 ≠ B256.max →
+          WordFakeExponential.Run (b.getStorVal sevm.currentTarget 0) 17 1 17 0 iterations finalOutput →
+          (finalOutput / (17 : B256)).toNat ≤ sevm.value.toNat →
+          Nonempty (Exec 0 sevm (St b [] M (G + WithdrawalRequest.userSubmissionGas sevm b M iterations))
+            (.ok (WithdrawalRequest.submissionPost sevm (afterSload sevm b 0) M G)))) ∧
+        (∀ {sevm : Sevm} {b : Devm} {M : Mem} {G iterations : Nat} {finalOutput : B256},
+          sevm.code = Blanc.withdrawalRequestCode →
+          CoveredFork sevm.benvStat.fork →
+          M.size % 32 = 0 →
+          sevm.caller ≠ systemAddress →
+          sevm.data = [] →
+          sevm.value = 0 →
+          b.getStorVal sevm.currentTarget 0 ≠ B256.max →
+          WordFakeExponential.Run (b.getStorVal sevm.currentTarget 0) 17 1 17 0 iterations finalOutput →
+          Nonempty (Exec 0 sevm (St b [] M (G + WithdrawalRequest.userFeeGetterGas sevm b M iterations))
+            (.ok (RequestFee.feeGetterPost (afterSload sevm b 0) M (finalOutput / (17 : B256)) G))))
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s7_headline
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s7_headline
+example :
+    (∀ {sevm : Sevm} {b : Devm},
+          sevm.currentTarget = Blanc.Composition.ConsolidationRequestPublic.addr →
+          sevm.code = Blanc.Composition.ConsolidationRequestPublic.code →
+          CoveredFork sevm.benvStat.fork →
+          sevm.caller ≠ systemAddress →
+          sevm.data.length = 96 →
+          sevm.isStatic = false →
+          b.getStorVal Blanc.Composition.ConsolidationRequestPublic.addr 0 ≠ B256.max →
+          Blanc.Composition.ConsolidationRequestPublic.quotedFee
+            (b.getStorVal Blanc.Composition.ConsolidationRequestPublic.addr 0) ≤ sevm.value.toNat →
+          Blanc.Composition.ConsolidationRequestPublic.SubmissionLive sevm b) ∧
+        (∀ {sevm : Sevm} {b : Devm} {M : Mem} {G iterations : Nat} {output : B256},
+          sevm.code = Blanc.Lift.SystemExecution.ConsolidationRequest.code →
+          CoveredFork sevm.benvStat.fork →
+          M.size % 32 = 0 →
+          sevm.caller ≠ systemAddress →
+          sevm.data = [] →
+          sevm.value = 0 →
+          b.getStorVal sevm.currentTarget 0 ≠ B256.max →
+          WordFakeExponential.Run (b.getStorVal sevm.currentTarget 0) 17 1 17 0 iterations output →
+          Nonempty (Exec 0 sevm (St b [] M (G + Blanc.Lift.RequestFee.PlainUserPath.feeReadGas sevm b M iterations))
+            (.ok (RequestFee.feeGetterPost (afterSload sevm b 0) M (output / (17 : B256)) G))))
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s7_headline
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_deposit_acceptance_gas
+example :
+    depositDirectUse ∧ depositCoveredProgress ∧ depositAmsterdamProgress
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_deposit_acceptance_gas
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_exit_acceptance_gas
+example :
+    exitDirectUse ∧ exitCoveredProgress ∧ exitAmsterdamProgress
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_exit_acceptance_gas
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s9_registration_authorization_credit
+example {P : Preset} {cfg : ChainConfig}
+    {ccfg : Config} {checkpoint : BlockChain} {anchor final : GJointState P}
+    (v : ValidJointG cfg ccfg true checkpoint anchor final) :
+    (((checkpoint.state.get depositAddr).bal).toNat + feesPaidAt v.blocks depositAddr ≤
+            ((final.exec.state.get depositAddr).bal).toNat ∧
+          ((checkpoint.state.get exitAddr).bal).toNat + feesPaidAt v.blocks exitAddr ≤
+            ((final.exec.state.get exitAddr).bal).toNat ∧
+          ∀ f ∈ keptAt v.blocks depositAddr, ∀ h : f.sevm.data.length = 184,
+            Bytes.toNat (Deposit.recordOf f.sevm h).amount * 10 ^ 9 ≤ f.sevm.value.toNat ∧
+              ∃ fee : B256, Deposit.Admits f.sevm.data f.sevm.value fee) ∧
+        (∀ {j : Nat} {D : GloasStepData (P := P) cfg ccfg true},
+          v.run.steps[j]? = some (.gloas D) →
+          ∀ {i : Nat}, BuilderCreated D.preB D.postB i →
+            ∃ (k : Nat) (req : Gloas.BuilderDepositRequest) (tr : List (Gloas.BeaconState P))
+              (m m' : Gloas.BeaconState P) (amount : Gwei) (dom : Domain)
+              (addr : ExecutionAddress) (e : Epoch),
+              D.builderDeposits[k]? = some req ∧
+              builderDepositTrace ccfg true D.postSlots D.block = .ok tr ∧
+              tr[k]? = some m ∧ tr[k + 1]? = some m' ∧
+              classifyBuilderDeposit ccfg true m req = .ok (.register i amount) ∧
+              amount = req.amount ∧
+              req.withdrawal_credentials.toBytes.head? = some 0xB0 ∧
+              builderDepositDomain ccfg = some dom ∧
+              blsVerify true req.pubkey (computeSigningRoot (builderDepositMessage req) dom)
+                req.signature = true ∧
+              Jaune.Bytes.toAdr? (req.withdrawal_credentials.toBytes.drop 12) = some addr ∧
+              computeEpochAtSlot P m.slot = .ok e ∧
+              m'.builders.toArray[i]? = some (freshBuilder req.pubkey addr req.amount e))
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s9_registration_authorization_credit v
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s10_headline
+example :
+    (∀ {benv : Benv}, benv.stat.fork = .amsterdam →
+          benv.state.getCode withdrawalRequestPredeployAddress = withdrawalRequestCode →
+          ∃ out, processCheckedSystemTransaction benv withdrawalRequestPredeployAddress [] =
+              .ok (Blanc.Lift.RequestSystem.sysState Blanc.Lift.WithdrawalRequest.Amsterdam.sysShape
+                benv.state withdrawalRequestPredeployAddress, out) ∧
+            Blanc.Lift.RequestSystem.RegularGasWithin out.gasLeft 163000) ∧
+        (∀ {benv0 final benv : Benv} {txs : List Tx} {bal0 : BalBuilder}
+          {out0 : BlockOutput} {senders : List (Adr × Tx)} {roots : List Blanc.Root}
+          (wds : List Withdrawal),
+          benv0.stat.fork = .amsterdam →
+          benv0.state.getCode depositContractAddress = BeaconDeposit.code →
+          Blanc.TransactionsRoots txs.putIndex benv0 { BlockOutput.init with bal := bal0 }
+            final out0 senders roots →
+          benv.stat.fork = .amsterdam →
+          benv.state.getCode withdrawalRequestPredeployAddress = withdrawalRequestCode →
+          benv.state.getCode consolidationRequestPredeployAddress = consolidationRequestCode →
+          benv.state.getCode BuilderRequest.Deposit.Creation.address = BuilderRequest.Deposit.code →
+          benv.state.getCode BuilderRequest.Exit.Creation.address = BuilderRequest.Exit.code →
+          ∀ (idx : Nat),
+            let bout := (withdrawalsPass benv0.stat.rules final out0 wds).2
+            let depositRequests := ((roots.flatMap (Blanc.Root.keptAt depositContractAddress)).flatMap
+              Blanc.Corpus.Freeze.Deposit.frameRecords).flatten
+            let σ1 := Blanc.Composition.RequestPhaseAmsterdam.afterWithdrawals benv.state
+            let σ2 := Blanc.Composition.RequestPhaseAmsterdam.afterConsolidations σ1
+            let σ3 := Blanc.Composition.RequestPhaseAmsterdam.afterDeposits σ2
+            let σ4 := Blanc.Composition.RequestPhaseAmsterdam.afterExits σ3
+            ∃ (out1 out2 out3 out4 : MsgCallOutput) (bal' : BalBuilder),
+              processCheckedSystemTransaction benv withdrawalRequestPredeployAddress [] = .ok (σ1, out1) ∧
+              processCheckedSystemTransaction (benv.withState σ1) consolidationRequestPredeployAddress [] =
+                .ok (σ2, out2) ∧
+              processCheckedSystemTransaction (benv.withState σ2) BuilderRequest.Deposit.Creation.address [] =
+                .ok (σ3, out3) ∧
+              processCheckedSystemTransaction (benv.withState σ3) BuilderRequest.Exit.Creation.address [] =
+                .ok (σ4, out4) ∧
+              processGeneralPurposeRequestsAt idx benv bout =
+                .ok (σ4, { bout with
+                  requests := bout.requests ++ ExecutionTrace.optionalRequestEntry 0 depositRequests ++
+                    ExecutionTrace.optionalRequestEntry 1 out1.returnData ++
+                    ExecutionTrace.optionalRequestEntry 2 out2.returnData ++
+                    ExecutionTrace.optionalRequestEntry 3 out3.returnData ++
+                    ExecutionTrace.optionalRequestEntry 4 out4.returnData
+                  bal := bal' }))
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s10_headline
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s10_headline
+example :
+    (∀ {benv : Benv}, benv.stat.fork = .amsterdam →
+          benv.state.getCode consolidationRequestPredeployAddress = consolidationRequestCode →
+          ∃ out, processCheckedSystemTransaction benv consolidationRequestPredeployAddress [] =
+              .ok (Blanc.Lift.RequestSystem.sysState
+                Blanc.Lift.SystemExecution.ConsolidationRequest.Amsterdam.sysShape
+                benv.state consolidationRequestPredeployAddress, out) ∧
+            Blanc.Lift.RequestSystem.RegularGasWithin out.gasLeft 75000) ∧
+        (∀ {benv0 final benv : Benv} {txs : List Tx} {bal0 : BalBuilder}
+          {out0 : BlockOutput} {senders : List (Adr × Tx)} {roots : List Blanc.Root}
+          (wds : List Withdrawal),
+          benv0.stat.fork = .amsterdam →
+          benv0.state.getCode depositContractAddress = BeaconDeposit.code →
+          Blanc.TransactionsRoots txs.putIndex benv0 { BlockOutput.init with bal := bal0 }
+            final out0 senders roots →
+          benv.stat.fork = .amsterdam →
+          benv.state.getCode withdrawalRequestPredeployAddress = withdrawalRequestCode →
+          benv.state.getCode consolidationRequestPredeployAddress = consolidationRequestCode →
+          benv.state.getCode BuilderRequest.Deposit.Creation.address = BuilderRequest.Deposit.code →
+          benv.state.getCode BuilderRequest.Exit.Creation.address = BuilderRequest.Exit.code →
+          ∀ (idx : Nat),
+            let bout := (withdrawalsPass benv0.stat.rules final out0 wds).2
+            let depositRequests := ((roots.flatMap (Blanc.Root.keptAt depositContractAddress)).flatMap
+              Blanc.Corpus.Freeze.Deposit.frameRecords).flatten
+            let σ1 := Blanc.Composition.RequestPhaseAmsterdam.afterWithdrawals benv.state
+            let σ2 := Blanc.Composition.RequestPhaseAmsterdam.afterConsolidations σ1
+            let σ3 := Blanc.Composition.RequestPhaseAmsterdam.afterDeposits σ2
+            let σ4 := Blanc.Composition.RequestPhaseAmsterdam.afterExits σ3
+            ∃ (out1 out2 out3 out4 : MsgCallOutput) (bal' : BalBuilder),
+              processCheckedSystemTransaction benv withdrawalRequestPredeployAddress [] = .ok (σ1, out1) ∧
+              processCheckedSystemTransaction (benv.withState σ1) consolidationRequestPredeployAddress [] =
+                .ok (σ2, out2) ∧
+              processCheckedSystemTransaction (benv.withState σ2) BuilderRequest.Deposit.Creation.address [] =
+                .ok (σ3, out3) ∧
+              processCheckedSystemTransaction (benv.withState σ3) BuilderRequest.Exit.Creation.address [] =
+                .ok (σ4, out4) ∧
+              processGeneralPurposeRequestsAt idx benv bout =
+                .ok (σ4, { bout with
+                  requests := bout.requests ++ ExecutionTrace.optionalRequestEntry 0 depositRequests ++
+                    ExecutionTrace.optionalRequestEntry 1 out1.returnData ++
+                    ExecutionTrace.optionalRequestEntry 2 out2.returnData ++
+                    ExecutionTrace.optionalRequestEntry 3 out3.returnData ++
+                    ExecutionTrace.optionalRequestEntry 4 out4.returnData
+                  bal := bal' }))
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s10_headline
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_deposit
+example :
+    (∀ (benv : Benv), benv.stat.fork = .amsterdam →
+          runsBuilderCode benv.state depositAddr Deposit.code →
+          ∃ out, processCheckedSystemTransaction benv depositAddr [] =
+              .ok (Blanc.Lift.RequestSystem.sysState Deposit.sysShape benv.state depositAddr, out) ∧
+            Blanc.Lift.RequestSystem.RegularGasWithin out.gasLeft 888000) ∧
+        next_pass_cannot_fail ∧ request_fold_succeeds
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_deposit
+
+-- Corpus pin: Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_exit
+example :
+    (∀ (benv : Benv), benv.stat.fork = .amsterdam →
+          runsBuilderCode benv.state exitAddr Exit.code →
+          ∃ out, processCheckedSystemTransaction benv exitAddr [] =
+              .ok (Blanc.Lift.RequestSystem.sysState Exit.sysShape benv.state exitAddr, out) ∧
+            Blanc.Lift.RequestSystem.RegularGasWithin out.gasLeft 161000) ∧
+        next_pass_cannot_fail ∧ request_fold_succeeds
+    := Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_exit
+
+end Blanc.Composition.Corpus.Proofs.MatrixComponentPins
+
+namespace Blanc.Lift.WithdrawalRequest
+open Jaune
+
+-- Corpus pin: Blanc.Lift.WithdrawalRequest.exec_frame_effect
+example {sevm : Sevm} {pre post : Devm}
+    (code : sevm.code = Blanc.withdrawalRequestCode)
+    (fork : CoveredFork sevm.benvStat.fork) (stack : pre.stack = [])
+    (aligned : pre.memory.size % 32 = 0) (wf : Mem.Wf pre.memory)
+    (lengthBound : sevm.data.length < 2 ^ 256)
+    (exec : Exec 0 sevm pre (.ok post)) :
+    FrameEffect sevm pre post
+    := Blanc.Lift.WithdrawalRequest.exec_frame_effect code fork stack aligned wf lengthBound exec
+
+end Blanc.Lift.WithdrawalRequest
+
+namespace Blanc.Lift.BeaconDeposit.BeaconDeploymentTo
+open Jaune Blanc.ExecutionTrace
+
+-- Corpus pin: Blanc.Lift.BeaconDeposit.BeaconDeploymentTo.solInv
+example {B : BlockChain} (d : BeaconDeploymentTo B) :
+    SolInv (B.state.getStor Creation.depositAddress) d.deposits
+    := Blanc.Lift.BeaconDeposit.BeaconDeploymentTo.solInv d
+
+end Blanc.Lift.BeaconDeposit.BeaconDeploymentTo
+
+namespace Blanc.Lift.BeaconDeposit
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Corpus pin: Blanc.Lift.BeaconDeposit.configuredHistory_deposit_live
+example {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {initialHistory : List B256}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (admitted : trace.FrameAdmitted ca beaconEntry)
+    (installed : checkpoint.state.getCode ca = code)
+    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory)
+    (sevm : Sevm) (base : Devm) (G : Nat)
+    (s' : BeaconDeposit.Acc) (ev : BeaconDeposit.DepositEvent)
+    (target : sevm.currentTarget = ca)
+    (state : base.state = future.state)
+    (hcode : sevm.code = code)
+    (hdataLength : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = BeaconDeposit.depositSelector)
+    (hdec : DepositDecodable sevm)
+    (hOk : BeaconDeposit.deposit Bytes.sha256 (solAcc (Devm.getStor base sevm.currentTarget))
+      (argBytes sevm 0) (argBytes sevm 1) (argBytes sevm 2) (argRoot sevm) sevm.value.toNat =
+        .ok (s', ev))
+    (hsha : ShaReady sevm base) (hdepth : sevm.depth ≠ 0) (hstatic : sevm.isStatic = false)
+    (hsentryLive : gCallStipend < G + 52 +
+      bodyLiveCostOf (base.getOrigStorVal sevm sevm.currentTarget
+        (solBranchSlot (bodyDepth sevm base))) sevm base)
+    (hsentryCount : gCallStipend < G + 4 +
+      bodyInsertGasOf (base.getOrigStorVal sevm sevm.currentTarget
+        (solBranchSlot (bodyDepth sevm base))) sevm base +
+      countStoreCostOf (base.getOrigStorVal sevm sevm.currentTarget solCountSlot)
+        (bodyCount sevm base))
+    (hbound : G + 1 + bodyGasOf (base.getOrigStorVal sevm sevm.currentTarget
+        (solBranchSlot (bodyDepth sevm base)))
+      (base.getOrigStorVal sevm sevm.currentTarget solCountSlot) sevm base < 2 ^ 256) :
+    ∃ post, Nonempty (Exec 0 sevm (St base [] Mem.empty
+            (G + depositGasOf (base.getOrigStorVal sevm sevm.currentTarget
+              (solBranchSlot (bodyDepth sevm base)))
+              (base.getOrigStorVal sevm sevm.currentTarget solCountSlot) sevm base)) (.ok post)) ∧
+          post.gasLeft = G ∧
+          solAcc (Devm.getStor post sevm.currentTarget) = s' ∧
+          SolInv (Devm.getStor post sevm.currentTarget)
+            (initialHistory ++ committedNodes ca trace ++ [BeaconDeposit.depositDataNode Bytes.sha256
+              (argBytes sevm 0) (argBytes sevm 1) (argBytes sevm 2)
+              (BeaconDeposit.le64 (sevm.value.toNat / BeaconDeposit.oneGwei))]) ∧
+          (∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor base a) ∧
+          post.logs = base.logs ++ [BeaconDeposit.depositEventLog sevm.currentTarget ev]
+    := Blanc.Lift.BeaconDeposit.configuredHistory_deposit_live trace admitted installed invariant sevm base G s' ev target state hcode hdataLength hcd hsel hdec hOk hsha hdepth hstatic hsentryLive hsentryCount hbound
+
+end Blanc.Lift.BeaconDeposit
+
+namespace Blanc.Lift.BuilderRequest.ActualFeeBounds
+open Jaune Delivery ChainLink Occurrence JauneConsensus
+
+-- Corpus pin: Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_every_boundary
+example {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock} (H : Deposit.Indexed.Clean cfg start blocks stop)
+    {budget ceiling : Nat} (fees : WordFees.actualFeeSum Deposit.contract blocks ≤ budget)
+    (cost : budget < Backlog.cost 8 0 (ceiling + 1)) (small : ceiling < 2893) :
+    ∀ b ∈ blocks, (Deposit.Indexed.queueAtRequests b).length ≤ ceiling
+    := Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_every_boundary H fees cost small
+
+-- Corpus pin: Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_every_boundary
+example {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock} (H : Exit.Indexed.Clean cfg start blocks stop)
+    {budget ceiling : Nat} (fees : WordFees.actualFeeSum Exit.contract blocks ≤ budget)
+    (cost : budget < Backlog.cost 2 0 (ceiling + 1)) (small : ceiling < 2893) :
+    ∀ b ∈ blocks, (Exit.Indexed.queueAtRequests b).length ≤ ceiling
+    := Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_every_boundary H fees cost small
+
+-- Corpus pin: Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_delivery
+example {cfg : ChainConfig} {P : Preset} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain} {anchor final : GJointState P} (v : ValidJointG cfg ccfg bls checkpoint anchor final) {budget ceiling : Nat}
+    (fees : WordFees.actualFeeSum Deposit.contract v.blocks ≤ budget)
+    (cost : budget < Backlog.cost 8 0 (ceiling + 1)) (small : ceiling < 2893)
+    {j q : Nat}
+    {B D : KeptBlock} {r : Bytes}
+    (hB : v.blocks[j]? = some B) (hD : v.blocks[j + q / 64]? = some D)
+    (amsterdam : ∀ i ≤ q / 64, ∀ x, v.blocks[j + i]? = some x → x.fork = .amsterdam)
+    (queued : (Deposit.Indexed.queueAtRequests B)[q]? = some r) :
+    q < ceiling ∧ q / 64 + 1 ≤ (ceiling + 63) / 64 ∧
+        (Deposit.Indexed.blockEmissions D)[q % 64]? = some r ∧
+        (∀ i ≤ q % 64, (Deposit.Indexed.blockEmissions D)[i]? = (Deposit.Indexed.queueAtRequests B)[64 * (q / 64) + i]?) ∧
+        (Deposit.Indexed.submissions v.blocks)[(Deposit.Indexed.emissions (v.blocks.take j)).length + q]? = some r ∧
+        (Deposit.Indexed.emissions (v.blocks.take j)).length + q =
+          (Deposit.Indexed.emissions (v.blocks.take (j + q / 64))).length + q % 64 ∧
+        (v.preBlocks.length ≤ j + q / 64 → ∃ (j' : Nat) (S : GloasStepData (P := P) cfg ccfg bls) (req : _),
+          v.run.steps[j']? = some (.gloas S) ∧ S.isFull ∧
+          v.run.payloadIndex j' = j + q / 64 - v.preBlocks.length ∧ S.builderDeposits[q % 64]? = some req ∧
+          Ssz.serialize req = r)
+    := Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_delivery v fees cost small hB hD amsterdam queued
+
+-- Corpus pin: Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_delivery
+example {cfg : ChainConfig} {P : Preset} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain} {anchor final : GJointState P} (v : ValidJointG cfg ccfg bls checkpoint anchor final) {budget ceiling : Nat}
+    (fees : WordFees.actualFeeSum Exit.contract v.blocks ≤ budget)
+    (cost : budget < Backlog.cost 2 0 (ceiling + 1)) (small : ceiling < 2893)
+    {j q : Nat}
+    {B D : KeptBlock} {r : Bytes}
+    (hB : v.blocks[j]? = some B) (hD : v.blocks[j + q / 16]? = some D)
+    (amsterdam : ∀ i ≤ q / 16, ∀ x, v.blocks[j + i]? = some x → x.fork = .amsterdam)
+    (queued : (Exit.Indexed.queueAtRequests B)[q]? = some r) :
+    q < ceiling ∧ q / 16 + 1 ≤ (ceiling + 15) / 16 ∧
+        (Exit.Indexed.blockEmissions D)[q % 16]? = some r ∧
+        (∀ i ≤ q % 16, (Exit.Indexed.blockEmissions D)[i]? = (Exit.Indexed.queueAtRequests B)[16 * (q / 16) + i]?) ∧
+        (Exit.Indexed.submissions v.blocks)[(Exit.Indexed.emissions (v.blocks.take j)).length + q]? = some r ∧
+        (Exit.Indexed.emissions (v.blocks.take j)).length + q =
+          (Exit.Indexed.emissions (v.blocks.take (j + q / 16))).length + q % 16 ∧
+        (v.preBlocks.length ≤ j + q / 16 → ∃ (j' : Nat) (S : GloasStepData (P := P) cfg ccfg bls) (req : _),
+          v.run.steps[j']? = some (.gloas S) ∧ S.isFull ∧
+          v.run.payloadIndex j' = j + q / 16 - v.preBlocks.length ∧ S.builderExits[q % 16]? = some req ∧
+          Ssz.serialize req = r)
+    := Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_delivery v fees cost small hB hD amsterdam queued
+
+end Blanc.Lift.BuilderRequest.ActualFeeBounds
+
+namespace Blanc.Lift.WithdrawalRequest
+open Jaune JauneConsensus ExecutionTrace
+
+-- Corpus pin: Blanc.Lift.WithdrawalRequest.ValidJoint.authorization
+example {P : Preset}
+    {cfg : ChainConfig} {ccfg : Config}
+    {bls : Bool} {checkpoint : BlockChain} {anchor final : JointState P}
+    (v : ValidJoint cfg ccfg bls checkpoint anchor final)
+    {j : Nat} {D : JointRunStep (P := P) cfg ccfg bls} (stepD : v.run.steps[j]? = some D)
+    {requests : ExecutionRequests P}
+    (hread : Gated.read D.block.2.message.body.execution_requests
+      "NewPayloadRequest: execution_requests" = .ok requests)
+    {k : Nat} {wr : WithdrawalRequest} (hwr : requests.withdrawals.toArray[k]? = some wr)
+    {tr : List (BeaconState P D.block.1)}
+    (htr : jointWithdrawalTrace ccfg bls D.pre D.block = .ok tr)
+    {m : BeaconState P D.block.1} (hm : tr[k]? = some m)
+    {o : Facts.WithdrawalOutcome} {V : ValidatorIndex}
+    (hclass : Facts.classifyWithdrawalRequest ccfg m wr = .ok o)
+    (ho : o = .fullExit V ∨ ∃ amount, o = .partialWithdrawal V amount) :
+    (∃ m', tr[k + 1]? = some m' ∧ Facts.applyWithdrawalOutcome ccfg m wr o = .ok m') ∧
+        (withdrawalFeed v.run)[feedPosition v.run j k]? = some wr ∧
+        (submissions (v.run.toExec v.pre))[(emissions v.pre).length + feedPosition v.run j k]? =
+          some (Ssz.serialize wr) ∧
+        validatorIndexOf m wr.validator_pubkey = .ok (some V) ∧
+        ∃ validator, m.validators.get V.toNat "process_withdrawal_request" = .ok validator ∧
+          hasExecutionWithdrawalCredential validator = true ∧
+          validator.withdrawal_credentials.toBytes.drop 12 = wr.source_address.toBytes ∧
+          validator.withdrawal_credentials.toBytes.drop 12 = (Ssz.serialize wr).take 20
+    := Blanc.Lift.WithdrawalRequest.ValidJoint.authorization v stepD hread hwr htr hm hclass ho
+
+end Blanc.Lift.WithdrawalRequest
+
+namespace Blanc.Lift.WithdrawalRequest
+open Jaune JauneConsensus ExecutionTrace
+
+-- Corpus pin: Blanc.Lift.WithdrawalRequest.ValidJoint.fate
+example {P : Preset}
+    {cfg : ChainConfig} {ccfg : Config}
+    {bls : Bool} {checkpoint : BlockChain} {anchor final : JointState P}
+    (v : ValidJoint cfg ccfg bls checkpoint anchor final)
+    {n : Nat} (hn : n < (submissions (v.run.toExec v.pre)).length) :
+    (n < (emissions v.pre).length ∧
+          (emissions v.pre)[n]? = some (submissions (v.run.toExec v.pre))[n]) ∨
+        ((emissions v.pre).length ≤ n ∧ n < (emissions (v.run.toExec v.pre)).length ∧
+          ∃ j k, ∃ D : JointRunStep (P := P) cfg ccfg bls, ∃ requests : ExecutionRequests P,
+          ∃ wr, ∃ tr : List (BeaconState P D.block.1), ∃ m : BeaconState P D.block.1,
+            v.run.steps[j]? = some D ∧
+            Gated.read D.block.2.message.body.execution_requests
+              "NewPayloadRequest: execution_requests" = .ok requests ∧
+            requests.withdrawals.toArray[k]? = some wr ∧
+            feedPosition v.run j k = n - (emissions v.pre).length ∧
+            Ssz.serialize wr = (submissions (v.run.toExec v.pre))[n] ∧
+            jointWithdrawalTrace ccfg bls D.pre D.block = .ok tr ∧ tr[k]? = some m ∧
+            ∃ o, Facts.classifyWithdrawalRequest ccfg m wr = .ok o ∧
+              (∀ o', Facts.classifyWithdrawalRequest ccfg m wr = .ok o' → o' = o) ∧
+              ∃ m', tr[k + 1]? = some m' ∧ Facts.applyWithdrawalOutcome ccfg m wr o = .ok m' ∧
+              (∀ j' k' (D' : JointRunStep (P := P) cfg ccfg bls) (wr' : WithdrawalRequest),
+                v.run.steps[j']? = some D' → (stepWithdrawalRequests D')[k']? = some wr' →
+                  feedPosition v.run j' k' = n - (emissions v.pre).length → j' = j ∧ k' = k)) ∨
+        ((emissions (v.run.toExec v.pre)).length ≤ n ∧
+          (remainingQueue (v.run.toExec v.pre))[n - (emissions (v.run.toExec v.pre)).length]? =
+            some (submissions (v.run.toExec v.pre))[n])
+    := Blanc.Lift.WithdrawalRequest.ValidJoint.fate v hn
+
+-- Corpus pin: Blanc.Lift.WithdrawalRequest.ValidJoint.fate_outcome
+example {P : Preset} {f : CFork} {ccfg : Config}
+    {m m' : BeaconState P f} {wr : WithdrawalRequest} {o : Facts.WithdrawalOutcome}
+    (hclass : Facts.classifyWithdrawalRequest ccfg m wr = .ok o)
+    (happly : Facts.applyWithdrawalOutcome ccfg m wr o = .ok m') :
+    (∀ r, o = .ignored r → m' = m) ∧
+        (∀ V amount, o = .partialWithdrawal V amount →
+          ∃ balance pending, m.balances.get V.toNat "process_withdrawal_request" = .ok balance ∧
+            getPendingBalanceToWithdraw m V = .ok pending ∧
+            amount.toNat =
+              min (balance.toNat - P.MIN_ACTIVATION_BALANCE - pending.toNat) wr.amount.toNat ∧
+            wr.amount ≠ U64.zero) ∧
+        (∀ V, o = .fullExit V →
+          (wr.amount = FULL_EXIT_REQUEST_AMOUNT ∧
+          (∃ q, m.pendingPartialWithdrawals = .ok q) ∧
+          validatorIndexOf m wr.validator_pubkey = .ok (some V) ∧
+          (∃ v, m.validators.get V.toNat "process_withdrawal_request" = .ok v ∧
+            hasExecutionWithdrawalCredential v = true ∧
+            v.withdrawal_credentials.toBytes.drop 12 = wr.source_address.toBytes ∧
+            (∃ current, getCurrentEpoch m = .ok current ∧
+              isActiveValidator v current = true ∧
+              v.exit_epoch = FAR_FUTURE_EPOCH ∧
+              (∃ period, c64 ccfg.SHARD_COMMITTEE_PERIOD = .ok period ∧
+                (∃ actSum, U64.add? v.activation_epoch period
+                  "process_withdrawal_request" = .ok actSum ∧
+                  ¬ (current < actSum))))) ∧
+          getPendingBalanceToWithdraw m V = .ok U64.zero) ∧
+          initiateValidatorExit ccfg m V = .ok m')
+    := Blanc.Lift.WithdrawalRequest.ValidJoint.fate_outcome hclass happly
+
+-- Corpus pin: Blanc.Lift.WithdrawalRequest.ValidJoint.fee_budget_retained_aggregate
+example {P : Preset}
+    {cfg : ChainConfig} {ccfg : Config}
+    {bls : Bool} {checkpoint : BlockChain} {anchor final : JointState P}
+    (v : ValidJoint cfg ccfg bls checkpoint anchor final) :
+    (checkpoint.state.bal withdrawalRequestPredeployAddress).toNat +
+            submissionPaid (v.run.toExec v.pre) ≤
+          (final.exec.state.bal withdrawalRequestPredeployAddress).toNat
+    := Blanc.Lift.WithdrawalRequest.ValidJoint.fee_budget_retained_aggregate v
+
+end Blanc.Lift.WithdrawalRequest
+
+namespace Blanc.Lift.WithdrawalRequest
+open Jaune JauneConsensus ExecutionTrace
+
+-- Corpus pin: Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_recipient
+example {P : Preset} {cfg : ChainConfig} {ccfg : Config}
+    {bls : Bool} {checkpoint : BlockChain} {anchor final : JointState P}
+    (v : ValidJoint cfg ccfg bls checkpoint anchor final)
+    {j : Nat} {D : JointRunStep (P := P) cfg ccfg bls} (stepD : v.run.steps[j]? = some D) :
+    ∃ st, jointWithdrawalsInput ccfg bls D.pre D.block = .ok st ∧
+          ∃ (ws : Array JauneConsensus.Withdrawal) (processed : Nat),
+            getExpectedWithdrawals st = .ok (ws, processed) ∧
+            Facts.AllRecipientOk st ws ∧
+            D.stepTrace.trace.block.wds = ws.toList.map JauneConsensus.Withdrawal.toExecution ∧
+            Nonempty (RequestsTrace
+              (D.stepTrace.trace.bodyTrace.transactionBenv.withState
+                (processWithdrawalsState D.stepTrace.trace.bodyTrace.transactionBenv.state
+                  (ws.toList.map JauneConsensus.Withdrawal.toExecution)))
+              (D.stepTrace.trace.bodyTrace.transactionBout.withWithdrawalsTrie
+                (processWithdrawalsTrie D.stepTrace.trace.bodyTrace.transactionBout.withdrawalsTrie
+                  (ws.toList.map JauneConsensus.Withdrawal.toExecution)))
+              D.stepTrace.trace.bodyState D.stepTrace.trace.bodyTrace.requestBout) ∧
+            ∀ (pre : State) (a : Adr),
+              ((processWithdrawalsState pre
+                  (ws.toList.map JauneConsensus.Withdrawal.toExecution)).bal a).toNat =
+                ((pre.bal a).toNat + ((ws.toList.filter fun w => decide (w.address = a)).map
+                  fun w => w.amount.toNat * 10 ^ 9).sum) % 2 ^ 256
+    := Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_recipient v stepD
+
+-- Corpus pin: Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1
+example {P : Preset} {cfg : ChainConfig} {ccfg : Config}
+    {bls : Bool} {checkpoint : BlockChain} {anchor final : JointState P}
+    (v : ValidJoint cfg ccfg bls checkpoint anchor final)
+    {j : Nat} {D : JointRunStep (P := P) cfg ccfg bls} (stepD : v.run.steps[j]? = some D) :
+    ∃ st, jointWithdrawalsInput ccfg bls D.pre D.block = .ok st ∧
+          ∃ (ws : Array JauneConsensus.Withdrawal) (processed : Nat),
+            getExpectedWithdrawals st = .ok (ws, processed) ∧
+            D.block.2.message.body.execution_payload.withdrawals.toArray = ws ∧
+            ∃ (ws1 ws2 : Array JauneConsensus.Withdrawal) (l : SszList PendingPartialWithdrawal
+                P.PENDING_PARTIAL_WITHDRAWALS_LIMIT),
+              st.pendingPartialWithdrawals = .ok l ∧
+              ws.toList = ws1.toList ++ ws2.toList ∧
+              Facts.Loop1Witness ws1 l.toArray processed ∧
+              Facts.Loop1Floor st ws1 P.MIN_ACTIVATION_BALANCE
+    := Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1 v stepD
+
+-- Corpus pin: Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_floor
+example {P : Preset} {cfg : ChainConfig} {ccfg : Config}
+    {bls : Bool} {checkpoint : BlockChain} {anchor final : JointState P}
+    (v : ValidJoint cfg ccfg bls checkpoint anchor final)
+    {j : Nat} {D : JointRunStep (P := P) cfg ccfg bls} (stepD : v.run.steps[j]? = some D) :
+    ∃ st, jointWithdrawalsInput ccfg bls D.pre D.block = .ok st ∧
+          ∃ (ws : Array JauneConsensus.Withdrawal) (processed : Nat),
+            getExpectedWithdrawals st = .ok (ws, processed) ∧
+            D.block.2.message.body.execution_payload.withdrawals.toArray = ws ∧
+            ∃ post, JauneConsensus.processWithdrawals st D.block.2.message.body.execution_payload =
+                .ok post ∧
+            ∃ (ws1 ws2 : Array JauneConsensus.Withdrawal) (l : SszList PendingPartialWithdrawal
+                P.PENDING_PARTIAL_WITHDRAWALS_LIMIT),
+              st.pendingPartialWithdrawals = .ok l ∧
+              ws.toList = ws1.toList ++ ws2.toList ∧
+              Facts.Loop1Witness ws1 l.toArray processed ∧
+              Facts.Loop1Floor st ws1 P.MIN_ACTIVATION_BALANCE ∧
+              ∀ w ∈ ws1.toList, ∀ validator,
+                st.validators.toArray[w.validator_index.toNat]? = some validator →
+                validator.exit_epoch = FAR_FUTURE_EPOCH →
+                ∀ b : U64, post.balances.toArray[w.validator_index.toNat]? = some b →
+                  P.MIN_ACTIVATION_BALANCE ≤ b.toNat
+    := Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_floor v stepD
+
+-- Corpus pin: Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1_compounding
+example {P : Preset} {cfg : ChainConfig} {ccfg : Config}
+    {bls : Bool} {checkpoint : BlockChain} {anchor final : JointState P}
+    (v : ValidJoint cfg ccfg bls checkpoint anchor final)
+    {j : Nat} {D : JointRunStep (P := P) cfg ccfg bls} (stepD : v.run.steps[j]? = some D)
+    {st : BeaconState P D.block.1} (hst : jointWithdrawalsInput ccfg bls D.pre D.block = .ok st)
+    {l : SszList PendingPartialWithdrawal P.PENDING_PARTIAL_WITHDRAWALS_LIMIT}
+    {ws1 : Array JauneConsensus.Withdrawal} {processed : Nat}
+    (hl : st.pendingPartialWithdrawals = .ok l)
+    (hwit : Facts.Loop1Witness ws1 l.toArray processed)
+    {w : JauneConsensus.Withdrawal} (hw : w ∈ ws1.toList) :
+    ∃ validator, st.validators.toArray[w.validator_index.toNat]? = some validator ∧
+          hasCompoundingWithdrawalCredential validator = true
+    := Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1_compounding v stepD hst hl hwit hw
+
+-- Corpus pin: Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_address
+example {P : Preset} {cfg : ChainConfig} {ccfg : Config}
+    {bls : Bool} {checkpoint : BlockChain} {anchor final : JointState P}
+    (v : ValidJoint cfg ccfg bls checkpoint anchor final)
+    {j₀ : Nat} {D₀ : JointRunStep (P := P) cfg ccfg bls} (stepD₀ : v.run.steps[j₀]? = some D₀)
+    {requests : ExecutionRequests P}
+    (hread : Gated.read D₀.block.2.message.body.execution_requests
+      "NewPayloadRequest: execution_requests" = .ok requests)
+    {k₀ : Nat} {wr : WithdrawalRequest} (hwr : requests.withdrawals.toArray[k₀]? = some wr)
+    {tr : List (BeaconState P D₀.block.1)}
+    (htr : jointWithdrawalTrace ccfg bls D₀.pre D₀.block = .ok tr)
+    {m : BeaconState P D₀.block.1} (hm : tr[k₀]? = some m)
+    {V : ValidatorIndex} {amount : Gwei}
+    (hclass : Facts.classifyWithdrawalRequest ccfg m wr = .ok (.partialWithdrawal V amount))
+    {j : Nat} {D : JointRunStep (P := P) cfg ccfg bls} (stepD : v.run.steps[j]? = some D)
+    (hj : j₀ < j) {st : BeaconState P D.block.1}
+    (hst : jointWithdrawalsInput ccfg bls D.pre D.block = .ok st)
+    {ws : Array JauneConsensus.Withdrawal} {processed : Nat}
+    (hge : getExpectedWithdrawals st = .ok (ws, processed))
+    {w : JauneConsensus.Withdrawal} (hw : w ∈ ws.toList) (hV : w.validator_index = V) :
+    w.address = wr.source_address
+    := Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_address v stepD₀ hread hwr htr hm hclass stepD hj hst hge hw hV
+
+end Blanc.Lift.WithdrawalRequest
+
+namespace Blanc.Lift.BuilderRequest.ValidJointG
+open Jaune JauneConsensus ExecutionTrace ChainLink Blanc JauneConsensus.Facts.Gloas Occurrence
+
+-- Corpus pin: Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate
+example {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain} {anchor final : GJointState P} (v : ValidJointG cfg ccfg bls checkpoint anchor final) {n : Nat}
+    (_hn : n < (Deposit.Indexed.submissions v.blocks).length) :
+    (n < (Deposit.Indexed.emissions v.preBlocks).length ∧
+          (Deposit.Indexed.emissions v.preBlocks)[n]? = (Deposit.Indexed.submissions v.blocks)[n]?) ∨
+        ((Deposit.Indexed.emissions v.preBlocks).length ≤ n ∧ n < (Deposit.Indexed.emissions v.blocks).length ∧
+          ∃ bj k, ∃ hbj : bj < v.blocks.length, k < (Deposit.Indexed.blockEmissions v.blocks[bj]).length ∧
+            (Deposit.Indexed.emissions (v.blocks.take bj)).length + k = n ∧
+            (Deposit.Indexed.blockEmissions v.blocks[bj])[k]? = (Deposit.Indexed.submissions v.blocks)[n]? ∧
+            v.preBlocks.length ≤ bj ∧
+          ∃ (j : Nat) (D : GloasStepData (P := P) cfg ccfg bls) (req : Gloas.BuilderDepositRequest)
+            (tr : List (Gloas.BeaconState P)) (m : Gloas.BeaconState P),
+            v.run.steps[j]? = some (.gloas D) ∧ D.isFull ∧ v.run.payloadIndex j = bj - v.preBlocks.length ∧
+            D.builderDeposits[k]? = some req ∧ Ssz.serialize req = (Deposit.Indexed.submissions v.blocks)[n]! ∧
+            builderDepositTrace ccfg bls D.postSlots D.block = .ok tr ∧ tr[k]? = some m ∧
+            ∃ o, classifyBuilderDeposit ccfg bls m req = .ok o ∧
+              (∀ o', classifyBuilderDeposit ccfg bls m req = .ok o' → o' = o) ∧
+              ∃ m', tr[k + 1]? = some m' ∧ applyBuilderDepositOutcome ccfg m req o = .ok m' ∧
+              (∀ (j' k' : Nat) (D' : GloasStepData (P := P) cfg ccfg bls) req', v.run.steps[j']? = some (.gloas D') →
+                D'.builderDeposits[k']? = some req' →
+                (Deposit.Indexed.emissions (v.blocks.take (v.preBlocks.length + v.run.payloadIndex j'))).length + k' = n →
+                j' = j ∧ k' = k)) ∨
+        ((Deposit.Indexed.emissions v.blocks).length ≤ n ∧
+          (Deposit.Indexed.remainingQueue final.exec)[n - (Deposit.Indexed.emissions v.blocks).length]? =
+            (Deposit.Indexed.submissions v.blocks)[n]?)
+    := Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate v _hn
+
+-- Corpus pin: Blanc.Lift.BuilderRequest.ValidJointG.exit_fate
+example {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain} {anchor final : GJointState P} (v : ValidJointG cfg ccfg bls checkpoint anchor final) {n : Nat}
+    (_hn : n < (Exit.Indexed.submissions v.blocks).length) :
+    (n < (Exit.Indexed.emissions v.preBlocks).length ∧
+          (Exit.Indexed.emissions v.preBlocks)[n]? = (Exit.Indexed.submissions v.blocks)[n]?) ∨
+        ((Exit.Indexed.emissions v.preBlocks).length ≤ n ∧ n < (Exit.Indexed.emissions v.blocks).length ∧
+          ∃ bj k, ∃ hbj : bj < v.blocks.length, k < (Exit.Indexed.blockEmissions v.blocks[bj]).length ∧
+            (Exit.Indexed.emissions (v.blocks.take bj)).length + k = n ∧
+            (Exit.Indexed.blockEmissions v.blocks[bj])[k]? = (Exit.Indexed.submissions v.blocks)[n]? ∧
+            v.preBlocks.length ≤ bj ∧
+          ∃ (j : Nat) (D : GloasStepData (P := P) cfg ccfg bls) (req : Gloas.BuilderExitRequest)
+            (tr : List (Gloas.BeaconState P)) (m : Gloas.BeaconState P),
+            v.run.steps[j]? = some (.gloas D) ∧ D.isFull ∧ v.run.payloadIndex j = bj - v.preBlocks.length ∧
+            D.builderExits[k]? = some req ∧ Ssz.serialize req = (Exit.Indexed.submissions v.blocks)[n]! ∧
+            builderExitTrace ccfg bls D.postSlots D.block = .ok tr ∧ tr[k]? = some m ∧
+            ∃ o, classifyBuilderExit ccfg m req = .ok o ∧
+              (∀ o', classifyBuilderExit ccfg m req = .ok o' → o' = o) ∧
+              ∃ m', tr[k + 1]? = some m' ∧ applyBuilderExitOutcome ccfg m req o = .ok m' ∧
+              (∀ (j' k' : Nat) (D' : GloasStepData (P := P) cfg ccfg bls) req', v.run.steps[j']? = some (.gloas D') →
+                D'.builderExits[k']? = some req' →
+                (Exit.Indexed.emissions (v.blocks.take (v.preBlocks.length + v.run.payloadIndex j'))).length + k' = n →
+                j' = j ∧ k' = k)) ∨
+        ((Exit.Indexed.emissions v.blocks).length ≤ n ∧
+          (Exit.Indexed.remainingQueue final.exec)[n - (Exit.Indexed.emissions v.blocks).length]? =
+            (Exit.Indexed.submissions v.blocks)[n]?)
+    := Blanc.Lift.BuilderRequest.ValidJointG.exit_fate v _hn
+
+end Blanc.Lift.BuilderRequest.ValidJointG
+
+namespace Blanc.Lift.BuilderRequest.ValidJointG
+open Jaune JauneConsensus ExecutionTrace ChainLink Blanc JauneConsensus.Facts.Gloas Occurrence
+open Blanc.Composition.BuilderRequestPublic (keptAt exitAddr)
+
+-- Corpus pin: Blanc.Lift.BuilderRequest.ValidJointG.exit_authorization_caller
+example {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain} {anchor final : GJointState P} (v : ValidJointG cfg ccfg bls checkpoint anchor final) {j : Nat}
+    {D : GloasStepData (P := P) cfg ccfg bls} (stepD : v.run.steps[j]? = some (.gloas D)) {i : Nat}
+    (initiated : ExitInitiated D.preB D.postB i) :
+    ∃ (k : Nat) (req : Gloas.BuilderExitRequest) (tr : List (Gloas.BeaconState P)) (m m' : Gloas.BeaconState P),
+          D.builderExits[k]? = some req ∧
+          builderExitTrace ccfg bls D.postSlots D.block = .ok tr ∧ tr[k]? = some m ∧ tr[k + 1]? = some m' ∧
+          classifyBuilderExit ccfg m req = .ok (.initiate i) ∧
+          (D.isFull ∧ ∃ bi b, v.run.payloadIndex j = bi ∧ v.blocks[v.preBlocks.length + bi]? = some b ∧
+            (Exit.Indexed.blockEmissions b)[k]? = some (Ssz.serialize req) ∧
+            (Exit.Indexed.submissions v.blocks)[(Exit.Indexed.emissions
+              (v.blocks.take (v.preBlocks.length + bi))).length + k]? = some (Ssz.serialize req)) ∧
+          firstMatch m.builders req.pubkey = some i ∧
+          (∃ (b : Gloas.Builder) (bi : Gloas.BuilderIndex), m.builders.toArray[i]? = some b ∧
+            b.execution_address = req.source_address ∧ U64.ofNat? i "BuilderIndex" = .ok bi ∧
+            Gloas.isActiveBuilder m bi = .ok true) ∧
+          (Ssz.serialize req).take 20 = req.source_address.toBytes ∧
+          ∃ (r : Exit.Record) (f : Exec.Frame), f ∈ keptAt v.blocks exitAddr ∧
+            submittedBy Exit.contract f = some r ∧ Ssz.serialize req = Exit.Record.out r ∧
+            r.source = f.sevm.caller ∧ req.source_address = f.sevm.caller
+    := Blanc.Lift.BuilderRequest.ValidJointG.exit_authorization_caller v stepD initiated
+
+-- Corpus pin: Blanc.Lift.BuilderRequest.ValidJointG.exit_resolution_unique
+example {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain} {anchor final : GJointState P} (v : ValidJointG cfg ccfg bls checkpoint anchor final) {j : Nat}
+    {D : GloasStepData (P := P) cfg ccfg bls} (stepD : v.run.steps[j]? = some (.gloas D)) {i : Nat}
+    (initiated : ExitInitiated D.preB D.postB i) :
+    ∃ (k : Nat) (req : Gloas.BuilderExitRequest) (tr : List (Gloas.BeaconState P)) (m : Gloas.BeaconState P),
+          D.builderExits[k]? = some req ∧
+          builderExitTrace ccfg bls D.postSlots D.block = .ok tr ∧ tr[k]? = some m ∧
+          classifyBuilderExit ccfg m req = .ok (.initiate i) ∧
+          ∀ (i' : Nat) (b' : Gloas.Builder), m.builders.toArray[i']? = some b' → b'.pubkey = req.pubkey → i' = i
+    := Blanc.Lift.BuilderRequest.ValidJointG.exit_resolution_unique v stepD initiated
+
+end Blanc.Lift.BuilderRequest.ValidJointG
+
+namespace Blanc.Lift.BuilderRequest.ValidJointG
+open Jaune JauneConsensus ExecutionTrace Blanc JauneConsensus.Facts JauneConsensus.Facts.Gloas JauneConsensus.Facts.Gloas.Inv
+
+-- Corpus pin: Blanc.Lift.BuilderRequest.ValidJointG.payment_debit_at_most_once
+example {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain} {anchor final : GJointState P} (v : ValidJointG cfg ccfg bls checkpoint anchor final) :
+    (v.run.debitSpent ++ v.run.debitLeft = v.run.debitSource ∧
+          v.run.debitLeft.map Prod.snd = final.builderQueue ∧
+          (v.run.debitSource.map Prod.fst).Nodup ∧
+          (v.run.debitSpent.map Prod.fst).Nodup) ∧
+        (∀ {i k : Nat} {D : GloasStepData (P := P) cfg ccfg bls},
+          v.run.steps[i]? = some (.gloas D) → k < (GJointRunStep.gloas D).drops →
+          ∃ origin e, DebitStepEvent v.run i D k origin e) ∧
+        (∀ {p : Nat} {origin : DebitOrigin} {e : Gloas.BuilderPendingWithdrawal},
+          v.run.debitSpent[p]? = some (origin, e) →
+          ∃ i D k, p = v.run.debitCursor i + k ∧ DebitStepEvent v.run i D k origin e) ∧
+        (∀ {i i' k k' : Nat} {D D' : GloasStepData (P := P) cfg ccfg bls}
+            {origin : DebitOrigin} {e e' : Gloas.BuilderPendingWithdrawal},
+          v.run.steps[i]? = some (.gloas D) → k < (GJointRunStep.gloas D).drops →
+          v.run.debitSpent[v.run.debitCursor i + k]? = some (origin, e) →
+          v.run.steps[i']? = some (.gloas D') → k' < (GJointRunStep.gloas D').drops →
+          v.run.debitSpent[v.run.debitCursor i' + k']? = some (origin, e') →
+          i = i' ∧ k = k' ∧ e = e') ∧
+        (∀ {k : Nat} {e : Gloas.BuilderPendingWithdrawal},
+          anchor.builderQueue[k]? = some e →
+          ((Sum.inl k, e) ∈ v.run.debitSpent ∧ (Sum.inl k, e) ∉ v.run.debitLeft) ∨
+            ((Sum.inl k, e) ∈ v.run.debitLeft ∧ (Sum.inl k, e) ∉ v.run.debitSpent)) ∧
+        (∀ slot : Nat,
+          ((v.run.debitSpent.filterMap (fun r => v.run.lookupPush r.1)).filter
+            (fun p => decide (p.slot = slot))).length ≤ 1) ∧
+        (∀ {j : Nat} {D : GloasStepData (P := P) cfg ccfg bls}
+            {origin : DebitOrigin} {e : Gloas.BuilderPendingWithdrawal} {p : Push},
+          v.run.steps[j]? = some (.gloas D) → U64.zero < D.bid.value →
+          (origin, e) ∈ v.run.debitSpent → v.run.lookupPush origin = some p → p.slot = D.paySlot →
+          e = D.payW ∧ p.w = D.payW ∧
+            ∃ j_app k_app D_app (f : PaymentFate v.run j),
+              origin = Sum.inr (j_app, k_app) ∧
+              v.run.steps[j_app]? = some (.gloas D_app) ∧
+              D_app.pushes[k_app]? = some p ∧
+              f.holdsFor D ∧
+              f.pushKey? = some (p.path, j_app))
+    := Blanc.Lift.BuilderRequest.ValidJointG.payment_debit_at_most_once v
+
+end Blanc.Lift.BuilderRequest.ValidJointG
+
+namespace Blanc.Lift.BuilderRequest.ValidJointG
+open Jaune JauneConsensus ExecutionTrace ChainLink Blanc JauneConsensus.Facts.Gloas Occurrence
+
+-- Corpus pin: Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate_no_pre_anchor_emissions
+example {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain} {anchor final : GJointState P} (v : ValidJointG cfg ccfg bls checkpoint anchor final) {n : Nat}
+    (noAmsterdam : ∀ b ∈ v.preBlocks, b.fork ≠ .amsterdam)
+    (hn : n < (Deposit.Indexed.submissions v.blocks).length) :
+    ((Deposit.Indexed.emissions v.preBlocks).length ≤ n ∧ n < (Deposit.Indexed.emissions v.blocks).length ∧
+          ∃ bj k, ∃ hbj : bj < v.blocks.length, k < (Deposit.Indexed.blockEmissions v.blocks[bj]).length ∧
+            (Deposit.Indexed.emissions (v.blocks.take bj)).length + k = n ∧
+            (Deposit.Indexed.blockEmissions v.blocks[bj])[k]? = (Deposit.Indexed.submissions v.blocks)[n]? ∧
+            v.preBlocks.length ≤ bj ∧
+          ∃ (j : Nat) (D : GloasStepData (P := P) cfg ccfg bls) (req : Gloas.BuilderDepositRequest)
+            (tr : List (Gloas.BeaconState P)) (m : Gloas.BeaconState P),
+            v.run.steps[j]? = some (.gloas D) ∧ D.isFull ∧ v.run.payloadIndex j = bj - v.preBlocks.length ∧
+            D.builderDeposits[k]? = some req ∧ Ssz.serialize req = (Deposit.Indexed.submissions v.blocks)[n]! ∧
+            builderDepositTrace ccfg bls D.postSlots D.block = .ok tr ∧ tr[k]? = some m ∧
+            ∃ o, classifyBuilderDeposit ccfg bls m req = .ok o ∧
+              (∀ o', classifyBuilderDeposit ccfg bls m req = .ok o' → o' = o) ∧
+              ∃ m', tr[k + 1]? = some m' ∧ applyBuilderDepositOutcome ccfg m req o = .ok m' ∧
+              (∀ (j' k' : Nat) (D' : GloasStepData (P := P) cfg ccfg bls) req', v.run.steps[j']? = some (.gloas D') →
+                D'.builderDeposits[k']? = some req' →
+                (Deposit.Indexed.emissions (v.blocks.take (v.preBlocks.length + v.run.payloadIndex j'))).length + k' = n →
+                j' = j ∧ k' = k)) ∨
+        ((Deposit.Indexed.emissions v.blocks).length ≤ n ∧
+          (Deposit.Indexed.remainingQueue final.exec)[n - (Deposit.Indexed.emissions v.blocks).length]? =
+            (Deposit.Indexed.submissions v.blocks)[n]?)
+    := Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate_no_pre_anchor_emissions v noAmsterdam hn
+
+-- Corpus pin: Blanc.Lift.BuilderRequest.ValidJointG.exit_fate_no_pre_anchor_emissions
+example {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoint : BlockChain} {anchor final : GJointState P} (v : ValidJointG cfg ccfg bls checkpoint anchor final) {n : Nat}
+    (noAmsterdam : ∀ b ∈ v.preBlocks, b.fork ≠ .amsterdam)
+    (hn : n < (Exit.Indexed.submissions v.blocks).length) :
+    ((Exit.Indexed.emissions v.preBlocks).length ≤ n ∧ n < (Exit.Indexed.emissions v.blocks).length ∧
+          ∃ bj k, ∃ hbj : bj < v.blocks.length, k < (Exit.Indexed.blockEmissions v.blocks[bj]).length ∧
+            (Exit.Indexed.emissions (v.blocks.take bj)).length + k = n ∧
+            (Exit.Indexed.blockEmissions v.blocks[bj])[k]? = (Exit.Indexed.submissions v.blocks)[n]? ∧
+            v.preBlocks.length ≤ bj ∧
+          ∃ (j : Nat) (D : GloasStepData (P := P) cfg ccfg bls) (req : Gloas.BuilderExitRequest)
+            (tr : List (Gloas.BeaconState P)) (m : Gloas.BeaconState P),
+            v.run.steps[j]? = some (.gloas D) ∧ D.isFull ∧ v.run.payloadIndex j = bj - v.preBlocks.length ∧
+            D.builderExits[k]? = some req ∧ Ssz.serialize req = (Exit.Indexed.submissions v.blocks)[n]! ∧
+            builderExitTrace ccfg bls D.postSlots D.block = .ok tr ∧ tr[k]? = some m ∧
+            ∃ o, classifyBuilderExit ccfg m req = .ok o ∧
+              (∀ o', classifyBuilderExit ccfg m req = .ok o' → o' = o) ∧
+              ∃ m', tr[k + 1]? = some m' ∧ applyBuilderExitOutcome ccfg m req o = .ok m' ∧
+              (∀ (j' k' : Nat) (D' : GloasStepData (P := P) cfg ccfg bls) req', v.run.steps[j']? = some (.gloas D') →
+                D'.builderExits[k']? = some req' →
+                (Exit.Indexed.emissions (v.blocks.take (v.preBlocks.length + v.run.payloadIndex j'))).length + k' = n →
+                j' = j ∧ k' = k)) ∨
+        ((Exit.Indexed.emissions v.blocks).length ≤ n ∧
+          (Exit.Indexed.remainingQueue final.exec)[n - (Exit.Indexed.emissions v.blocks).length]? =
+            (Exit.Indexed.submissions v.blocks)[n]?)
+    := Blanc.Lift.BuilderRequest.ValidJointG.exit_fate_no_pre_anchor_emissions v noAmsterdam hn
+
+end Blanc.Lift.BuilderRequest.ValidJointG

@@ -10,7 +10,10 @@ namespace Blanc
 
 open Jaune
 
-open private Frame_enter_run_logs_noStateGas from Blanc.Lift.CommittedLogs
+open private Frame_enter_run_logs_noStateGas
+  LogsEqOrTransfer Evm_halt_ok_logs_any Exec.cont_logs_any
+  Evm_childless_logs_any Evm_resumed_committed_logs_any
+  Evm_resumed_rollback_logs_any from Blanc.Lift.CommittedLogs
 
 /-- A frame's added logs are the existing committed boundary ledger, at any original path. -/
 theorem Exec.addedLogs_eq_ownLogs
@@ -704,5 +707,329 @@ theorem putIndex_pairwise {α : Type} (xs : List α) :
       intro item member
       have bound := putIndex_aux_lower xs (offset + 1) item member
       omega
+
+private theorem Exec.committed_logs_prefix {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true) :
+    ∃ added, (Execution.committedPost out committed).logs = pre.logs ++ added := by
+  refine Exec.retained_induction (run := run) (committed := committed)
+    (P := fun _ _ pre out _ =>
+      ∀ (c : Execution.commits out = true), ∃ added, (Execution.committedPost out c).logs = pre.logs ++ added)
+    (halt := by
+      intro pc sevm pre out step c
+      cases out with
+      | error e => simp only [Execution.commits, Bool.false_eq_true] at c
+      | ok post =>
+          obtain ⟨xs, hxs, -⟩ := Evm_halt_ok_logs_any step
+          exact ⟨xs, hxs⟩)
+    (cont := by
+      intro pc sevm pre pc' post out step next ih c
+      obtain ⟨tail, htail⟩ := ih c
+      refine ⟨(Exec.logAt? pc sevm pre).toList ++ tail, ?_⟩
+      rw [htail, Exec.cont_logs_any step, List.append_assoc])
+    (doneOk := by
+      intro pc sevm pre frame resume pc' result post out step enter resumed next ih c
+      obtain ⟨xs, hxs, -⟩ := Evm_childless_logs_any step enter resumed
+      obtain ⟨tail, htail⟩ := ih c
+      refine ⟨xs ++ tail, ?_⟩
+      rw [htail, hxs, List.append_assoc])
+    (settled := by
+      intro pc sevm pre frame resume pc' childEvm raw post out step enter child resumed next settles _ ih c
+      obtain ⟨tail, htail⟩ := ih c
+      refine ⟨(Execution.committedPost raw (Frame.raw_commits_of_settlementCommits settles)).logs ++ tail, ?_⟩
+      rw [htail, Evm_resumed_committed_logs_any step resumed settles, List.append_assoc])
+    (rolled := by
+      intro pc sevm pre frame resume pc' childEvm raw post out step enter child resumed next notSettles ih c
+      obtain ⟨tail, htail⟩ := ih c
+      refine ⟨tail, ?_⟩
+      rw [htail, Evm_resumed_rollback_logs_any step resumed notSettles])
+    committed
+
+private theorem Exec.addedLogs_eq_ownLogs_filtered {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {out : Execution} (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    {keep : Log → Bool} (noTransfer : ∀ s r v, keep (transferLog s r v) = false)
+    (path : List Nat) (counter : Nat) :
+    List.filter keep (List.drop pre.logs.length (Execution.committedPost out committed).logs) =
+      List.filter keep (List.flatMap Exec.boundaryOwnLogs
+        (Exec.stateBoundariesOfCommits path counter run committed)) := by
+  obtain ⟨added, hadded⟩ := Exec.committed_logs_prefix run committed
+  have hfilt := Exec.committed_logs_at_filtered (framePath := path) (nextChild := counter)
+    run committed noTransfer
+  rw [hadded, List.filter_append] at hfilt
+  rw [hadded, List.drop_left]
+  exact List.append_cancel_left hfilt
+
+/-- All-fork counterpart of `Exec.keptAt_ownLogs`: for any filter predicate excluding EIP-7708
+transfer logs, a foreign run's filtered boundary own-logs equal its kept frames' filtered added
+logs, with no `stateGas = none` assumption. -/
+theorem Exec.keptAt_ownLogs_filtered {a : Adr} {keep : Log → Bool}
+    (address : ∀ log : Log, keep log = true → log.address = a)
+    (noTransfer : ∀ s r v, keep (transferLog s r v) = false)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    (foreign : sevm.currentTarget ≠ a) (path : List Nat) (counter : Nat) :
+    List.filter keep (List.flatMap Exec.boundaryOwnLogs
+      (Exec.stateBoundariesOfCommits path counter run committed)) =
+      List.flatMap (fun frame => List.filter keep (List.drop frame.pre.logs.length frame.post.logs))
+        (Exec.keptAt a run) := by
+  refine Exec.retained_induction (run := run) (committed := committed)
+    (P := fun _ sevm _ out run =>
+      sevm.currentTarget ≠ a → ∀ (c : Execution.commits out = true) path counter,
+        List.filter keep (List.flatMap Exec.boundaryOwnLogs
+          (Exec.stateBoundariesOfCommits path counter run c)) =
+          List.flatMap (fun frame => List.filter keep (List.drop frame.pre.logs.length frame.post.logs))
+            (Exec.keptAt a run))
+    (halt := by
+      intro pc sevm pre out step _ c path counter
+      simp only [Exec.stateBoundariesOfCommits, Exec.keptAt, List.flatMap_cons, List.flatMap_nil,
+        List.append_nil, Exec.boundaryOwnLogs, Exec.stateBoundary, List.filter_nil])
+    (cont := by
+      intro pc sevm pre pc' post out step next ih hforeign c path counter
+      simp only [Exec.stateBoundariesOfCommits, Exec.keptAt, List.flatMap_cons, List.filter_append]
+      have hlog : List.filter keep (Exec.boundaryOwnLogs
+          (Exec.stateBoundary path (Exec.Frame.ofRun (.cont step next) c) .instruction pre.state
+            (Exec.startState next))) = [] := by
+        simpa only [Exec.boundaryOwnLogs, Exec.stateBoundary, Exec.Frame.rootDeriv,
+          Exec.Frame.ofRun, Exec.Deriv.successfulLog?] using Exec.logAt_filter_of_foreign address hforeign
+      rw [hlog, List.nil_append]
+      exact ih hforeign c path counter)
+    (doneOk := by
+      intro pc sevm pre frame resume pc' result post out step enter resumed next ih hforeign c path counter
+      simp only [Exec.stateBoundariesOfCommits, Exec.keptAt, List.flatMap_cons,
+        Exec.boundaryOwnLogs, Exec.stateBoundary, List.nil_append]
+      exact ih hforeign c path (counter + 1))
+    (settled := by
+      intro pc sevm pre frame resume pc' childEvm raw post out step enter child resumed next
+        settles childIH nextIH hforeign c path counter
+      have childC := Frame.raw_commits_of_settlementCommits settles
+      have hsb : Exec.stateBoundariesOfCommits path counter
+          (.runOk step enter child resumed next) c =
+          Exec.stateBoundary path (Exec.Frame.ofRun (.runOk step enter child resumed next) c)
+              .childEntry pre.state (Exec.startState child) ::
+            (Exec.stateBoundariesOfCommits (path ++ [counter]) 0 child childC ++
+              Exec.stateBoundary path (Exec.Frame.ofRun (.runOk step enter child resumed next) c)
+                  .childSettlement (Execution.committedPost raw childC).state (Exec.startState next) ::
+                Exec.stateBoundariesOfCommits path (counter + 1) next c) := by
+        simp only [Exec.stateBoundariesOfCommits, settles, ↓reduceDIte]
+      have hka : Exec.keptAt a (.runOk step enter child resumed next) =
+          (if childEvm.sta.currentTarget = a then [Exec.Frame.ofRun child childC]
+            else Exec.keptAt a child) ++ Exec.keptAt a next := by
+        simp only [Exec.keptAt, settles, ↓reduceDIte]
+      rw [hsb, hka, List.flatMap_cons, List.flatMap_append, List.flatMap_cons, List.flatMap_append,
+        List.filter_append, List.filter_append, List.filter_append]
+      simp only [Exec.boundaryOwnLogs, Exec.stateBoundary, List.filter_nil, List.nil_append]
+      rw [nextIH hforeign c path (counter + 1)]
+      congr 1
+      by_cases here : childEvm.sta.currentTarget = a
+      · rw [ite_eq_left here, List.flatMap_cons, List.flatMap_nil, List.append_nil]
+        exact (Exec.addedLogs_eq_ownLogs_filtered child childC noTransfer (path ++ [counter]) 0).symm
+      · rw [ite_eq_right here]
+        exact childIH here childC (path ++ [counter]) 0)
+    (rolled := by
+      intro pc sevm pre frame resume pc' childEvm raw post out step enter child resumed next
+        notSettles ih hforeign c path counter
+      have hsb : Exec.stateBoundariesOfCommits path counter
+          (.runOk step enter child resumed next) c =
+          Exec.stateBoundary path (Exec.Frame.ofRun (.runOk step enter child resumed next) c)
+              .childRollback pre.state (Exec.startState next) ::
+            Exec.stateBoundariesOfCommits path (counter + 1) next c := by
+        simp only [Exec.stateBoundariesOfCommits, dite_eq_right notSettles]
+      have hka : Exec.keptAt a (.runOk step enter child resumed next) = Exec.keptAt a next := by
+        simp only [Exec.keptAt, dite_eq_right notSettles, List.nil_append]
+      rw [hsb, hka, List.flatMap_cons, List.filter_append]
+      simp only [Exec.boundaryOwnLogs, Exec.stateBoundary, List.filter_nil, List.nil_append]
+      exact ih hforeign c path (counter + 1))
+    foreign committed path counter
+
+/-- All-fork counterpart of `Root.keptAt_logs`. -/
+theorem Root.keptAt_logs_filtered {a : Adr} {keep : Log → Bool}
+    (address : ∀ log : Log, keep log = true → log.address = a)
+    (noTransfer : ∀ s r v, keep (transferLog s r v) = false)
+    (root : Root) :
+    List.flatMap (fun frame => List.filter keep (List.drop frame.pre.logs.length frame.post.logs))
+        (root.keptAt a) =
+      if committed : Frame.settlementCommits root.frame root.raw = true then
+        List.filter keep (List.drop root.evm.dyna.logs.length
+          (Execution.committedPost root.raw (Frame.raw_commits_of_settlementCommits committed)).logs)
+      else [] := by
+  by_cases committed : Frame.settlementCommits root.frame root.raw = true
+  · rw [dite_eq_left committed, Root.keptAt, dite_eq_left committed]
+    by_cases here : root.evm.sta.currentTarget = a
+    · rw [ite_eq_left here, List.flatMap_cons, List.flatMap_nil, List.append_nil]
+      rfl
+    · rw [ite_eq_right here,
+        ← Exec.keptAt_ownLogs_filtered address noTransfer root.run
+          (Frame.raw_commits_of_settlementCommits committed) here [] 0,
+        ← Exec.addedLogs_eq_ownLogs_filtered root.run
+          (Frame.raw_commits_of_settlementCommits committed) noTransfer [] 0]
+  · rw [dite_eq_right committed, Root.keptAt, dite_eq_right committed]
+    rfl
+
+/-- All-fork counterpart of `_root_.Blanc.MessageRoots.keptAt_logs`: actual message logs
+filtered by a transfer-excluding target predicate match the kept frames' added logs. -/
+theorem _root_.Blanc.MessageRoots.keptAt_logs_filtered {a : Adr} {keep : Log → Bool}
+    (address : ∀ log : Log, keep log = true → log.address = a)
+    (noTransfer : ∀ s r v, keep (transferLog s r v) = false)
+    {msg : Msg} {state : State} {out : MsgCallOutput} {roots : List Root}
+    (run : MessageRoots msg state out roots) :
+    List.filter keep out.logs =
+      List.flatMap (fun fr => List.filter keep (List.drop fr.pre.logs.length fr.post.logs))
+        (List.flatMap (Root.keptAt a) roots) := by
+  rcases run.logs_shape with ⟨rfl, transfers⟩ | ⟨r, rfl, transfers, body⟩
+  · simp only [List.flatMap_nil, OnlyTransferLogs.filter_eq_nil transfers noTransfer]
+  · simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
+    rw [Root.keptAt_logs_filtered address noTransfer r]
+    rcases body with ⟨notSettles, empty⟩ | ⟨settles, outLogs⟩
+    · rw [dite_eq_right (by rw [notSettles]; exact Bool.false_ne_true), empty, List.filter_nil]
+    · rw [dite_eq_left settles, outLogs]
+      obtain ⟨added, hadded⟩ := Exec.committed_logs_prefix r.run
+        (Frame.raw_commits_of_settlementCommits settles)
+      rw [hadded, List.filter_append, List.drop_left,
+        OnlyTransferLogs.filter_eq_nil transfers noTransfer, List.nil_append]
+
+private theorem transaction_receipt_exact_any
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (run : processTransaction benv bout tx index = .ok (state, bout')) :
+    ∃ sender msg messageState messageOut,
+      transactionMessage benv bout tx index = .ok (sender, msg) ∧
+        processMessageCall msg = .ok (messageState, messageOut) ∧
+        bout'.receiptKeys = bout.receiptKeys ++ [BLT.toBytes (.bytes index.toBytes)] ∧
+        bout'.receiptsTrie[BLT.toBytes (.bytes index.toBytes)]? =
+          some (makeReceipt tx messageOut.error bout'.cumulativeGasUsed messageOut.logs) ∧
+        bout'.blockLogs = bout.blockLogs ++ messageOut.logs := by
+  unfold processTransaction at run
+  rcases Except.bind_eq_ok run with ⟨bout0, hbout0, run⟩
+  rcases Except.bind_eq_ok run with ⟨vs, hvs, run⟩
+  rcases Except.bind_eq_ok run with ⟨⟨intrinsic, floorGas⟩, hval, run⟩
+  rcases Except.bind_eq_ok run with ⟨⟨sender, price, hashes, blobGas⟩, hchk, run⟩
+  rcases Except.bind_eq_ok run with ⟨debit, hsub, run⟩
+  rcases Except.bind_eq_ok run with ⟨msg, hprep, run⟩
+  rcases Except.bind_eq_ok run with ⟨⟨messageState, messageOut⟩, hcall, run⟩
+  rcases Except.bind_eq_ok run with ⟨refund, href, run⟩
+  rcases Except.bind_eq_ok run with ⟨bout1, hbout1, run⟩
+  rcases Except.bind_eq_ok run with ⟨bout2, hbout2, run⟩
+  rw [Except.mapError_eq_ok_iff] at hcall
+  have hbout0_keys : bout0.receiptKeys = bout.receiptKeys := by
+    cases hbout0
+    rfl
+  have hbout0_trie : bout0.receiptsTrie = bout.receiptsTrie := by
+    cases hbout0
+    rfl
+  have hbout0_logs : bout0.blockLogs = bout.blockLogs := by
+    cases hbout0
+    rfl
+  have hbout1_keys : bout1.receiptKeys = bout0.receiptKeys := by
+    cases hbout1
+    rfl
+  have hbout1_trie : bout1.receiptsTrie = bout0.receiptsTrie := by
+    cases hbout1
+    rfl
+  have hbout1_logs : bout1.blockLogs = bout0.blockLogs := by
+    cases hbout1
+    rfl
+  have hbout2_eq :
+      bout2.receiptKeys = bout.receiptKeys ++ [BLT.toBytes (.bytes index.toBytes)] ∧
+        bout2.receiptsTrie = bout.receiptsTrie.insert (BLT.toBytes (.bytes index.toBytes))
+          (makeReceipt tx messageOut.error bout2.cumulativeGasUsed messageOut.logs) ∧
+        bout2.blockLogs = bout.blockLogs ++ messageOut.logs := by
+    cases hbout2
+    rw [hbout1_keys, hbout0_keys, hbout1_trie, hbout0_trie, hbout1_logs, hbout0_logs]
+    exact ⟨rfl, rfl, rfl⟩
+  have hbout'_eq : bout'.receiptKeys = bout2.receiptKeys ∧
+      bout'.receiptsTrie = bout2.receiptsTrie ∧
+      bout'.cumulativeGasUsed = bout2.cumulativeGasUsed ∧
+      bout'.blockLogs = bout2.blockLogs := by
+    simp only [Except.ok.injEq, Prod.mk.injEq] at run
+    obtain ⟨-, rfl⟩ := run
+    exact ⟨rfl, rfl, rfl, rfl⟩
+  have htxMsg : transactionMessage benv bout tx index = .ok (sender, msg) := by
+    have hbout0_eq : bout0 = ExecutionTrace.transactionPreludeBout bout tx index := by
+      cases hbout0
+      rfl
+    rw [hbout0_eq] at hchk
+    unfold transactionMessage ExecutionTrace.transactionBlobGasFee transactionTenvAt
+      ExecutionTrace.transactionTenv
+    dsimp only
+    simp only [bind, Except.bind]
+    rw [hvs]
+    dsimp only
+    rw [hval]
+    dsimp only
+    rw [hchk]
+    dsimp only
+    rw [hsub]
+    dsimp only
+    rw [hprep]
+  refine ⟨sender, msg, messageState, messageOut, htxMsg, hcall, ?_, ?_, ?_⟩
+  · exact hbout'_eq.1.trans hbout2_eq.1
+  · rw [hbout'_eq.2.1, hbout2_eq.2.1, hbout'_eq.2.2.1]
+    exact Std.TreeMap.getElem?_insert_self
+  · exact hbout'_eq.2.2.2.trans hbout2_eq.2.2
+
+private theorem TransactionsRoots.receipt_preserved_of_keys_ne
+    {txis : List (Nat × Tx)} {benv final : Benv} {bout out : BlockOutput}
+    {senders : List (Adr × Tx)} {roots : List Root}
+    (run : TransactionsRoots txis benv bout final out senders roots)
+    {key : Bytes} (different : ∀ item ∈ txis, (BLT.bytes (Nat.toBytes item.1)).toBytes ≠ key) :
+    out.receiptsTrie[key]? = bout.receiptsTrie[key]? := by
+  induction run with
+  | nil => rfl
+  | @cons i tx rest benv bfinal bout bout' finalOut st sender rs later txs headRun restRun ih =>
+      obtain ⟨r, htrie⟩ := processTransaction_receiptsTrie headRun.1
+      have neq : (BLT.bytes (Nat.toBytes i)).toBytes ≠ key :=
+        different (i, tx) List.mem_cons_self
+      have tailNeq : ∀ item ∈ rest, (BLT.bytes (Nat.toBytes item.1)).toBytes ≠ key :=
+        fun item mem => different item (List.mem_cons_of_mem _ mem)
+      rw [ih tailNeq, htrie, Std.TreeMap.getElem?_insert]
+      split
+      · rename_i same
+        exact False.elim (neq (Std.LawfulEqOrd.eq_of_compare same))
+      · rfl
+
+/-- All-fork counterpart of `TransactionsRoots.receipt_keptAt_logs`. -/
+theorem TransactionsRoots.receipt_keptAt_logs_filtered {a : Adr} {keep : Log → Bool}
+    (address : ∀ log : Log, keep log = true → log.address = a)
+    (noTransfer : ∀ s r v, keep (transferLog s r v) = false)
+    {txis : List (Nat × Tx)} {benv final : Benv} {bout out : BlockOutput}
+    {senders : List (Adr × Tx)} {roots : List Root}
+    (run : TransactionsRoots txis benv bout final out senders roots)
+    (ordered : List.Pairwise (fun left right => left.1 < right.1) txis) :
+    ∃ receipts,
+      out.receiptKeys = bout.receiptKeys ++ List.map (fun item => (BLT.bytes (Nat.toBytes item.1)).toBytes) txis ∧
+        List.Forall₂ (fun key receipt => out.receiptsTrie[key]? = some receipt)
+          (List.map (fun item => (BLT.bytes (Nat.toBytes item.1)).toBytes) txis) receipts ∧
+        List.flatMap (fun receipt => List.filter keep receipt.2.logs) receipts =
+          List.flatMap (fun fr => List.filter keep (List.drop fr.pre.logs.length fr.post.logs))
+            (List.flatMap (Root.keptAt a) roots) := by
+  induction run with
+  | nil => exact ⟨[], (List.append_nil _).symm, .nil, rfl⟩
+  | @cons i tx rest benv bfinal bout bout' finalOut st sender rs later txs headRun restRun ih =>
+      obtain ⟨sender0, msg0, ms0, mo0, htxMsg0, hcall0, hkeys0, hlkp0, -⟩ :=
+        transaction_receipt_exact_any headRun.1
+      obtain ⟨msg1, ms1, mo1, htxMsg1, hmroots⟩ := headRun.2
+      rw [htxMsg0, Except.ok.injEq, Prod.mk.injEq] at htxMsg1
+      obtain ⟨-, hmsgEq⟩ := htxMsg1
+      subst msg1
+      have hcall1 : processMessageCall msg0 = .ok (ms1, mo1) := hmroots.1
+      rw [hcall0, Except.ok.injEq, Prod.mk.injEq] at hcall1
+      obtain ⟨-, hmoEq⟩ := hcall1
+      subst mo1
+      have hlogs0 := _root_.Blanc.MessageRoots.keptAt_logs_filtered address noTransfer hmroots
+      have different : ∀ item ∈ rest,
+          (BLT.bytes (Nat.toBytes item.1)).toBytes ≠ (BLT.bytes (Nat.toBytes i)).toBytes := by
+        intro item mem
+        have lt := (List.pairwise_cons.mp ordered).1 item mem
+        exact RlpConcrete.receipt_key_ne (Nat.ne_of_gt lt)
+      have lookup : finalOut.receiptsTrie[(BLT.bytes (Nat.toBytes i)).toBytes]? =
+          some (makeReceipt tx mo0.error bout'.cumulativeGasUsed mo0.logs) :=
+        (TransactionsRoots.receipt_preserved_of_keys_ne restRun different).trans hlkp0
+      obtain ⟨receipts, keys, lookups, logs⟩ := ih (List.pairwise_cons.mp ordered).2
+      refine ⟨makeReceipt tx mo0.error bout'.cumulativeGasUsed mo0.logs :: receipts, ?_,
+        .cons lookup lookups, ?_⟩
+      · rw [keys, hkeys0, List.map_cons, List.append_assoc]
+        rfl
+      · simp only [List.flatMap_cons, List.flatMap_append]
+        rw [← hlogs0, ← logs]
+        rfl
 
 end Blanc

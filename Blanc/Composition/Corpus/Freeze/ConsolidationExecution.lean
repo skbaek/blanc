@@ -5,8 +5,8 @@ import Blanc.ExecutionKeptValue
 /-!
 # Freeze record (G0, part cb): EIP-7251 execution cells C-S2, C-S6, C-S8
 
-Statements only: each cell is a `def … : Prop` against Blanc main `7f2a69ba` and Jaune `c30cf0a5`. Nothing here is
-proved, registered in the layering classification, or imported by the root. A later proof is `theorem c_s2 : C_S2`.
+Frozen statement definitions (`def … : Prop`) from G0 against Blanc `7f2a69ba` and Jaune `c30cf0a5`,
+classified in `scripts/check-layering.py`, imported by `Blanc.lean`, and proved in `Blanc/Composition/`.
 
 Every statement ranges over kept histories (`Blanc.KeptHistory`) and the frames they keep at the predeploy
 (`KeptBlock.keptAt`): a frame rolled back by its own or an ancestor's failure is not among them.

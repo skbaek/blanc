@@ -32,14 +32,15 @@ private structure PrepKeep (auths : List Auth) (d d' : Devm) : Prop where
   kept : ∀ x, (d.state.getCode x).toList ≠ [] → ¬ isValidDelegation (d.state.getCode x) →
     d'.state.get x = d.state.get x
   away : ∀ x, (∀ auth ∈ auths, recoverAuthority auth ≠ .ok x) → d'.state.getCode x = d.state.getCode x
+  logs : d'.logs = d.logs
 
 private theorem PrepKeep.refl (auths : List Auth) (d : Devm) : PrepKeep auths d d :=
-  ⟨rfl, rfl, rfl, rfl, fun _ _ _ => rfl, fun _ _ => rfl⟩
+  ⟨rfl, rfl, rfl, rfl, fun _ _ _ => rfl, fun _ _ => rfl, rfl⟩
 
 private theorem PrepKeep.trans {auths : List Auth} {d₁ d₂ d₃ : Devm} (h : PrepKeep auths d₁ d₂)
     (k : PrepKeep auths d₂ d₃) : PrepKeep auths d₁ d₃ := by
   refine ⟨k.stack.trans h.stack, k.memory.trans h.memory, k.deletions.trans h.deletions, k.created.trans h.created,
-    ?_, ?_⟩
+    ?_, ?_, k.logs.trans h.logs⟩
   · intro x hc hd
     have e := h.kept x hc hd
     have ec : d₂.state.getCode x = d₁.state.getCode x := congrArg Acct.code e
@@ -61,7 +62,8 @@ private theorem Charged.trans {d₁ d₂ d₃ : Devm} (h : Charged d₁ d₂) (k
 
 private theorem Charged.keep {d d' : Devm} (h : Charged d d') (auths : List Auth) : PrepKeep auths d d' := by
   have hstate : d'.state = d.state := congrArg World.state h.world
-  refine ⟨h.stack, h.memory, congrArg Meta.accountsToDelete h.records, congrArg Meta.createdAccounts h.records, ?_, ?_⟩
+  refine ⟨h.stack, h.memory, congrArg Meta.accountsToDelete h.records, congrArg Meta.createdAccounts h.records,
+    ?_, ?_, congrArg Meta.logs h.records⟩
   · intro x _ _; rw [hstate]
   · intro x _; rw [hstate]
 
@@ -89,7 +91,7 @@ private theorem chargeStateGas_charged {c : Nat} {d d' : Devm} (h : chargeStateG
 
 private theorem PrepKeep.widen {auths' : List Auth} {auths : List Auth} {d d' : Devm} (h : PrepKeep auths d d')
     (sub : ∀ a ∈ auths, a ∈ auths') : PrepKeep auths' d d' :=
-  ⟨h.stack, h.memory, h.deletions, h.created, h.kept, fun x hx => h.away x (fun a m => hx a (sub a m))⟩
+  ⟨h.stack, h.memory, h.deletions, h.created, h.kept, fun x hx => h.away x (fun a m => hx a (sub a m)), h.logs⟩
 
 private theorem setCode_incrNonce_get (d : Devm) {a x : Adr} (c : ByteArray) (ne : a ≠ x) :
     ((d.setCode a c).incrNonce a).state.get x = d.state.get x := by
@@ -152,7 +154,7 @@ private theorem applyValidated_keep {state : StateGasRules} {msg : Msg} {authori
   subst h
   have k := (k₁.trans k₂).trans k₃
   have hstate : d₃.state = d.state := congrArg World.state k.world
-  refine (k.keep [auth]).trans ⟨rfl, rfl, rfl, rfl, ?_, ?_⟩
+  refine (k.keep [auth]).trans ⟨rfl, rfl, rfl, rfl, ?_, ?_, rfl⟩
   · intro x hc hd
     have ne : authority ≠ x := by
       intro same
@@ -173,12 +175,12 @@ private theorem applyValidated_keep {state : StateGasRules} {msg : Msg} {authori
 
 private theorem read_keep (rules : ForkRules) (a : Adr) (d : Devm) (auths : List Auth) :
     PrepKeep auths d (d.balReadAccount rules a) := by
-  refine ⟨rfl, rfl, ?_, ?_, fun _ _ _ => rfl, fun _ _ => rfl⟩ <;>
+  refine ⟨rfl, rfl, ?_, ?_, fun _ _ _ => rfl, fun _ _ => rfl, Devm.balReadAccount_logs _ _ _⟩ <;>
     · simp only [Devm.balReadAccount, Devm.setMeta, Devm.accountsToDelete, Devm.createdAccounts]
       split <;> rfl
 
 private theorem warm_keep (a : Adr) (d : Devm) (auths : List Auth) : PrepKeep auths d (addAccessedAddress d a) :=
-  ⟨rfl, rfl, rfl, rfl, fun _ _ _ => rfl, fun _ _ => rfl⟩
+  ⟨rfl, rfl, rfl, rfl, fun _ _ _ => rfl, fun _ _ => rfl, rfl⟩
 
 private theorem step_keep {state : StateGasRules} {msg : Msg} {auth : Auth} {d : Devm} {paid set : AdrSet}
     {r : AmsterdamDelegationResult} (h : setDelegationAmsterdamStep state msg auth d paid set = .ok r) :
@@ -623,6 +625,21 @@ private def FrameOf (msg m : Msg) (f : Frame) : Prop :=
   (msg.target.isNone = false ∧ f = Frame.ofCall m) ∨
     (msg.target.isNone = true ∧ f = Frame.ofCreate m ∧ accountHasCodeOrNonce m.benv.state m.currentTarget = false)
 
+private theorem initDevm_logs_transfer (msg : Msg) :
+    ∀ log ∈ (initDevm msg).logs, ∃ s r v, log = transferLog s r v := by
+  unfold initDevm Devm.logs
+  dsimp only
+  intro log hlog
+  split at hlog
+  · cases hlog
+  · split at hlog
+    · simp only [Devm.emitTransferLog] at hlog
+      split at hlog
+      · cases hlog
+      · change log ∈ [transferLog msg.caller msg.currentTarget msg.value] at hlog
+        exact ⟨msg.caller, msg.currentTarget, msg.value, List.mem_singleton.mp hlog⟩
+    · cases hlog
+
 /-- One settled frame of a message, with the output it renders. -/
 private structure TopRun (msg m : Msg) (state : State) (out : MsgCallOutput) (f : Frame) (benv : Benv) (e : Evm)
     (raw : Execution) (s : Devm) : Prop where
@@ -636,6 +653,8 @@ private structure TopRun (msg m : Msg) (state : State) (out : MsgCallOutput) (f 
   top : messageEntry msg = some (f, e) ∨ (messageEntry msg = none ∧ ∃ adr, raw = executePrecomp e adr ∧
     (f.inner.withBenv benv).codeAddress = some adr ∧
     (!(f.inner.withBenv benv).disablePrecompiles && (f.inner.withBenv benv).benv.stat.rules.isPrecomp adr) = true)
+  logs_eq : out.logs = if s.error.isNone then s.logs else []
+  entry_logs : ∀ log ∈ e.dyna.logs, ∃ s' r' v, log = transferLog s' r' v
 
 private theorem settleMsg_error {f : Frame} {e : EvmError × State × AdrSet × Tra} {s : Devm} :
     f.settleMsg (.error e) ≠ .ok s := by
@@ -717,7 +736,8 @@ private theorem runPrepared_cases {f : Frame} {prepared : Devm} {s : Devm} {benv
 
 private theorem output_amsterdam {msg : Msg} {evm : Devm} {state : State} {out : MsgCallOutput}
     (h : msgCallOutputAmsterdam msg evm = .ok (state, out)) :
-    state = evm.state ∧ ∀ x ∈ out.accountsToDelete, evm.error.isNone = true ∧ x ∈ evm.accountsToDelete := by
+    state = evm.state ∧ (∀ x ∈ out.accountsToDelete, evm.error.isNone = true ∧ x ∈ evm.accountsToDelete) ∧
+      out.logs = (if evm.error.isNone then evm.logs else []) := by
   unfold msgCallOutputAmsterdam at h
   dsimp only at h
   split at h <;>
@@ -725,14 +745,17 @@ private theorem output_amsterdam {msg : Msg} {evm : Devm} {state : State} {out :
     obtain ⟨_, _, h⟩ := Except.bind_eq_ok h
     simp only [Except.ok.injEq, Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-    refine ⟨rfl, fun x hx => ?_⟩
-    first
-      | exact ⟨he, hx⟩
-      | exact absurd hx AdrSet.not_mem_empty
+    refine ⟨rfl, fun x hx => ?_, ?_⟩
+    · first
+        | exact ⟨he, hx⟩
+        | exact absurd hx AdrSet.not_mem_empty
+    · first
+        | exact (ite_eq_left he).symm
+        | exact (ite_eq_right he).symm
 
 /-- A message's outcome: rolled back before any frame, or settled from a precompile with no root, or from the root. -/
 private def Outcome (entry : Option (Frame × Evm)) (msg : Msg) (state : State) (out : MsgCallOutput) : Prop :=
-  (entry = none ∧ state = msg.benv.state ∧ ∀ x, x ∉ out.accountsToDelete) ∨
+  (entry = none ∧ state = msg.benv.state ∧ (∀ x, x ∉ out.accountsToDelete) ∧ out.logs = []) ∨
     (entry = none ∧ ∃ m f benv e adr s, TopRun msg m state out f benv e (executePrecomp e adr) s) ∨
     ∃ m f benv e s, entry = some (f, e) ∧ TopRun msg m state out f benv e (exec e) s
 
@@ -754,7 +777,7 @@ private theorem amsterdam_top {st : StateGasRules} {msg : Msg} {frameOf : Msg �
       split at h
       · simp only [Except.ok.injEq, Prod.mk.injEq] at h
         obtain ⟨rfl, rfl⟩ := h
-        exact .inl ⟨none, rfl, fun x => AdrSet.not_mem_empty⟩
+        exact .inl ⟨none, rfl, fun x => AdrSet.not_mem_empty, rfl⟩
       all_goals cases h
   | ok p =>
       rcases p with ⟨m, d⟩
@@ -762,7 +785,7 @@ private theorem amsterdam_top {st : StateGasRules} {msg : Msg} {frameOf : Msg �
       dsimp only at h
       obtain ⟨evm, hevm, hout⟩ := Except.bind_eq_ok h
       have hrun : runPreparedTopFrame (frameOf m) d = .ok evm := Except.bimap_id_eq_ok hevm
-      obtain ⟨hst, hdel⟩ := output_amsterdam hout
+      obtain ⟨hst, hdel, hlogs⟩ := output_amsterdam hout
       obtain ⟨prep, keep, coll⟩ := prepare_spec hp
       have frame : FrameOf msg m (frameOf m) := by
         rcases hf with ⟨ht, rfl⟩ | ⟨ht, rfl⟩
@@ -787,18 +810,27 @@ private theorem amsterdam_top {st : StateGasRules} {msg : Msg} {frameOf : Msg �
               ((d.withState benv.state).withStorageWrites benv.storageWrites).withCreatedAccounts
                 benv.createdAccounts⟩ :=
             ⟨ht, rfl, rfl, rfl, keep.stack, keep.memory, keep.deletions.trans hinner.symm, rfl⟩
+          have hentryLogs : ∀ log ∈ (((d.withState benv.state).withStorageWrites benv.storageWrites).withCreatedAccounts
+              benv.createdAccounts).logs, ∃ s' r' v, log = transferLog s' r' v := by
+            intro log hlog
+            have hdl : (((d.withState benv.state).withStorageWrites benv.storageWrites).withCreatedAccounts
+                benv.createdAccounts).logs = d.logs := rfl
+            rw [hdl, keep.logs] at hlog
+            exact initDevm_logs_transfer msg log hlog
           rw [hentry]
           rcases runPrepared_cases ht hrun with ⟨hnone, adr, hs, hca, hp⟩ | ⟨hsome, hs⟩
           · exact .inr (.inl ⟨hnone, m, _, benv, _, adr, evm,
-              ⟨prep, frame, entered, hs, hst, hdel, .inr ⟨lane.trans (hentry.trans hnone), adr, rfl, hca, hp⟩⟩⟩)
+              ⟨prep, frame, entered, hs, hst, hdel, .inr ⟨lane.trans (hentry.trans hnone), adr, rfl, hca, hp⟩,
+                hlogs, hentryLogs⟩⟩)
           · exact .inr (.inr ⟨m, _, benv, _, evm, hsome,
-              ⟨prep, frame, entered, hs, hst, hdel, .inl (lane.trans (hentry.trans hsome))⟩⟩)
+              ⟨prep, frame, entered, hs, hst, hdel, .inl (lane.trans (hentry.trans hsome)), hlogs, hentryLogs⟩⟩)
 
 private theorem legacy_create_output {msg : Msg} {evm : Devm} {state : State} {out : MsgCallOutput}
     (hsg : msg.benv.stat.rules.stateGas = none) (target : msg.target.isNone = true)
     (collision : messageCreateCollision msg = false) (core : processCreateMessage msg = .ok evm)
     (result : processMessageCall msg = .ok (state, out)) :
-    state = evm.state ∧ ∀ x ∈ out.accountsToDelete, evm.error.isNone = true ∧ x ∈ evm.accountsToDelete := by
+    state = evm.state ∧ (∀ x ∈ out.accountsToDelete, evm.error.isNone = true ∧ x ∈ evm.accountsToDelete) ∧
+      out.logs = (if evm.error.isNone then evm.logs else []) := by
   unfold processMessageCall at result
   simp only [target, ↓reduceIte] at result
   unfold processMessageCall.create at result
@@ -812,20 +844,24 @@ private theorem legacy_create_output {msg : Msg} {evm : Devm} {state : State} {o
   · rename_i he
     rcases Except.bind_eq_ok tail with ⟨_, _, output⟩
     have hout := Prod.mk.inj (Except.ok.inj output)
-    refine ⟨hout.1.symm, fun a ha => ?_⟩
-    rw [← hout.2] at ha
-    exact ⟨he, ha⟩
-  · have hout := Prod.mk.inj (Except.ok.inj tail)
-    refine ⟨hout.1.symm, fun a ha => ?_⟩
-    rw [← hout.2] at ha
-    exact absurd ha AdrSet.not_mem_empty
+    refine ⟨hout.1.symm, fun a ha => ?_, ?_⟩
+    · rw [← hout.2] at ha
+      exact ⟨he, ha⟩
+    · rw [← hout.2, ite_eq_left he]
+  · rename_i he
+    have hout := Prod.mk.inj (Except.ok.inj tail)
+    refine ⟨hout.1.symm, fun a ha => ?_, ?_⟩
+    · rw [← hout.2] at ha
+      exact absurd ha AdrSet.not_mem_empty
+    · rw [← hout.2, ite_eq_right he]
 
 private theorem legacy_call_output {msg delegated : Msg} {refund : Nat} {evm : Devm} {state : State}
     {out : MsgCallOutput} (hsg : msg.benv.stat.rules.stateGas = none) (target : msg.target.isNone = false)
     (delegation : messageCallDelegation msg = .ok (delegated, refund))
     (core : processMessage (messageCallExecutionMessage delegated) = .ok evm)
     (result : processMessageCall msg = .ok (state, out)) :
-    state = evm.state ∧ ∀ x ∈ out.accountsToDelete, evm.error.isNone = true ∧ x ∈ evm.accountsToDelete := by
+    state = evm.state ∧ (∀ x ∈ out.accountsToDelete, evm.error.isNone = true ∧ x ∈ evm.accountsToDelete) ∧
+      out.logs = (if evm.error.isNone then evm.logs else []) := by
   unfold processMessageCall at result
   simp only [target, Bool.false_eq_true, ↓reduceIte] at result
   unfold processMessageCall.call at result
@@ -839,24 +875,31 @@ private theorem legacy_call_output {msg delegated : Msg} {refund : Nat} {evm : D
   · rename_i he
     rcases Except.bind_eq_ok tail with ⟨_, _, output⟩
     have hout := Prod.mk.inj (Except.ok.inj output)
-    refine ⟨hout.1.symm, fun a ha => ?_⟩
-    rw [← hout.2] at ha
-    exact ⟨he, ha⟩
-  · have hout := Prod.mk.inj (Except.ok.inj tail)
-    refine ⟨hout.1.symm, fun a ha => ?_⟩
-    rw [← hout.2] at ha
-    exact absurd ha AdrSet.not_mem_empty
+    refine ⟨hout.1.symm, fun a ha => ?_, ?_⟩
+    · rw [← hout.2] at ha
+      exact ⟨he, ha⟩
+    · rw [← hout.2, ite_eq_left he]
+  · rename_i he
+    have hout := Prod.mk.inj (Except.ok.inj tail)
+    refine ⟨hout.1.symm, fun a ha => ?_, ?_⟩
+    · rw [← hout.2] at ha
+      exact absurd ha AdrSet.not_mem_empty
+    · rw [← hout.2, ite_eq_right he]
 
 private theorem legacy_frame_outcome {msg m : Msg} {f : Frame} {state : State} {out : MsgCallOutput} {evm : Devm}
     (prep : Prepared msg m) (frame : FrameOf msg m f) (core : runFrame f = .ok evm)
     (hst : state = evm.state) (hdel : ∀ x ∈ out.accountsToDelete, evm.error.isNone = true ∧ x ∈ evm.accountsToDelete)
+    (hlogs : out.logs = (if evm.error.isNone then evm.logs else []))
     (lane : messageEntry msg = enteredFrame f) :
     Outcome (enteredFrame f) msg state out := by
   obtain ⟨benv, ht, hcases⟩ := runFrame_cases core
+  have hentryLogs : ∀ log ∈ (initEvm (f.inner.withBenv benv)).dyna.logs, ∃ s' r' v, log = transferLog s' r' v :=
+    initDevm_logs_transfer _
   rcases hcases with ⟨hnone, adr, hs, hca, hp⟩ | ⟨hsome, hs⟩
   · exact .inr (.inl ⟨hnone, m, f, benv, _, adr, evm,
-      ⟨prep, frame, .ofInit ht, hs, hst, hdel, .inr ⟨lane.trans hnone, adr, rfl, hca, hp⟩⟩⟩)
-  · exact .inr (.inr ⟨m, f, benv, _, evm, hsome, ⟨prep, frame, .ofInit ht, hs, hst, hdel, .inl (lane.trans hsome)⟩⟩)
+      ⟨prep, frame, .ofInit ht, hs, hst, hdel, .inr ⟨lane.trans hnone, adr, rfl, hca, hp⟩, hlogs, hentryLogs⟩⟩)
+  · exact .inr (.inr ⟨m, f, benv, _, evm, hsome,
+      ⟨prep, frame, .ofInit ht, hs, hst, hdel, .inl (lane.trans hsome), hlogs, hentryLogs⟩⟩)
 
 private theorem legacy_top {msg : Msg} {state : State} {out : MsgCallOutput}
     (hsg : msg.benv.stat.rules.stateGas = none) (h : processMessageCall msg = .ok (state, out)) :
@@ -868,7 +911,15 @@ private theorem legacy_top {msg : Msg} {state : State} {out : MsgCallOutput}
       cases collision : messageCreateCollision msg with
       | true =>
           obtain ⟨hst, hdel⟩ := processMessageCall_createCollision_out_noStateGas hsg target collision h
-          exact .inl ⟨by simp only [↓reduceIte], hst, hdel⟩
+          have hlogs : out.logs = [] := by
+            unfold processMessageCall at h
+            simp only [target, ↓reduceIte] at h
+            unfold processMessageCall.create at h
+            rw [hsg] at h
+            unfold messageCreateCollision at collision
+            simp only [collision, ↓reduceIte, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+            rw [← h.2]
+          exact .inl ⟨by simp only [↓reduceIte], hst, hdel, hlogs⟩
       | false =>
           simp only [Bool.false_eq_true, ↓reduceIte]
           have body := h
@@ -880,8 +931,8 @@ private theorem legacy_top {msg : Msg} {state : State} {out : MsgCallOutput}
           simp only [collision, Bool.false_eq_true, ↓reduceIte, bind, Except.bind] at body
           obtain ⟨evm, hevm, -⟩ := Except.bind_eq_ok body
           have core : processCreateMessage msg = .ok evm := Except.bimap_id_eq_ok hevm
-          obtain ⟨hst, hdel⟩ := legacy_create_output hsg target collision core h
-          exact legacy_frame_outcome (.refl msg) (.inr ⟨target, rfl, collision⟩) core hst hdel
+          obtain ⟨hst, hdel, hlogs⟩ := legacy_create_output hsg target collision core h
+          exact legacy_frame_outcome (.refl msg) (.inr ⟨target, rfl, collision⟩) core hst hdel hlogs
             (by unfold messageEntry legacyEntry; rw [hsg]; simp only [target, messageCreateCollision, collision, Bool.false_eq_true, ↓reduceIte])
   | false =>
       simp only [Bool.false_eq_true, ↓reduceIte]
@@ -897,8 +948,8 @@ private theorem legacy_top {msg : Msg} {state : State} {out : MsgCallOutput}
       have delegation : messageCallDelegation msg = .ok (d, refund) := hd
       rw [delegation]
       dsimp only
-      obtain ⟨hst, hdel⟩ := legacy_call_output hsg target delegation core h
-      exact legacy_frame_outcome (prepared_legacy_call delegation target) (.inl ⟨target, rfl⟩) core hst hdel
+      obtain ⟨hst, hdel, hlogs⟩ := legacy_call_output hsg target delegation core h
+      exact legacy_frame_outcome (prepared_legacy_call delegation target) (.inl ⟨target, rfl⟩) core hst hdel hlogs
         (by unfold messageEntry legacyEntry; rw [hsg, delegation]; simp only [target, Bool.false_eq_true, ↓reduceIte])
 
 private theorem message_top {msg : Msg} {state : State} {out : MsgCallOutput}
@@ -928,20 +979,51 @@ private theorem recordTouch_deletions (rules : ForkRules) (cond : Bool) (a : Adr
   unfold Devm.recordTouch
   split <;> rfl
 
+private theorem recordTouch_logs (rules : ForkRules) (cond : Bool) (a : Adr) (d : Devm) :
+    (d.recordTouch rules cond a).logs = d.logs := by
+  unfold Devm.recordTouch
+  split <;> rfl
+
+private theorem chargeCodeGas_ok_logs {rules : ForkRules} {pre charged : Devm}
+    (h : processCreateMessage.chargeCodeGas rules pre = .ok charged) : charged.logs = pre.logs := by
+  simp only [processCreateMessage.chargeCodeGas] at h
+  split at h
+  · split at h
+    · split at h
+      · cases h
+      · dsimp only [ExceptT.stM_eq, bind, Except.bind] at h
+        obtain ⟨devm, hc, h⟩ := Except.bind_eq_ok h
+        split at h
+        · cases h
+        · cases h; exact congrArg Meta.logs (chargeGas_charged hc).records
+    · dsimp only [ExceptT.stM_eq, bind, Except.bind] at h
+      obtain ⟨devm, hc, h⟩ := Except.bind_eq_ok h
+      split at h
+      · cases h
+      · cases h; exact congrArg Meta.logs (chargeGas_charged hc).records
+  · split at h
+    · cases h
+    · split at h
+      · cases h
+      · obtain ⟨mid, hcg, h⟩ := Except.bind_eq_ok h
+        exact (congrArg Meta.logs (chargeStateGas_charged h).records).trans
+          (congrArg Meta.logs (chargeGas_charged hcg).records)
+
 /-- What a clean raw execution settles to in the inner message frame. -/
 private theorem settle_inner_clean {m : Msg} {raw : Execution} (c : Execution.commits raw = true) :
     ∃ inner : Devm, processMessage.settle m (executeCode.handleErrorWith m.benv.stat.rules.stateGas raw) = .ok inner ∧
       inner.state = (Execution.committedPost raw c).state ∧
       inner.accountsToDelete = (Execution.committedPost raw c).accountsToDelete ∧
-      inner.error.isNone = true := by
+      inner.error.isNone = true ∧
+      inner.logs = (Execution.committedPost raw c).logs := by
   cases raw with
   | error err => simp only [Execution.commits, Bool.false_eq_true] at c
   | ok post =>
       have clean : post.error.isNone = true := c
       have hsome : post.error.isSome = false := by
         cases he : post.error <;> simp only [he, Option.isNone_some, Bool.false_eq_true, Option.isSome_none] at clean ⊢
-      refine ⟨post.recordTouch m.benv.stat.rules true m.currentTarget, ?_, Devm.recordTouch_state .., 
-        recordTouch_deletions .., ?_⟩
+      refine ⟨post.recordTouch m.benv.stat.rules true m.currentTarget, ?_, Devm.recordTouch_state ..,
+        recordTouch_deletions .., ?_, recordTouch_logs ..⟩
       · simp only [processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok, hsome, Bool.false_eq_true,
           ↓reduceIte]
       · rw [Devm.recordTouch_error]
@@ -950,19 +1032,21 @@ private theorem settle_inner_clean {m : Msg} {raw : Execution} (c : Execution.co
 private theorem settle_ofCall_committed {m : Msg} {raw : Execution} {s : Devm}
     (settled : (Frame.ofCall m).settle raw = .ok s) (c : Execution.commits raw = true) :
     s.state = (Execution.committedPost raw c).state ∧
-      s.accountsToDelete = (Execution.committedPost raw c).accountsToDelete := by
-  obtain ⟨inner, hi, hs, hd, -⟩ := settle_inner_clean (m := m) c
+      s.accountsToDelete = (Execution.committedPost raw c).accountsToDelete ∧
+      s.logs = (Execution.committedPost raw c).logs := by
+  obtain ⟨inner, hi, hs, hd, -, hl⟩ := settle_inner_clean (m := m) c
   have : inner = s := Except.ok.inj (hi.symm.trans settled)
   subst this
-  exact ⟨hs, hd⟩
+  exact ⟨hs, hd, hl⟩
 
 private theorem settle_ofCreate_committed {m : Msg} {raw : Execution} {s : Devm}
     (settled : (Frame.ofCreate m).settle raw = .ok s) (c : Execution.commits raw = true)
     (clean : s.error.isNone = true) :
     (∀ x, m.currentTarget ≠ x → s.getCode x = (Execution.committedPost raw c).getCode x ∧
       Devm.getStor s x = Devm.getStor (Execution.committedPost raw c) x) ∧
-      s.accountsToDelete = (Execution.committedPost raw c).accountsToDelete := by
-  obtain ⟨inner, hi, hs, hd, hn⟩ := settle_inner_clean (m := processCreateMessage.msg m) c
+      s.accountsToDelete = (Execution.committedPost raw c).accountsToDelete ∧
+      s.logs = (Execution.committedPost raw c).logs := by
+  obtain ⟨inner, hi, hs, hd, hn, hl⟩ := settle_inner_clean (m := processCreateMessage.msg m) c
   have run : processCreateMessage.settle m (.ok inner) = .ok s := by
     rw [← hi]
     exact settled
@@ -991,7 +1075,7 @@ private theorem settle_ofCreate_committed {m : Msg} {raw : Execution} {s : Devm}
       have frame' : Devm.InstructionFrame inner charged := frame
       subst eq
       have hstate := (chargeCodeGas_state_ok charge).trans hs
-      refine ⟨fun x ne => ⟨?_, ?_⟩, ?_⟩
+      refine ⟨fun x ne => ⟨?_, ?_⟩, ?_, ?_⟩
       · rw [setCode_getCode ne]
         exact congrArg (fun st : State => st.getCode x) hstate
       · change ((charged.state.setCode m.currentTarget ⟨⟨charged.output⟩⟩).get x).stor = _
@@ -999,6 +1083,7 @@ private theorem settle_ofCreate_committed {m : Msg} {raw : Execution} {s : Devm}
         exact congrArg (fun st : State => st.getStor x) hstate
       · refine Eq.trans ?_ hd
         exact frame'.accountsToDelete.symm
+      · exact (chargeCodeGas_ok_logs charge).trans hl
 
 private theorem settle_error_rollback {m : Msg} {f : Frame} (shape : f = Frame.ofCall m ∨ f = Frame.ofCreate m)
     {raw : Execution} {s : Devm} (settled : f.settle raw = .ok s) (dirty : s.error.isSome = true) :
@@ -1125,9 +1210,18 @@ private theorem deletions_committed (t : TopRun msg m state out f benv e raw s)
     s.accountsToDelete = (Execution.committedPost raw c).accountsToDelete := by
   rcases t.shape with hf | hf
   · subst hf
-    exact (settle_ofCall_committed t.settled c).2
+    exact (settle_ofCall_committed t.settled c).2.1
   · subst hf
-    exact (settle_ofCreate_committed t.settled c clean).2
+    exact (settle_ofCreate_committed t.settled c clean).2.1
+
+private theorem logs_committed (t : TopRun msg m state out f benv e raw s)
+    (c : Execution.commits raw = true) (clean : s.error.isNone = true) :
+    s.logs = (Execution.committedPost raw c).logs := by
+  rcases t.shape with hf | hf
+  · subst hf
+    exact (settle_ofCall_committed t.settled c).2.2
+  · subst hf
+    exact (settle_ofCreate_committed t.settled c clean).2.2
 
 private theorem rolled (t : TopRun msg m state out f benv e raw s) {x : Adr}
     (hc : (msg.benv.state.getCode x).toList ≠ []) (hd : ¬ isValidDelegation (msg.benv.state.getCode x))
@@ -1145,12 +1239,13 @@ end TopRun
 
 private theorem precomp_post (e : Evm) (adr : Adr) (c : Execution.commits (executePrecomp e adr) = true) :
     (Execution.committedPost _ c).state = e.dyna.state ∧
-      (Execution.committedPost _ c).accountsToDelete = e.dyna.accountsToDelete := by
+      (Execution.committedPost _ c).accountsToDelete = e.dyna.accountsToDelete ∧
+      (Execution.committedPost _ c).logs = e.dyna.logs := by
   revert c
   unfold executePrecomp applyPrecompResult
   cases precompileRun e adr with
   | error reason cost => intro c; simp only [Execution.commits, Bool.false_eq_true] at c
-  | ok cost output => intro _; exact ⟨rfl, rfl⟩
+  | ok cost output => intro _; exact ⟨rfl, rfl, rfl⟩
 
 private theorem run_post_getCode {pc : Nat} {sevm : Sevm} {pre : Devm} {raw : Execution} (run : Exec pc sevm pre raw)
     (c : Execution.commits raw = true) {x : Adr} (hne : (pre.getCode x).toList ≠ []) :
@@ -1177,7 +1272,7 @@ private theorem no_root_facts {msg m : Msg} {state : State} {out : MsgCallOutput
       · exact (congrArg (fun st : State => st.getStor x) world).trans (t.entry_getStor hc hd)
     · exact t.rolled hc hd clean
   · obtain ⟨clean, hm⟩ := t.deletions x hx
-    rw [t.deletions_committed (commits clean) clean, (precomp_post e adr (commits clean)).2,
+    rw [t.deletions_committed (commits clean) clean, (precomp_post e adr (commits clean)).2.1,
       t.entered.deletions] at hm
     have hinner : f.inner.inheritedDeletions = msg.inheritedDeletions := by
       rcases t.shape with rfl | rfl <;> exact t.prepared.deletions
@@ -1192,7 +1287,7 @@ private theorem MessageRoots.cases {msg : Msg} {state : State} {out : MsgCallOut
         ∀ x ∈ out.accountsToDelete, x ∈ msg.inheritedDeletions) ∨
       ∃ r m benv s, rs = [r] ∧ TopRun msg m state out r.frame benv r.evm r.raw s := by
   obtain ⟨result, hmap⟩ := h
-  rcases message_top result with ⟨hnone, hst, hdel⟩ | ⟨hnone, _, f, _, e, adr, s, t⟩ | ⟨m, f, benv, e, s, hsome, t⟩
+  rcases message_top result with ⟨hnone, hst, hdel, -⟩ | ⟨hnone, _, f, _, e, adr, s, t⟩ | ⟨m, f, benv, e, s, hsome, t⟩
   · rw [hnone] at hmap
     refine .inl ⟨List.map_eq_nil_iff.mp hmap, fun x _ _ => ?_, fun x hx => (hdel x hx).elim⟩
     rw [hst]
@@ -1423,6 +1518,53 @@ theorem MessageRoots.deletions {msg : Msg} {state : State} {out : MsgCallOutput}
     refine .inr ⟨r, List.mem_singleton.mpr rfl, settles, ?_⟩
     rw [← t.deletions_committed _ clean]
     exact hm
+
+/-- Every log a root started with is an EIP-7708 transfer log, and the message output's logs come solely from its
+committing root (or only transfer/empty logs if no root ran). -/
+theorem MessageRoots.logs_shape {msg : Msg} {state : State} {out : MsgCallOutput} {rs : List Root}
+    (h : MessageRoots msg state out rs) :
+    (rs = [] ∧ ∀ log ∈ out.logs, ∃ s r v, log = transferLog s r v) ∨
+      ∃ r, rs = [r] ∧ (∀ log ∈ r.evm.dyna.logs, ∃ s r' v, log = transferLog s r' v) ∧
+        ((Frame.settlementCommits r.frame r.raw = false ∧ out.logs = []) ∨
+          ∃ settles : Frame.settlementCommits r.frame r.raw = true,
+            out.logs = (Execution.committedPost r.raw (Frame.raw_commits_of_settlementCommits settles)).logs) := by
+  obtain ⟨result, hmap⟩ := h
+  rcases message_top result with ⟨hnone, -, -, hlogs⟩ | ⟨hnone, m, f, benv, e, adr, s, t⟩ | ⟨m, f, benv, e, s, hsome, t⟩
+  · rw [hnone] at hmap
+    refine .inl ⟨List.map_eq_nil_iff.mp hmap, fun log hlog => ?_⟩
+    rw [hlogs] at hlog
+    cases hlog
+  · rw [hnone] at hmap
+    refine .inl ⟨List.map_eq_nil_iff.mp hmap, fun log hlog => ?_⟩
+    rw [t.logs_eq] at hlog
+    by_cases clean : s.error.isNone = true
+    · rw [ite_eq_left clean] at hlog
+      have commits : Execution.commits (executePrecomp e adr) = true :=
+        Frame.raw_commits_of_settlementCommits (t.commits_eq.trans clean)
+      rw [t.logs_committed commits clean, (precomp_post e adr commits).2.2] at hlog
+      exact t.entry_logs log hlog
+    · rw [ite_eq_right clean] at hlog
+      cases hlog
+  · rw [hsome] at hmap
+    cases rs with
+    | nil => cases hmap
+    | cons r tail =>
+        simp only [Option.toList_some, List.map_cons, List.cons.injEq, Prod.mk.injEq, List.map_eq_nil_iff] at hmap
+        obtain ⟨⟨hf, he⟩, rfl⟩ := hmap
+        obtain ⟨frame, evm, raw, run⟩ := r
+        dsimp only at hf he
+        subst hf he
+        have hraw : exec evm = raw := (exec_iff_exec_eq _ _ _ _).mp ⟨run⟩
+        subst hraw
+        refine .inr ⟨⟨frame, evm, exec evm, run⟩, rfl, t.entry_logs, ?_⟩
+        by_cases clean : s.error.isNone = true
+        · have settles : Frame.settlementCommits frame (exec evm) = true := t.commits_eq.trans clean
+          refine .inr ⟨settles, ?_⟩
+          rw [t.logs_eq, ite_eq_left clean, t.logs_committed (Frame.raw_commits_of_settlementCommits settles) clean]
+        · have notSettles : Frame.settlementCommits frame (exec evm) = false := by
+            rw [t.commits_eq]
+            exact Bool.eq_false_iff.mpr clean
+          exact .inl ⟨notSettles, by rw [t.logs_eq, ite_eq_right clean]⟩
 
 /-! ## System calls -/
 

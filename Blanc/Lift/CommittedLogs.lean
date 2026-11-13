@@ -877,4 +877,932 @@ theorem Exec.Deriv.successfulLog?_sound
   | runErr step enter child resume => cases image
   | runOk step enter child resume next => cases image
 
+/-! ## All-fork filtered log decomposition -/
+
+/-- Every log in `logs` is an EIP-7708 transfer log. -/
+def OnlyTransferLogs (logs : List Log) : Prop :=
+  ∀ log ∈ logs, ∃ s r v, log = transferLog s r v
+
+private theorem OnlyTransferLogs.nil : OnlyTransferLogs [] := by
+  intro log hlog
+  cases hlog
+
+private theorem OnlyTransferLogs.append {xs ys : List Log}
+    (hx : OnlyTransferLogs xs) (hy : OnlyTransferLogs ys) : OnlyTransferLogs (xs ++ ys) := by
+  intro log hlog
+  rcases List.mem_append.mp hlog with h | h
+  · exact hx log h
+  · exact hy log h
+
+theorem OnlyTransferLogs.filter_eq_nil {logs : List Log} (h : OnlyTransferLogs logs)
+    {keep : Log → Bool} (noTransfer : ∀ s r v, keep (transferLog s r v) = false) :
+    logs.filter keep = [] := by
+  induction logs with
+  | nil => rfl
+  | cons log rest ih =>
+      obtain ⟨s, r, v, rfl⟩ := h log List.mem_cons_self
+      simp only [List.filter_cons, noTransfer s r v, Bool.false_eq_true, ↓reduceIte]
+      exact ih (fun x hx => h x (List.mem_cons_of_mem _ hx))
+
+theorem OnlyTransferLogs.initDevm (msg : Msg) :
+    OnlyTransferLogs (initDevm msg).logs := by
+  unfold _root_.Jaune.initDevm Devm.logs
+  dsimp only
+  intro log hlog
+  split at hlog
+  · cases hlog
+  · split at hlog
+    · simp only [Devm.emitTransferLog] at hlog
+      split at hlog
+      · cases hlog
+      · change log ∈ [transferLog msg.caller msg.currentTarget msg.value] at hlog
+        exact ⟨msg.caller, msg.currentTarget, msg.value, List.mem_singleton.mp hlog⟩
+    · cases hlog
+
+private theorem emitTransferLog_logs_suffix (d : Devm) (s r : Adr) (v : B256) :
+    ∃ extra, (d.emitTransferLog s r v).logs = d.logs ++ extra ∧ OnlyTransferLogs extra := by
+  simp only [Devm.emitTransferLog]
+  split
+  · exact ⟨[], (List.append_nil _).symm, OnlyTransferLogs.nil⟩
+  · exact ⟨[transferLog s r v], rfl, fun log hm => ⟨s, r, v, List.mem_singleton.mp hm⟩⟩
+
+private theorem Devm_push_ok_logs {v : B256} {pre post : Devm}
+    (h : pre.push v = .ok post) : post.logs = pre.logs := by
+  have f := Devm.push_machFrame v pre
+  rw [h] at f
+  exact f.logs.symm
+
+private theorem chargeGas_ok_logs {cost : Nat} {pre post : Devm}
+    (h : chargeGas cost pre = .ok post) : post.logs = pre.logs := by
+  have f := chargeGas_machFrame cost pre
+  rw [h] at f
+  exact f.logs.symm
+
+private theorem chargeStateGas_ok_logs {cost : Nat} {pre post : Devm}
+    (h : chargeStateGas cost pre = .ok post) : post.logs = pre.logs := by
+  have f := liftMachExecution_machFrame (Mach.chargeStateGas cost) pre
+  dsimp only [chargeStateGas] at h
+  rw [h] at f
+  exact f.logs.symm
+
+private theorem Devm_pop_ok_logs {pre post : Devm} {v : B256}
+    (h : pre.pop = .ok (v, post)) : post.logs = pre.logs := by
+  have f := Devm.pop_machFrame pre
+  rw [h] at f
+  exact f.logs.symm
+
+private theorem Devm_popToAdr_ok_logs {pre post : Devm} {a : Adr}
+    (h : pre.popToAdr = .ok (a, post)) : post.logs = pre.logs := by
+  have f := Devm.popToAdr_machFrame pre
+  rw [h] at f
+  exact f.logs.symm
+
+private theorem Devm_withStack_logs (d : Devm) (s : List B256) :
+    (d.withStack s).logs = d.logs := rfl
+
+private theorem Devm_withOutput_logs (d : Devm) (o : Bytes) :
+    (d.withOutput o).logs = d.logs := rfl
+
+private theorem Devm_withError_logs (d : Devm) (e : Option SettledHalt) :
+    (d.withError e).logs = d.logs := rfl
+
+private theorem Devm_incrNonce_logs (d : Devm) (a : Adr) :
+    (d.incrNonce a).logs = d.logs := rfl
+
+private theorem Devm_addAccessedAddress_logs (d : Devm) (a : Adr) :
+    (addAccessedAddress d a).logs = d.logs := rfl
+
+private theorem Devm_withholdCreateGas_logs (d : Devm) :
+    d.withholdCreateGas.2.logs = d.logs := rfl
+
+private theorem Devm_drainStateGasReservoir_logs (d : Devm) :
+    d.drainStateGasReservoir.2.logs = d.logs := rfl
+
+private theorem Devm_creditStateGasRefund_logs (a : Nat) (d : Devm) :
+    (d.creditStateGasRefund a).logs = d.logs := rfl
+
+private theorem Devm_restoreChildGas_logs (g r : Nat) (d : Devm) :
+    (d.restoreChildGas g r).logs = d.logs := rfl
+
+private theorem Devm_addBal_logs (d : Devm) (a : Adr) (v : B256) :
+    (d.addBal a v).logs = d.logs := rfl
+
+private theorem Devm_setBal_logs (d : Devm) (a : Adr) (v : B256) :
+    (d.setBal a v).logs = d.logs := rfl
+
+private theorem Devm_addAccountToDelete_logs (d : Devm) (a : Adr) :
+    (addAccountToDelete d a).logs = d.logs := rfl
+
+private theorem Devm_creditSelfdestructRefund_logs (r : ForkRules) (p : Prop) [Decidable p]
+    (d : Devm) : (creditSelfdestructRefund r p d).logs = d.logs := by
+  unfold creditSelfdestructRefund
+  split <;> rfl
+
+private theorem Devm_creditBeneficiary_logs (r : ForkRules) (a : Adr) (v : B256) (d : Devm) :
+    (d.creditBeneficiary r a v).logs = d.logs := by
+  unfold Devm.creditBeneficiary
+  split
+  · rfl
+  · unfold Devm.recordTouch
+    split <;> rfl
+
+private theorem Devm_balReadAccount_logs (r : ForkRules) (a : Adr) (d : Devm) :
+    (d.balReadAccount r a).logs = d.logs := by
+  unfold Devm.balReadAccount
+  split <;> rfl
+
+private theorem incorporateChildAmsterdamOnError_logs (parent child : Devm) (rd : Bytes) :
+    (incorporateChildAmsterdamOnError parent child rd).logs = parent.logs := rfl
+
+private theorem incorporateChildAmsterdamOnSuccess_logs (parent child : Devm) (rd : Bytes) :
+    (incorporateChildAmsterdamOnSuccess parent child rd).logs = parent.logs ++ child.logs := rfl
+
+private theorem match_except_xstep_done_ok {body : Except (EvmError × Devm) XStep} {post : Devm}
+    (h : (match body with | .error err => XStep.done (.error err) | .ok s => s) =
+      .done (.ok post)) :
+    body = .ok (.done (.ok post)) := by
+  cases body with
+  | error e => simp only [XStep.done.injEq, reduceCtorEq] at h
+  | ok s => simp only [h]
+
+private theorem match_except_xstep_spawn {body : Except (EvmError × Devm) XStep}
+    {frame : Frame} {resume : Resume}
+    (h : (match body with | .error err => XStep.done (.error err) | .ok s => s) =
+      .spawn frame resume) :
+    body = .ok (.spawn frame resume) := by
+  cases body with
+  | error e => simp only [reduceCtorEq] at h
+  | ok s => simp only [h]
+
+private theorem Step.ofExecution_eq_cont {nextPc : Nat} {ex : Execution}
+    {nextPc' : Nat} {post : Devm}
+    (h : Step.ofExecution nextPc ex = .cont nextPc' post) : ex = .ok post := by
+  cases ex with
+  | error _ => simp only [Step.ofExecution, reduceCtorEq] at h
+  | ok d =>
+      simp only [Step.ofExecution, Step.cont.injEq] at h
+      rw [h.2]
+
+private theorem Step.ofExecution_ne_halt_ok {nextPc : Nat} {ex : Execution} {post : Devm}
+    (h : Step.ofExecution nextPc ex = .halt (.ok post)) : False := by
+  cases ex <;> simp only [Step.ofExecution, Step.halt.injEq, reduceCtorEq] at h
+
+private theorem Step.ofExecution_ne_spawn {nextPc : Nat} {ex : Execution}
+    {frame : Frame} {resume : Resume} {pc' : Nat}
+    (h : Step.ofExecution nextPc ex = .spawn frame resume pc') : False := by
+  cases ex <;> simp only [Step.ofExecution, reduceCtorEq] at h
+
+private theorem genericCreateAmsterdam_step_done_logs
+    {sevm : Sevm} {state : StateGasRules} {pre post : Devm} {endowment : B256} {address : Adr}
+    {mi ms : Nat}
+    (step : genericCreateAmsterdam.step sevm state pre endowment address mi ms =
+      .done (.ok post)) : post.logs = pre.logs := by
+  simp only [genericCreateAmsterdam.step] at step
+  have hbody := match_except_xstep_done_ok step
+  split at hbody
+  · simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at hbody
+    obtain ⟨d1, hp, hbody⟩ := Except.bind_eq_ok hbody
+    cases hbody
+    exact (Devm_push_ok_logs hp).trans (by simp only [Devm_balReadAccount_logs, Devm.withReturnData_logs])
+  · split at hbody
+    · simp only [Bind.bind, Except.bind] at hbody
+      obtain ⟨d1, hcsg, hbody⟩ := Except.bind_eq_ok hbody
+      split at hbody
+      · obtain ⟨d2, hp, hbody⟩ := Except.bind_eq_ok hbody
+        simp only [Pure.pure, Except.pure] at hbody
+        cases hbody
+        have hd1 := chargeStateGas_ok_logs hcsg
+        simp only [Devm_balReadAccount_logs, Devm_addAccessedAddress_logs,
+          Devm.withReturnData_logs] at hd1
+        rw [Devm_push_ok_logs hp, Devm_incrNonce_logs, Devm_withholdCreateGas_logs, hd1]
+      · simp only [Pure.pure, Except.pure, Except.ok.injEq, reduceCtorEq] at hbody
+    · simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at hbody
+      split at hbody
+      · obtain ⟨d2, hp, hbody⟩ := Except.bind_eq_ok hbody
+        cases hbody
+        rw [Devm_push_ok_logs hp]
+        simp only [Devm_incrNonce_logs, Devm_withholdCreateGas_logs, Devm_balReadAccount_logs,
+          Devm_addAccessedAddress_logs, Devm.withReturnData_logs]
+      · simp only [Except.ok.injEq, reduceCtorEq] at hbody
+
+private theorem genericCallAmsterdam_step_done_logs
+    {sevm : Sevm} {state : StateGasRules} {pre post : Devm} {gas reservoir : Nat} {value : B256}
+    {caller target address : Adr} {stv isSt : Bool} {ii isz oi osz : Nat}
+    {code : ByteArray} {dp charged insufficient : Bool}
+    (step : genericCallAmsterdam.step sevm state pre gas reservoir value caller target address
+      stv isSt ii isz oi osz code dp charged insufficient = .done (.ok post)) :
+    post.logs = pre.logs := by
+  simp only [genericCallAmsterdam.step] at step
+  split at step
+  · have hbody := match_except_xstep_done_ok step
+    dsimp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at hbody
+    obtain ⟨d1, hp, hbody⟩ := Except.bind_eq_ok hbody
+    cases hbody
+    rw [Devm_push_ok_logs hp]
+    split <;> rfl
+  · cases step
+
+private theorem Xinst_step_done_logs_any
+    {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    (step : Xinst.step sevm pre x = .done (.ok post)) :
+    post.logs = pre.logs := by
+  rcases Blanc.Lift.Xinst.step_shapeLogs_any sevm pre x with
+    ⟨ex, hstep, hlogs⟩ |
+    ⟨_, state, d, endowment, address, mi, ms, _, hd, hstep⟩ |
+    ⟨state, d, gas, reservoir, value, caller, target, address, stv, isSt,
+      ii, isz, oi, osz, code, dp, charged, insufficient, _, hd, hstep⟩
+  · rw [step] at hstep
+    cases hstep
+    exact hlogs.symm
+  · rw [step] at hstep
+    cases state with
+    | none => exact (genericCreate_step_done_logs hstep.symm).trans hd
+    | some st => exact (genericCreateAmsterdam_step_done_logs hstep.symm).trans hd
+  · rw [step] at hstep
+    cases state with
+    | none => exact (genericCall_step_done_logs hstep.symm).trans hd
+    | some st => exact (genericCallAmsterdam_step_done_logs hstep.symm).trans hd
+
+private theorem Exec.cont_logs_any
+    {pc nextPc : Nat} {sevm : Sevm} {pre post : Devm}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .cont nextPc post) :
+    post.logs = pre.logs ++ (Exec.logAt? pc sevm pre).toList := by
+  have decoded : (Evm.getInst ⟨pc, sevm, pre⟩).isSome := by
+    cases h : Evm.getInst ⟨pc, sevm, pre⟩
+    · simp only [Evm.step, h, reduceCtorEq] at step
+    · rfl
+  cases hinst : Evm.getInst ⟨pc, sevm, pre⟩ with
+  | none => rw [hinst] at decoded; cases decoded
+  | some inst =>
+      cases inst with
+      | last l => simp only [Evm.step, hinst, reduceCtorEq] at step
+      | jump j =>
+          simp only [Evm.step, hinst, Step.ofJump] at step
+          cases hr : j.run ⟨pc, sevm, pre⟩ with
+          | error _ => rw [hr] at step; cases step
+          | ok pair =>
+              rw [hr] at step
+              cases step
+              simp only [Exec.logAt?, hinst, Option.toList_none, List.append_nil]
+              exact Blanc.Lift.Jinst.logs_of_ok hr
+      | next n =>
+          have step0 := step
+          simp only [Evm.step, hinst, Ninst.step] at step
+          cases n with
+          | push xs =>
+              dsimp only at step
+              split at step
+              · cases step
+              · have hex := Step.ofExecution_eq_cont step
+                simp only [Bind.bind, Except.bind] at hex
+                cases hcg : chargeGas _ pre with
+                | error _ => rw [hcg] at hex; cases hex
+                | ok mid =>
+                    rw [hcg] at hex
+                    simp only [Exec.logAt?, hinst, Option.toList_none, List.append_nil]
+                    exact (Devm_push_ok_logs hex).trans (chargeGas_ok_logs hcg)
+          | dupn imm =>
+              simp only [Exec.logAt?, hinst, Option.toList_none, List.append_nil]
+              dsimp only at step
+              split at step
+              · have hex := Step.ofExecution_eq_cont step
+                simp only [Bind.bind, Except.bind] at hex
+                obtain ⟨d1, hcg, hex⟩ := Except.bind_eq_ok hex
+                split at hex
+                · cases hex
+                · split at hex
+                  · cases hex
+                  · exact (Devm_push_ok_logs hex).trans (chargeGas_ok_logs hcg)
+              · cases step
+          | swapn imm =>
+              simp only [Exec.logAt?, hinst, Option.toList_none, List.append_nil]
+              dsimp only at step
+              split at step
+              · have hex := Step.ofExecution_eq_cont step
+                simp only [Bind.bind, Except.bind] at hex
+                obtain ⟨d1, hcg, hex⟩ := Except.bind_eq_ok hex
+                split at hex
+                · cases hex
+                · split at hex
+                  · cases hex
+                  · cases hex
+                    exact (Devm_withStack_logs d1 _).trans (chargeGas_ok_logs hcg)
+              · cases step
+          | exchange imm =>
+              simp only [Exec.logAt?, hinst, Option.toList_none, List.append_nil]
+              dsimp only at step
+              split at step
+              · have hex := Step.ofExecution_eq_cont step
+                simp only [Bind.bind, Except.bind] at hex
+                obtain ⟨d1, hcg, hex⟩ := Except.bind_eq_ok hex
+                split at hex
+                · cases hex
+                · split at hex
+                  · cases hex
+                  · cases hex
+                    exact (Devm_withStack_logs d1 _).trans (chargeGas_ok_logs hcg)
+              · cases step
+          | exec x =>
+              simp only [XStep.toStep] at step
+              cases hx : Xinst.step sevm pre x with
+              | spawn _ _ => rw [hx] at step; cases step
+              | done ex =>
+                  rw [hx] at step
+                  cases ex with
+                  | error _ => cases step
+                  | ok d =>
+                      cases step
+                      simp only [Exec.logAt?, hinst, Option.toList_none, List.append_nil]
+                      exact Xinst_step_done_logs_any hx
+          | reg r =>
+              have hex := Step.ofExecution_eq_cont step
+              by_cases hlog : ∃ k, r = .log k
+              · obtain ⟨k, rfl⟩ := hlog
+                have nstep : Ninst.step ⟨pc, sevm, pre⟩ (.reg (.log k)) = .cont nextPc post := by
+                  rw [← Evm.step_next hinst]
+                  exact step0
+                have pcEq := Ninst.step_cont_pc nstep
+                have nrun : Ninst.StepRun pc sevm pre (.reg (.log k)) .none (.ok post) := by
+                  unfold Ninst.StepRun
+                  rw [nstep, pcEq]
+                  exact ⟨rfl, rfl⟩
+                have hrun : Ninst.Run sevm pre (.reg (.log k)) post :=
+                  ⟨none, trivial, pc, nrun⟩
+                obtain ⟨entry, heq, hl⟩ := Exec.logAt_of_run hinst hrun
+                rw [heq, Option.toList_some, hl]
+              · have hne : ∀ k, r ≠ .log k := fun k eq => hlog ⟨k, eq⟩
+                have hnone : Exec.logAt? pc sevm pre = none := by
+                  unfold Exec.logAt?
+                  rw [hinst]
+                  cases r with
+                  | log k => exact absurd rfl (hne k)
+                  | _ => rfl
+                rw [hnone, Option.toList_none, List.append_nil]
+                exact Blanc.Lift.Rinst.logs_of_ok hne hex
+
+private def LogsEqOrTransfer (pre post : Devm) : Prop :=
+  ∃ extra, post.logs = pre.logs ++ extra ∧ OnlyTransferLogs extra
+
+private theorem LogsEqOrTransfer.of_eq {pre post : Devm} (h : post.logs = pre.logs) :
+    LogsEqOrTransfer pre post :=
+  ⟨[], by rw [h, List.append_nil], OnlyTransferLogs.nil⟩
+
+private theorem LogsEqOrTransfer.trans {a b c : Devm}
+    (h1 : LogsEqOrTransfer a b) (h2 : LogsEqOrTransfer b c) :
+    LogsEqOrTransfer a c := by
+  rcases h1 with ⟨e1, eq1, he1⟩
+  rcases h2 with ⟨e2, eq2, he2⟩
+  exact ⟨e1 ++ e2, by rw [eq2, eq1, List.append_assoc], OnlyTransferLogs.append he1 he2⟩
+
+private theorem LogsEqOrTransfer.filter_eq {pre post : Devm}
+    (h : LogsEqOrTransfer pre post) {keep : Log → Bool}
+    (noTransfer : ∀ s r v, keep (transferLog s r v) = false) :
+    post.logs.filter keep = pre.logs.filter keep := by
+  rcases h with ⟨extra, heq, hextra⟩
+  rw [heq, List.filter_append, OnlyTransferLogs.filter_eq_nil hextra noTransfer, List.append_nil]
+
+private def ResumeLogSeedAny (pre : Devm) (resume : Resume) : Prop :=
+  match resume with
+  | .create parent _ => parent.logs = pre.logs
+  | .call parent _ _ => parent.logs = pre.logs
+  | .createAmsterdam _ parent _ _ => parent.logs = pre.logs
+  | .callAmsterdam _ parent _ _ _ => parent.logs = pre.logs
+
+private theorem genericCreate_step_spawn_logs_any
+    {sevm : Sevm} {pre : Devm} {endowment : B256} {address : Adr}
+    {mi ms : Nat} {frame : Frame} {resume : Resume}
+    (step : genericCreate.step sevm pre endowment address mi ms = .spawn frame resume) :
+    ResumeLogSeedAny pre resume := by
+  simp only [genericCreate.step] at step
+  have hbody := match_except_xstep_spawn step
+  simp only [Bind.bind, Except.bind, Pure.pure, Except.pure, Except.assert] at hbody
+  split at hbody
+  · cases hbody
+  · obtain ⟨_, _, hbody⟩ := Except.bind_eq_ok hbody
+    split at hbody
+    · obtain ⟨_, _, hbody⟩ := Except.bind_eq_ok hbody
+      cases hbody
+    · split at hbody
+      · obtain ⟨_, _, hbody⟩ := Except.bind_eq_ok hbody
+        cases hbody
+      · simp only [Except.ok.injEq, XStep.spawn.injEq] at hbody
+        rcases hbody with ⟨-, rfl⟩
+        rfl
+
+private theorem genericCall_step_spawn_logs_any
+    {sevm : Sevm} {pre : Devm} {gas : Nat} {value : B256}
+    {caller target address : Adr} {stv isSt : Bool} {ii isz oi osz : Nat}
+    {code : ByteArray} {dp : Bool} {frame : Frame} {resume : Resume}
+    (step : genericCall.step sevm pre gas value caller target address stv isSt
+      ii isz oi osz code dp = .spawn frame resume) :
+    ResumeLogSeedAny pre resume := by
+  simp only [genericCall.step] at step
+  split at step
+  · have hbody := match_except_xstep_spawn step
+    simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at hbody
+    obtain ⟨_, _, hbody⟩ := Except.bind_eq_ok hbody
+    cases hbody
+  · simp only [XStep.spawn.injEq] at step
+    rcases step with ⟨-, rfl⟩
+    rfl
+
+private theorem genericCreateAmsterdam_step_spawn_logs_any
+    {sevm : Sevm} {state : StateGasRules} {pre : Devm} {endowment : B256} {address : Adr}
+    {mi ms : Nat} {frame : Frame} {resume : Resume}
+    (step : genericCreateAmsterdam.step sevm state pre endowment address mi ms =
+      .spawn frame resume) : ResumeLogSeedAny pre resume := by
+  simp only [genericCreateAmsterdam.step] at step
+  have hbody := match_except_xstep_spawn step
+  split at hbody
+  · simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at hbody
+    obtain ⟨_, _, hbody⟩ := Except.bind_eq_ok hbody
+    cases hbody
+  · split at hbody
+    · simp only [Bind.bind, Except.bind] at hbody
+      obtain ⟨d1, hcsg, hbody⟩ := Except.bind_eq_ok hbody
+      split at hbody
+      · obtain ⟨_, _, hbody⟩ := Except.bind_eq_ok hbody
+        simp only [Pure.pure, Except.pure] at hbody
+        cases hbody
+      · simp only [Pure.pure, Except.pure, Except.ok.injEq, XStep.spawn.injEq] at hbody
+        rcases hbody with ⟨-, rfl⟩
+        have hd1 := chargeStateGas_ok_logs hcsg
+        simp only [ResumeLogSeedAny, Devm_incrNonce_logs, Devm_drainStateGasReservoir_logs,
+          Devm_withholdCreateGas_logs, hd1, Devm_balReadAccount_logs, Devm_addAccessedAddress_logs,
+          Devm.withReturnData_logs]
+    · simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at hbody
+      split at hbody
+      · obtain ⟨_, _, hbody⟩ := Except.bind_eq_ok hbody
+        cases hbody
+      · simp only [Except.ok.injEq, XStep.spawn.injEq] at hbody
+        rcases hbody with ⟨-, rfl⟩
+        simp only [ResumeLogSeedAny, Devm_incrNonce_logs, Devm_drainStateGasReservoir_logs,
+          Devm_withholdCreateGas_logs, Devm_balReadAccount_logs, Devm_addAccessedAddress_logs,
+          Devm.withReturnData_logs]
+
+private theorem genericCallAmsterdam_step_spawn_logs_any
+    {sevm : Sevm} {state : StateGasRules} {pre : Devm} {gas reservoir : Nat} {value : B256}
+    {caller target address : Adr} {stv isSt : Bool} {ii isz oi osz : Nat}
+    {code : ByteArray} {dp charged insufficient : Bool} {frame : Frame} {resume : Resume}
+    (step : genericCallAmsterdam.step sevm state pre gas reservoir value caller target address
+      stv isSt ii isz oi osz code dp charged insufficient = .spawn frame resume) :
+    ResumeLogSeedAny pre resume := by
+  simp only [genericCallAmsterdam.step] at step
+  split at step
+  · have hbody := match_except_xstep_spawn step
+    simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at hbody
+    obtain ⟨_, _, hbody⟩ := Except.bind_eq_ok hbody
+    cases hbody
+  · simp only [XStep.spawn.injEq] at step
+    rcases step with ⟨-, rfl⟩
+    rfl
+
+private theorem Evm_spawn_logs_any
+    {pc nextPc : Nat} {sevm : Sevm} {pre : Devm} {frame : Frame} {resume : Resume}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume nextPc) :
+    ResumeLogSeedAny pre resume := by
+  cases hinst : Evm.getInst ⟨pc, sevm, pre⟩ with
+  | none => simp only [Evm.step, hinst, reduceCtorEq] at step
+  | some inst =>
+      cases inst with
+      | last l => simp only [Evm.step, hinst, reduceCtorEq] at step
+      | jump j =>
+          simp only [Evm.step, hinst, Step.ofJump] at step
+          cases hj : j.run ⟨pc, sevm, pre⟩ with
+          | error _ => rw [hj] at step; cases step
+          | ok _ => rw [hj] at step; cases step
+      | next n =>
+          have step0 := step
+          simp only [Evm.step, hinst, Ninst.step] at step
+          cases n with
+          | push _ =>
+              dsimp only at step
+              split at step <;> exact absurd step Step.ofExecution_ne_spawn
+          | dupn _ | swapn _ | exchange _ =>
+              exact absurd step Step.ofExecution_ne_spawn
+          | reg _ => exact absurd step Step.ofExecution_ne_spawn
+          | exec x =>
+              simp only [XStep.toStep] at step
+              cases hx : Xinst.step sevm pre x with
+              | done ex =>
+                  rw [hx] at step
+                  exact absurd step Step.ofExecution_ne_spawn
+              | spawn frame' resume' =>
+                  rw [hx] at step
+                  simp only [Step.spawn.injEq] at step
+                  rcases step with ⟨rfl, rfl, -⟩
+                  rcases Blanc.Lift.Xinst.step_shapeLogs_any sevm pre x with
+                    ⟨ex, hstep, _⟩ |
+                    ⟨_, state, d, endowment, address, mi, ms, _, hd, hstep⟩ |
+                    ⟨state, d, gas, reservoir, value, caller, target, address, stv, isSt,
+                      ii, isz, oi, osz, code, dp, charged, insufficient, _, hd, hstep⟩
+                  · rw [hx] at hstep; cases hstep
+                  · rw [hx] at hstep
+                    cases state with
+                    | none =>
+                        have hspawn := genericCreate_step_spawn_logs_any hstep.symm
+                        cases resume' <;> simp only [ResumeLogSeedAny] at hspawn ⊢ <;>
+                          exact hspawn.trans hd
+                    | some st =>
+                        have hspawn := genericCreateAmsterdam_step_spawn_logs_any hstep.symm
+                        cases resume' <;> simp only [ResumeLogSeedAny] at hspawn ⊢ <;>
+                          exact hspawn.trans hd
+                  · rw [hx] at hstep
+                    cases state with
+                    | none =>
+                        have hspawn := genericCall_step_spawn_logs_any hstep.symm
+                        cases resume' <;> simp only [ResumeLogSeedAny] at hspawn ⊢ <;>
+                          exact hspawn.trans hd
+                    | some st =>
+                        have hspawn := genericCallAmsterdam_step_spawn_logs_any hstep.symm
+                        cases resume' <;> simp only [ResumeLogSeedAny] at hspawn ⊢ <;>
+                          exact hspawn.trans hd
+
+private theorem ResumeLogSeedAny.result_logs {pre post : Devm} {resume : Resume}
+    {res : Except (EvmError × State × AdrSet × Tra) Devm}
+    (seed : ResumeLogSeedAny pre resume) (hrun : resume.run res = .ok post) :
+    ∃ out, res = .ok out ∧
+      ((out.error = none → post.logs = pre.logs ++ out.logs) ∧
+        (out.error ≠ none → post.logs = pre.logs)) := by
+  cases res with
+  | error e =>
+      rcases e with ⟨err, st, ca, tra⟩
+      cases resume <;>
+        simp only [Resume.run, liftToExecution, Bind.bind, Except.bind, reduceCtorEq] at hrun
+  | ok out =>
+      refine ⟨out, rfl, ?_⟩
+      cases resume with
+      | create parent address =>
+          simp only [ResumeLogSeedAny] at seed
+          simp only [Resume.run, liftToExecution, Bind.bind, Except.bind] at hrun
+          split at hrun
+          · next h =>
+              exact ⟨fun he => by simp only [he, Option.isSome_none, Bool.false_eq_true] at h,
+                fun _ => (Devm_push_ok_logs hrun).trans seed⟩
+          · next h =>
+              have herr : out.error = none := by
+                cases he : out.error with
+                | none => rfl
+                | some e => rw [he] at h; exact absurd rfl h
+              exact ⟨fun _ => (Devm_push_ok_logs hrun).trans (congrArg (· ++ out.logs) seed),
+                fun hne => absurd herr hne⟩
+      | call parent o s =>
+          simp only [ResumeLogSeedAny] at seed
+          simp only [Resume.run, liftToExecution, Bind.bind, Except.bind] at hrun
+          split at hrun
+          · next h =>
+              obtain ⟨d1, hp, hrun⟩ := Except.bind_eq_ok hrun
+              cases hrun
+              exact ⟨fun he => by simp only [he, Option.isSome_none, Bool.false_eq_true] at h,
+                fun _ => (Devm_push_ok_logs hp).trans seed⟩
+          · next h =>
+              have herr : out.error = none := by
+                cases he : out.error with
+                | none => rfl
+                | some e => rw [he] at h; exact absurd rfl h
+              obtain ⟨d1, hp, hrun⟩ := Except.bind_eq_ok hrun
+              cases hrun
+              exact ⟨fun _ => (Devm_push_ok_logs hp).trans (congrArg (· ++ out.logs) seed),
+                fun hne => absurd herr hne⟩
+      | createAmsterdam state parent address nac =>
+          simp only [ResumeLogSeedAny] at seed
+          simp only [Resume.run, liftToExecution, Bind.bind, Except.bind, Except.assert] at hrun
+          split at hrun
+          · next h =>
+              obtain ⟨_, -, hrun⟩ := Except.bind_eq_ok hrun
+              refine ⟨fun he => by simp only [he, Option.isSome_none, Bool.false_eq_true] at h,
+                fun _ => (Devm_push_ok_logs hrun).trans ?_⟩
+              cases nac <;> exact seed
+          · next h =>
+              have herr : out.error = none := by
+                cases he : out.error with
+                | none => rfl
+                | some e => rw [he] at h; exact absurd rfl h
+              obtain ⟨_, -, hrun⟩ := Except.bind_eq_ok hrun
+              exact ⟨fun _ => (Devm_push_ok_logs hrun).trans (congrArg (· ++ out.logs) seed),
+                fun hne => absurd herr hne⟩
+      | callAmsterdam state parent o s nac =>
+          simp only [ResumeLogSeedAny] at seed
+          simp only [Resume.run, liftToExecution, Bind.bind, Except.bind, Except.assert] at hrun
+          split at hrun
+          · next h =>
+              obtain ⟨_, -, hrun⟩ := Except.bind_eq_ok hrun
+              obtain ⟨d1, hp, hrun⟩ := Except.bind_eq_ok hrun
+              cases hrun
+              refine ⟨fun he => by simp only [he, Option.isSome_none, Bool.false_eq_true] at h,
+                fun _ => (Devm_push_ok_logs hp).trans ?_⟩
+              cases nac <;> exact seed
+          · next h =>
+              have herr : out.error = none := by
+                cases he : out.error with
+                | none => rfl
+                | some e => rw [he] at h; exact absurd rfl h
+              obtain ⟨_, -, hrun⟩ := Except.bind_eq_ok hrun
+              obtain ⟨d1, hp, hrun⟩ := Except.bind_eq_ok hrun
+              cases hrun
+              exact ⟨fun _ => (Devm_push_ok_logs hp).trans (congrArg (· ++ out.logs) seed),
+                fun hne => absurd herr hne⟩
+
+private theorem Frame_enter_run_logs_any {frame : Frame} {evm : Evm}
+    (enter : Frame.enter frame = .run evm) :
+    OnlyTransferLogs evm.dyna.logs := by
+  unfold Frame.enter at enter
+  cases hbt : frame.inner.benvAfterTransfer with
+  | error _ => simp only [hbt] at enter; cases enter
+  | ok benv =>
+      simp only [hbt] at enter
+      cases hec : executeCode.enter (frame.inner.withBenv benv) with
+      | inr _ => simp only [hec] at enter; cases enter
+      | inl evm' =>
+          simp only [hec, FrameEntry.run.injEq] at enter
+          subst enter
+          unfold executeCode.enter at hec
+          cases hca : (frame.inner.withBenv benv).codeAddress with
+          | none =>
+              simp only [hca, Sum.inl.injEq] at hec
+              subst hec
+              exact OnlyTransferLogs.initDevm (frame.inner.withBenv benv)
+          | some adr =>
+              simp only [hca] at hec
+              split at hec
+              · cases hec
+              · simp only [Sum.inl.injEq] at hec
+                subst hec
+                exact OnlyTransferLogs.initDevm (frame.inner.withBenv benv)
+
+private theorem except_ok_ite {α ε : Type} {P : Prop} [Decidable P] {a b x : α}
+    (h : (if P then Except.ok a else Except.ok b : Except ε α) = .ok x) :
+    x = a ∨ x = b := by
+  by_cases hp : P <;> simp only [hp, ↓reduceIte, Except.ok.injEq] at h
+  · exact Or.inl h.symm
+  · exact Or.inr h.symm
+
+private theorem Linst_selfdestruct_logs_any {sevm : Sevm} {pre post : Devm}
+    (h : Linst.run sevm pre .selfdestruct = .ok post) :
+    LogsEqOrTransfer pre post := by
+  dsimp only [Linst.run] at h
+  cases hsg : sevm.benvStat.rules.stateGas with
+  | none =>
+      rw [hsg] at h
+      simp only [Bind.bind, Except.bind] at h
+      obtain ⟨⟨recip, d1⟩, hpop, h⟩ := Except.bind_eq_ok h
+      obtain ⟨d2, hcg, h⟩ := Except.bind_eq_ok h
+      obtain ⟨_, -, h⟩ := Except.bind_eq_ok h
+      obtain ⟨d3, hsub, h⟩ := Except.bind_eq_ok h
+      have hs : d3.logs = d2.logs := by
+        cases hsb : d2.subBal sevm.currentTarget _ with
+        | none => rw [hsb] at hsub; cases hsub
+        | some d' => rw [hsb] at hsub; cases hsub; exact Devm_subBal_logs hsb
+      have hd : d2.logs = pre.logs := by
+        rw [chargeGas_ok_logs hcg]
+        cases sevm.benvStat.rules.access <;> simp only [Devm_balReadAccount_logs, Devm_popToAdr_ok_logs hpop]
+        split <;> simp only [Devm_addAccessedAddress_logs, Devm_balReadAccount_logs, Devm_popToAdr_ok_logs hpop]
+      rcases except_ok_ite h with rfl | rfl
+      · apply LogsEqOrTransfer.of_eq
+        rw [Devm_creditSelfdestructRefund_logs, Devm_addAccountToDelete_logs, Devm_setBal_logs,
+          Devm_creditBeneficiary_logs, hs, hd]
+      · apply LogsEqOrTransfer.of_eq
+        rw [Devm_creditBeneficiary_logs, hs, hd]
+  | some state =>
+      rw [hsg] at h
+      simp only [Bind.bind, Except.bind, Except.assert] at h
+      obtain ⟨_, -, h⟩ := Except.bind_eq_ok h
+      obtain ⟨⟨recip, d1⟩, hpop, h⟩ := Except.bind_eq_ok h
+      obtain ⟨_, -, h⟩ := Except.bind_eq_ok h
+      obtain ⟨d2, hcg, h⟩ := Except.bind_eq_ok h
+      obtain ⟨d3, hcsg, h⟩ := Except.bind_eq_ok h
+      obtain ⟨d4, hsub, h⟩ := Except.bind_eq_ok h
+      have hs : d4.logs = d3.logs := by
+        cases hsb : d3.subBal sevm.currentTarget _ with
+        | none => rw [hsb] at hsub; cases hsub
+        | some d' => rw [hsb] at hsub; cases hsub; exact Devm_subBal_logs hsb
+      have hd3 : d3.logs = pre.logs := by
+        rw [chargeStateGas_ok_logs hcsg, chargeGas_ok_logs hcg, Devm_balReadAccount_logs,
+          Devm_balReadAccount_logs]
+        split <;> simp only [Devm_addAccessedAddress_logs, Devm_popToAdr_ok_logs hpop]
+      have hd4 : d4.logs = pre.logs := hs.trans hd3
+      rcases emitTransferLog_logs_suffix (d4.addBal recip _) sevm.currentTarget recip _ with
+        ⟨extra, heq, hex⟩
+      rcases except_ok_ite h with rfl | rfl
+      · exact ⟨extra, by rw [Devm_addAccountToDelete_logs, heq, Devm_addBal_logs, hd4], hex⟩
+      · exact ⟨extra, by rw [heq, Devm_addBal_logs, hd4], hex⟩
+
+private theorem Evm_halt_ok_logs_any {pc : Nat} {sevm : Sevm} {pre post : Devm}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .halt (.ok post)) :
+    LogsEqOrTransfer pre post := by
+  cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
+  | none =>
+      simp only [Evm.step, decoded] at step
+      cases step
+  | some instruction =>
+      cases instruction with
+      | next instruction =>
+          rw [Evm.step_next decoded] at step
+          cases instruction with
+          | exec executable =>
+              simp only [Ninst.step_exec, XStep.toStep] at step
+              split at step
+              · exact (Step.ofExecution_ne_halt_ok step).elim
+              · cases step
+          | reg regular => exact (Step.ofExecution_ne_halt_ok step).elim
+          | push bytes bound =>
+              simp only [Ninst.step_push] at step
+              split at step <;> exact (Step.ofExecution_ne_halt_ok step).elim
+          | dupn imm => exact (Step.ofExecution_ne_halt_ok step).elim
+          | swapn imm => exact (Step.ofExecution_ne_halt_ok step).elim
+          | exchange imm => exact (Step.ofExecution_ne_halt_ok step).elim
+      | jump jumpInst =>
+          rw [Evm.step_jump decoded] at step
+          cases actual : Jinst.run ⟨pc, sevm, pre⟩ jumpInst with
+          | error error => rw [actual] at step; cases step
+          | ok pair => rw [actual] at step; cases step
+      | last last =>
+          rw [Evm.step_last decoded] at step
+          cases last with
+          | stop =>
+              exact LogsEqOrTransfer.of_eq
+                (Linst.Hinv.inv (f := Devm.logs) (g := Devm.logs) (Step.halt.inj step)).symm
+          | return_ =>
+              exact LogsEqOrTransfer.of_eq
+                (Linst.Hinv.inv (f := Devm.logs) (g := Devm.logs) (Step.halt.inj step)).symm
+          | revert => exact (Lift.Linst.revert_not_ok (Step.halt.inj step)).elim
+          | selfdestruct => exact Linst_selfdestruct_logs_any (Step.halt.inj step)
+
+private theorem Frame_enter_done_clean_logs_any {frame : Frame} {out : Devm}
+    (enter : Frame.enter frame = .done (.ok out))
+    (clean : out.error.isNone = true) :
+    OnlyTransferLogs out.logs := by
+  unfold Frame.enter at enter
+  cases transfer : frame.inner.benvAfterTransfer with
+  | error error =>
+      simp only [transfer, Frame_settleMsg_error] at enter
+      cases enter
+  | ok benv =>
+      simp only [transfer] at enter
+      cases started : executeCode.enter (frame.inner.withBenv benv) with
+      | inl evm => rw [started] at enter; cases enter
+      | inr raw =>
+          rw [started] at enter
+          have settled : frame.settle raw = .ok out := FrameEntry.done.inj enter
+          have commits : Frame.settlementCommits frame raw = true := by
+            simp only [Frame.settlementCommits, settled]
+            exact clean
+          have rawCommits := Frame.raw_commits_of_settlementCommits commits
+          have initialLogs : OnlyTransferLogs (initEvm (frame.inner.withBenv benv)).dyna.logs :=
+            OnlyTransferLogs.initDevm (frame.inner.withBenv benv)
+          unfold executeCode.enter at started
+          split at started
+          · cases started
+          · split at started
+            · rename_i address decoded enabled
+              cases started
+              have rawLogs := executePrecomp_logs
+                (initEvm (frame.inner.withBenv benv)) address
+              cases prec : executePrecomp (initEvm (frame.inner.withBenv benv)) address with
+              | error error =>
+                  simp only [prec, Execution.commits, Bool.false_eq_true] at rawCommits
+              | ok d =>
+                  rw [prec] at settled rawLogs
+                  change (initEvm (frame.inner.withBenv benv)).dyna.logs = d.logs at rawLogs
+                  rw [Frame_settle_logs settled, ← rawLogs]
+                  exact initialLogs
+            · cases started
+
+private theorem Evm_childless_logs_any {pc nextPc : Nat} {sevm : Sevm} {pre post : Devm}
+    {frame : Frame} {resume : Resume}
+    {res : Except (EvmError × State × AdrSet × Tra) Devm}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume nextPc)
+    (enter : Frame.enter frame = .done res)
+    (hrun : resume.run res = .ok post) :
+    LogsEqOrTransfer pre post := by
+  obtain ⟨out, rfl, hnoerr, herr⟩ :=
+    ResumeLogSeedAny.result_logs (Evm_spawn_logs_any step) hrun
+  by_cases he : out.error = none
+  · have clean : out.error.isNone = true := by rw [he]; rfl
+    exact ⟨out.logs, hnoerr he, Frame_enter_done_clean_logs_any enter clean⟩
+  · exact LogsEqOrTransfer.of_eq (herr he)
+
+private theorem Evm_resumed_committed_logs_any
+    {pc nextPc : Nat} {sevm : Sevm} {pre post : Devm}
+    {frame : Frame} {resume : Resume} {raw : Execution}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume nextPc)
+    (resumed : resume.run (frame.settle raw) = .ok post)
+    (commits : Frame.settlementCommits frame raw = true) :
+    post.logs = pre.logs ++
+      (Execution.committedPost raw (Frame.raw_commits_of_settlementCommits commits)).logs := by
+  obtain ⟨child, settled, hnoerr, _⟩ :=
+    ResumeLogSeedAny.result_logs (Evm_spawn_logs_any step) resumed
+  have clean : child.error.isNone = true := by
+    simpa only [Frame.settlementCommits, settled] using commits
+  have hnone : child.error = none := by
+    cases present : child.error with
+    | none => rfl
+    | some reason =>
+        simp only [present, Option.isNone_some, Bool.false_eq_true] at clean
+  cases raw with
+  | error error =>
+      have rawCommits := Frame.raw_commits_of_settlementCommits commits
+      simp only [Execution.commits, Bool.false_eq_true] at rawCommits
+  | ok d =>
+      change post.logs = pre.logs ++ d.logs
+      rw [hnoerr hnone, Frame_settle_logs settled]
+
+private theorem Evm_resumed_rollback_logs_any
+    {pc nextPc : Nat} {sevm : Sevm} {pre post : Devm}
+    {frame : Frame} {resume : Resume} {raw : Execution}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume nextPc)
+    (resumed : resume.run (frame.settle raw) = .ok post)
+    (notCommits : ¬ Frame.settlementCommits frame raw = true) :
+    post.logs = pre.logs := by
+  obtain ⟨child, settled, _, herr⟩ :=
+    ResumeLogSeedAny.result_logs (Evm_spawn_logs_any step) resumed
+  have hne : child.error ≠ none := by
+    intro hnone
+    apply notCommits
+    simp only [Frame.settlementCommits, settled, hnone, Option.isNone_none]
+  exact herr hne
+
+private theorem Exec.stateBoundaries_logs_of_commits_filtered
+    (framePath : List Nat) (nextChild : Nat)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (committed : Execution.commits out = true)
+    {keep : Log → Bool}
+    (noTransfer : ∀ s r v, keep (transferLog s r v) = false) :
+    (Execution.committedPost out committed).logs.filter keep =
+      pre.logs.filter keep ++
+        ((Exec.stateBoundariesOfCommits framePath nextChild run committed).flatMap
+          Exec.boundaryOwnLogs).filter keep := by
+  induction run generalizing framePath nextChild with
+  | @halt actualPc actualSevm actualPre actualOut step =>
+      cases actualOut with
+      | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
+      | ok post =>
+          simp only [Exec.stateBoundariesOfCommits, List.flatMap_cons,
+            List.flatMap_nil, Exec.boundaryOwnLogs, Exec.stateBoundary,
+            List.append_nil, List.filter_nil, Execution.committedPost]
+          exact (Evm_halt_ok_logs_any step).filter_eq noTransfer
+  | cont step next ih =>
+      simp only [Exec.stateBoundariesOfCommits, List.flatMap_cons,
+        Exec.boundaryOwnLogs, Exec.stateBoundary, Exec.Frame.rootDeriv,
+        Exec.Frame.ofRun, Exec.Deriv.successfulLog?]
+      rw [ih framePath nextChild committed, Exec.cont_logs_any step, List.filter_append,
+        List.append_assoc, List.filter_append]
+  | doneErr step enter resume =>
+      simp only [Execution.commits, Bool.false_eq_true] at committed
+  | doneOk step enter resume next ih =>
+      simp only [Exec.stateBoundariesOfCommits, List.flatMap_cons,
+        Exec.boundaryOwnLogs, Exec.stateBoundary, List.nil_append]
+      rw [ih framePath (nextChild + 1) committed,
+        (Evm_childless_logs_any step enter resume).filter_eq noTransfer]
+  | runErr step enter child resume ih =>
+      simp only [Execution.commits, Bool.false_eq_true] at committed
+  | runOk step enter child resume next childIh nextIh =>
+      simp only [Exec.stateBoundariesOfCommits]
+      split
+      · next childSettles =>
+          let childCommitted := Frame.raw_commits_of_settlementCommits childSettles
+          have childLogs := childIh (framePath ++ [nextChild]) 0 childCommitted
+          have initialLogs := OnlyTransferLogs.filter_eq_nil
+            (Frame_enter_run_logs_any enter) noTransfer
+          simp only [List.flatMap_cons, List.flatMap_append, Exec.boundaryOwnLogs,
+            Exec.stateBoundary, List.nil_append, List.filter_append]
+          rw [nextIh framePath (nextChild + 1) committed,
+            Evm_resumed_committed_logs_any step resume childSettles,
+            List.filter_append, childLogs, initialLogs, List.nil_append, List.append_assoc]
+      · next childDoesNotSettle =>
+          simp only [List.flatMap_cons, Exec.boundaryOwnLogs, Exec.stateBoundary,
+            List.nil_append]
+          rw [nextIh framePath (nextChild + 1) committed,
+            Evm_resumed_rollback_logs_any step resume childDoesNotSettle]
+
+/-- All committed logs passing a transfer-excluding predicate `keep` match the
+filtered own-logs of the retained execution boundary tree. -/
+theorem Exec.committed_logs_at_filtered
+    {framePath : List Nat} {nextChild : Nat}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (committed : Execution.commits out = true)
+    {keep : Log → Bool}
+    (noTransfer : ∀ s r v, keep (transferLog s r v) = false) :
+    (Execution.committedPost out committed).logs.filter keep =
+      pre.logs.filter keep ++
+        ((Exec.stateBoundariesOfCommits framePath nextChild run committed).flatMap
+          Exec.boundaryOwnLogs).filter keep :=
+  Exec.stateBoundaries_logs_of_commits_filtered framePath nextChild run committed noTransfer
+
+/-- All committed logs passing a transfer-excluding predicate `keep` match the
+filtered own-logs of `Exec.committedStateBoundaries run`. -/
+theorem Exec.committed_logs_filtered
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (committed : Execution.commits out = true)
+    {keep : Log → Bool}
+    (noTransfer : ∀ s r v, keep (transferLog s r v) = false) :
+    (Execution.committedPost out committed).logs.filter keep =
+      pre.logs.filter keep ++
+        ((Exec.committedStateBoundaries run).flatMap Exec.boundaryOwnLogs).filter keep := by
+  simpa only [Exec.committedStateBoundaries, committed, ↓reduceDIte] using
+    Exec.committed_logs_at_filtered (framePath := []) (nextChild := 0) run committed noTransfer
+
 end Blanc

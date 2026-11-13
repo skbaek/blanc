@@ -1,909 +1,972 @@
 # Protocol-contract corpus
 
-**UNADOPTED REVIEW DRAFT — bindings and wording are incomplete.**
-
-This file supplies no accepted claim or provenance. Missing evidence stays red.
-
 ## Matrix
 
 | Row | D | R | H | W | C | B |
 |---|---|---|---|---|---|---|
-| S1 | [PENDING](#d-s1) | [PENDING](#r-s1) | [PENDING](#h-s1) | [PENDING — Exact system storage writes still need a pinned headline.](#w-s1) | [PENDING — Exact arbitrary-storage system effects need their full theorem pin.](#c-s1) | [PENDING](#b-s1) |
-| S2 | [PENDING](#d-s2) | [PENDING](#r-s2) | [PENDING](#h-s2) | [PENDING — Exact kept-frame classification still needs its public pin.](#w-s2) | [PENDING — The exact settled-frame proof exists but has no typed theorem root.](#c-s2) | [PENDING](#b-s2) |
-| S3 | [PENDING](#d-s3) | [PENDING](#r-s3) | [PENDING](#h-s3) | [Admitted deployment histories determine word bookkeeping, FIFO records and block publication.](#w-s3) | [PENDING — Pinned FIFO does not yet state the complete bookkeeping history.](#c-s3) | [PENDING](#b-s3) |
-| S4 | [PENDING](#d-s4) | [PENDING](#r-s4) | [PENDING](#h-s4) | [Conditional observed deployment traces establish canonical code and initial queue words.](#w-s4) | [The observed checkpoint supplies the root of the conditional mainnet FIFO history.](#c-s4) | [PENDING](#b-s4) |
-| S5 | N/A (fee row) | N/A (fee row) | N/A (fee row) | [PENDING — The exact fee-equality domain is pinned; first divergence remains incomplete.](#w-s5) | [PENDING — Exact domain and first-divergence packaging still need full typed pins.](#c-s5) | [PENDING](#b-s5) |
-| S6 | [PENDING](#d-s6) | [PENDING](#r-s6) | [PENDING](#h-s6) | [Every configured suffix retains the checkpoint balance plus committed submission payments.](#w-s6) | [PENDING — The committed-value lower bound is proved but lacks its exact root.](#c-s6) | [PENDING](#b-s6) |
-| S7 | [PENDING](#d-s7) | [PENDING](#r-s7) | [PENDING](#h-s7) | [PENDING — Actual word-fee guard liveness still needs a complete pinned binding.](#w-s7) | [PENDING — Actual-word-fee submission is pinned; full getter liveness is not.](#c-s7) | [PENDING](#b-s7) |
-| S8 | [PENDING](#d-s8) | [PENDING](#r-s8) | [PENDING](#h-s8) | [An admitted extension delivers queue position q in block q/16 at record q%16.](#w-s8) | [PENDING — Exact block, record and occurrence delivery are proved but unpinned.](#c-s8) | [PENDING](#b-s8) |
-| S9 | [PENDING](#d-s9) | [PENDING](#r-s9) | [PENDING](#h-s9) | [PENDING — Joint authorization, fate and crediting proofs still need all nine component pins.](#w-s9) | [PENDING — Joint authorization, occurrence fate and transfer accounting remain open.](#c-s9) | [PENDING](#b-s9) |
-| S10 | [PENDING](#d-s10) | [PENDING](#r-s10) | [PENDING](#h-s10) | [PENDING — The Amsterdam system-call result still needs its exact pin and complete S1 mapping.](#w-s10) | [PENDING — Amsterdam success and exact state need their full typed root.](#c-s10) | [PENDING](#b-s10) |
+| S1 | [Settled deposit-contract frames emit only valid 576-byte deposit logs, making block deposit parsing total.](#d-s1) | [The covered-fork beacon-roots system call succeeds from arbitrary storage within 44,251 regular gas with exact ring writes.](#r-s1) | [The covered-fork history-storage system call succeeds from arbitrary storage within 22,143 regular gas with exact slot writes.](#h-s1) | [The covered-fork withdrawal-request checked system call succeeds from arbitrary storage within 210,000 gas.](#w-s1) | [The covered-fork consolidation-request checked system call succeeds from arbitrary storage within 114,177 gas.](#c-s1) | [Both builder-request contracts complete their Amsterdam system calls with exact post-state within 888,000 and 161,000 regular gas.](#b-s1) |
+| S2 | [Every settled frame at canonical deposit bytes in a kept history is deposit, root view, count view, or ERC-165.](#d-s2) | [Every settled beacon-roots frame on covered forks is either the system ring write or a 32-byte timestamp read.](#r-s2) | [Every settled history-storage frame on covered forks is either the system ring write or an in-window block-hash read.](#h-s2) | [Every successful fresh canonical withdrawal-request frame is a system dequeue, a 56-byte submission, or a fee-getter read.](#w-s2) | [Every settled consolidation-request frame in a kept history is a system dequeue, a 96-byte submission, or a fee read.](#c-s2) | [Every settled frame on both builder contracts is system empty, system inhibitor latch, submission, or fee read.](#b-s2) |
+| S3 | [Configured deposit histories maintain exact deposit count, 32-level SHA-256 Merkle root, and leaf recurrence.](#d-s3) | [Clean covered-fork histories determine every beacon-roots ring slot as the exact fold of block-entry writes.](#r-s3) | [Clean covered-fork histories determine every history-storage slot as the exact fold of parent-hash writes.](#h-s3) | [Admitted deployment histories determine withdrawal word bookkeeping, FIFO queue records, and block publication.](#w-s3) | [Clean checkpoint histories satisfy the consolidation FIFO law equating submissions with published records plus remaining queue.](#c-s3) | [Clean Amsterdam histories determine exact queue storage and request-boundary publication for both builder contracts.](#b-s3) |
+| S4 | [Modeled deployment at block 11,052,984 and historical seam anchors establish SolInv and empty initial history.](#d-s4) | [The observed block 22,431,083 checkpoint establishes canonical beacon-roots code and empty SYSTEM_ADDRESS code.](#r-s4) | [The observed block 22,431,083 checkpoint establishes canonical history-storage code and empty SYSTEM_ADDRESS code.](#h-s4) | [Conditional observed deployment traces from block 21,881,389 to 22,431,083 establish canonical code and initial words.](#w-s4) | [The observed block 22,431,083 checkpoint roots the conditional mainnet consolidation FIFO and storage history.](#c-s4) | [The adopted block 26,391,669 checkpoint establishes both builder bytecodes, whole initial storages, and clean SYSTEM.](#b-s4) |
+| S5 | N/A (fee row) | N/A (fee row) | N/A (fee row) | [Withdrawal word fee equals fake_exponential iff NatFeeDomain holds, with first underpayment at excess 2,893.](#w-s5) | [Consolidation word fee equals fake_exponential iff NoWrapDomain holds, agreeing through 2,892 and diverging at 2,893.](#c-s5) | [Both builder contracts share the NoWrapDomain/2,893 word-fee boundary and expose a reversible SYSTEM inhibitor latch.](#b-s5) |
+| S6 | [Deposit contract balance never decreases and retains every committed deposit payment at exact gwei-to-wei scaling.](#d-s6) | [Beacon-roots contract balance never falls and accumulates all value sent in kept frames across covered-fork histories.](#r-s6) | [History-storage contract balance never falls and accumulates all value sent in kept frames across covered-fork histories.](#h-s6) | [Every configured mainnet suffix retains the checkpoint balance plus all committed withdrawal submission payments.](#w-s6) | [Kept covered-fork histories retain starting balance plus committed consolidation submission and kept-frame values.](#c-s6) | [Both builder contracts retain starting balance plus all committed submission payments across Amsterdam histories.](#b-s6) |
+| S7 | [Valid 416-byte deposit frames with at least 1 ETH at exact gwei multiples and count below 2^32-1 succeed at exact gas.](#d-s7) | [Fresh 32-byte beacon-roots reads of a matching nonzero timestamp succeed at exact 120 plus two-SLOAD gas.](#r-s7) | [Fresh 32-byte history-storage reads within the 8,191-block window succeed at exact 125 plus SLOAD gas.](#h-s7) | [Canonical withdrawal submission and fee-getter frames succeed with exact gas under their actual word-fee guards.](#w-s7) | [Canonical consolidation submission and fee-getter frames succeed with exact gas under their actual word-fee guards.](#c-s7) | [Both builder contracts accept valid submissions and serve fee reads at exact regular gas under actual word-fee guards.](#b-s7) |
+| S8 | [Every committed deposit frame event becomes an exact same-block deposit request record in emission order.](#d-s8) | [Beacon-roots ring entries persist across timestamp-noncongruent suffixes and across fewer than 8,191 affine slots.](#r-s8) | [History-storage retains exact parent hashes for 8,191 blocks, rejects endpoints, and preserves unwritten slots.](#h-s8) | [An admitted mainnet extension delivers withdrawal queue position q in block q/16 at record index q%16.](#w-s8) | [A clean covered-fork history delivers consolidation queue position q in block j + q/2 at record index q%2.](#c-s8) | [History-wide multi-user fee budgets bound both builder queues at every boundary and yield conditional q/64 and q/16 delivery.](#b-s8) |
+| S9 | [Valid joint chains deliver same-block deposits and classify post-cutover queued fate and conservation under real BLS.](#d-s9) | [Valid joint steps store the consensus parent_root in beacon-roots and match SSZ parent headers under the slot guard.](#r-s9) | [Contiguous kept histories return the exact ancestor execution block hash for every retained height in the 8,191-block window.](#h-s9) | [Valid joint runs preserve withdrawal authorization, occurrence fate, retained fee budget, and payout crediting laws.](#w-s9) | [Valid joint runs enforce consolidation caller/credential authorization, unique occurrence fate, and balance conservation.](#c-s9) | [Focused Gloas joint theorems prove builder fate, registration/exit authorization, unique resolution, and at-most-once debit.](#b-s9) |
+| S10 | [Settled deposit frames at Amsterdam emit only valid 576-byte deposit logs, discharging request-pass parse premises.](#d-s10) | [The Amsterdam beacon-roots system call succeeds from arbitrary storage within 30,000 regular gas with exact ring writes.](#r-s10) | [The Amsterdam history-storage system call succeeds from arbitrary storage within 15,000 regular gas with exact writes.](#h-s10) | [The Amsterdam withdrawal system call succeeds within 163,000 regular gas and composes in the four-contract request phase.](#w-s10) | [The Amsterdam consolidation system call succeeds within 75,000 regular gas and composes in the four-contract request phase.](#c-s10) | [Both builder contracts succeed within 888,000 and 161,000 regular gas and compose in the Amsterdam request-phase pass.](#b-s10) |
 
 ## D-S1
 
 ### Premises
 
-PENDING
+Assumes a covered fork (Prague, Osaka, BPO1, or BPO2), canonical deposit runtime bytes at 0x00000000219ab540356cBB839Cbe05303d7705Fa, a receipt-producing execution trace with complete transaction receipts, and attribution of every deposit-topic log at that address to settled frames of the canonical code.
 
 ### Non-claims
 
-PENDING
+Does not claim parsing totality when foreign or unverified runtime bytes inhabit the deposit address; the paired short-log control proves parseDepositRequests fails if a 1-byte log with the deposit address and topic appears in receipts. Does not assert consensus validator crediting.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| log-shape, parse | `Blanc.Composition.DepositParse.d_s1` (`Blanc/Composition/DepositParse.lean:65`) | `thm:Blanc.Composition.DepositParse.d_s1` |
 
 ## R-S1
 
 ### Premises
 
-PENDING
+Assumes a covered fork (Prague, Osaka, BPO1, or BPO2) and canonical EIP-4788 bytecode installed at 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02, with arbitrary initial contract storage.
 
 ### Non-claims
 
-PENDING
+Applies to the protocol system call from SYSTEM_ADDRESS; zero parentBeaconBlockRoot performs no storage write. Does not classify user-originated calls or Amsterdam state gas.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Corpus.Proofs.R.r_s1` (`Blanc/Composition/Corpus/Proofs/RingTotality.lean:23`) | `thm:Blanc.Corpus.Proofs.R.r_s1` |
 
 ## H-S1
 
 ### Premises
 
-PENDING
+Assumes a covered fork (Prague, Osaka, BPO1, or BPO2), canonical EIP-2935 bytecode installed at 0x0000F90827F1C53a10cb7A02335B175320002935, blockHashes.getLast? = some lastHash, and arbitrary initial contract storage.
 
 ### Non-claims
 
-PENDING
+Applies to the protocol system call from SYSTEM_ADDRESS; at block number zero `blockNumber - 1` wraps modulo 2^256 in the bytecode, writing `lastHash` to slot `2^256 - 1 mod 8,191`. Does not classify user-originated reads or Amsterdam state gas.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Corpus.Proofs.H.h_s1` (`Blanc/Composition/Corpus/Proofs/RingTotality.lean:85`) | `thm:Blanc.Corpus.Proofs.H.h_s1` |
 
 ## W-S1
 
 ### Premises
 
-The existing `system_call_succeeds` assumes canonical installed code and a covered fork, with arbitrary storage. Its `SystemCallOk` conclusion supplies checked-call success and a 210,000 gas bound.
+Assumes a covered fork (Prague, Osaka, BPO1, or BPO2) and canonical EIP-7002 bytecode installed at 0x00000961Ef480Eb55e80D19ad83579A64c007002, with arbitrary initial contract storage.
 
 ### Non-claims
 
-This cell remains incomplete: `SystemCallOk` existentially quantifies the post-state and does not state the exact storage writes required by S1. No full-cell binding is proposed.
+Bounds checked system-call gas without stating the post-state directly in the headline existential (`checked_system_totality` states the exact post-state in the unit layer).
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Lift.WithdrawalRequest.system_call_succeeds` (`Blanc/Lift/WithdrawalRequest/HeadlineSystem.lean:28`) | `thm:Blanc.Lift.WithdrawalRequest.system_call_succeeds` |
 
 ## C-S1
 
 ### Premises
 
-The pinned `system_call_succeeds` assumes a covered fork and canonical installed code and proves checked-call success within 114,177 gas. The source-level `Lift.ConsolidationRequest.system_call_ok` additionally states the exact sysState post-state, no error and unconditional drained output from arbitrary storage.
+Assumes a covered fork (Prague, Osaka, BPO1, or BPO2) and canonical EIP-7251 bytecode installed at 0x0000BBdDc7CE488642fb579F8B00f3a590007251, with arbitrary initial contract storage.
 
 ### Non-claims
 
-This cell remains incomplete: the pinned SystemCallOk existentially hides the post-state. The full source theorem has no existing typed theorem root, and the pinned natural-number Bookkept result adds ordered-pointer, capacity and no-wrap assumptions. Neither narrower result substitutes for S1 from arbitrary storage.
+Bounds checked system-call gas without stating the post-state in the headline existential (stated separately by `system_call_bookkept` / `ConsolidationRequest.system_call_ok`); does not assert consensus consolidation processing.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Composition.ConsolidationRequestPublic.system_call_succeeds` (`Blanc/Composition/ConsolidationRequestPublicHeadlines.lean:41`) | `thm:Blanc.Composition.ConsolidationRequestPublic.system_call_succeeds` |
 
 ## B-S1
 
 ### Premises
 
-PENDING
+Assumes the Amsterdam fork and canonical EIP-8282 deposit and exit bytecodes installed at their respective predeploys, with arbitrary initial storage on each contract.
 
 ### Non-claims
 
-PENDING
+Bounds regular execution gas only and excludes Amsterdam state gas; does not assert consensus request processing or user-frame classification.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| deposit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_deposit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:126`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_deposit` |
+| exit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_exit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:150`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_exit` |
 
 ## D-S2
 
 ### Premises
 
-PENDING
+Assumes a kept covered-fork execution history from a state establishing the deposit Merkle accumulator invariant (discharged via D-S3 and D-S4 rather than assumed per frame) with canonical deposit bytecode retained at the deposit address.
 
 ### Non-claims
 
-PENDING
+Classifies settled frames of the canonical deposit runtime only; reverted frames roll back their local effects, and non-matching selectors or malformed calldata revert.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| deposit, root-view, count-view, erc165 | `Blanc.Composition.DepositClassified.d_s2` (`Blanc/Composition/DepositClassified.lean:132`) | `thm:Blanc.Composition.DepositClassified.d_s2` |
 
 ## R-S2
 
 ### Premises
 
-PENDING
+Assumes a covered fork, canonical EIP-4788 bytecode at the predeploy target, empty initial stack, word-aligned well-formed initial memory, and calldata length below 2^256.
 
 ### Non-claims
 
-PENDING
+User-originated ring reads do not reject nonzero call value in the bytecode, so incoming ETH on a successful read is retained by the predeploy rather than reverted.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Corpus.Proofs.BeaconRoots.r_s2` (`Blanc/Corpus/Proofs/BeaconRootsClassification.lean:10`) | `thm:Blanc.Corpus.Proofs.BeaconRoots.r_s2` |
 
 ## H-S2
 
 ### Premises
 
-PENDING
+Assumes a covered fork, canonical EIP-2935 bytecode at the predeploy target, empty initial stack, word-aligned well-formed initial memory, and calldata length below 2^256.
 
 ### Non-claims
 
-PENDING
+User-originated reads do not reject nonzero call value in the bytecode, so incoming ETH on a successful read is retained by the predeploy rather than reverted.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Corpus.Proofs.HistoryStorage.h_s2` (`Blanc/Corpus/Proofs/HistoryStorage.lean:13`) | `thm:Blanc.Corpus.Proofs.HistoryStorage.h_s2` |
 
 ## W-S2
 
 ### Premises
 
-The source-level `exec_frame_effect` classifies successful canonical frames into system, submission and fee-getter arms. It assumes a covered fork, empty stack, aligned well-formed memory and calldata length below 2^256, and exposes exact arm post-state constructors.
+Assumes a covered fork, canonical EIP-7002 bytecode, empty initial stack, word-aligned well-formed initial memory, and calldata length below 2^256.
 
 ### Non-claims
 
-This cell remains incomplete: no existing full theorem key and typed claim example were found for the complete kept-history frame clause. The local classifier alone is not a proposed binding for the history statement.
+Stated at the established fresh-frame entry contract for EIP-7002; incoming call value is credited by EVM message entry prior to frame body execution.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Lift.WithdrawalRequest.exec_frame_effect` (`Blanc/Lift/WithdrawalRequest/FrameEffects.lean:32`) | `thm:Blanc.Lift.WithdrawalRequest.exec_frame_effect` |
 
 ## C-S2
 
 ### Premises
 
-`Blanc.Corpus.Proofs.Consolidation.c_s2` has exactly frozen C_S2: every settled frame retained at the canonical predeploy by a kept history on Prague, Osaka, BPO1 or BPO2 has a dequeue, submission or fee-read effect. The dequeue states sysState, unchanged logs and unconditional word-arithmetic drained output, including head greater than tail. Submission and getter arms retain their exact storage, balance, log and output clauses. Incoming call value is credited before the frame starts.
+Assumes a kept history on covered forks (Prague, Osaka, BPO1, or BPO2) with canonical EIP-7251 bytecode at the predeploy address.
 
 ### Non-claims
 
-All three required components remain unbound because this exact proof has no existing typed ClaimCheck example or full stable theorem key. The older pinned Succeeded relation has guarded dequeue output and omits effects; its local fresh-frame classifier is not the frozen settled-history statement.
+System dequeue output uses unconditional word subtraction even if synthetic storage has head above tail; incoming call value is credited before frame body execution.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| all-success-arms, unconditional-output, exact-effects | `Blanc.Corpus.Proofs.Consolidation.c_s2` (`Blanc/Composition/Corpus/Proofs/ConsolidationExecution.lean:18`) | `thm:Blanc.Corpus.Proofs.Consolidation.c_s2` |
 
 ## B-S2
 
 ### Premises
 
-PENDING
+Assumes an Amsterdam kept history with canonical EIP-8282 deposit and exit bytecodes at their predeploys, under unrestricted Form B without assuming HistoryClean or empty SYSTEM_ADDRESS code.
 
 ### Non-claims
 
-PENDING
+Includes the nonzero-calldata SYSTEM_ADDRESS arm writing B256.max to slot 0 and user-originated SYSTEM_ADDRESS empty-calldata dequeues when SYSTEM_ADDRESS is unguarded; clean histories exclude those paths via B-S3.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| deposit-system-empty, deposit-system-latch, deposit-submission, deposit-fee-read | `Blanc.Composition.BuilderRequestClassification.b_s2_deposit` (`Blanc/Composition/BuilderRequestClassification.lean:139`) | `thm:Blanc.Composition.BuilderRequestClassification.b_s2_deposit` |
+| exit-system-empty, exit-system-latch, exit-submission, exit-fee-read | `Blanc.Composition.BuilderRequestClassification.b_s2_exit` (`Blanc/Composition/BuilderRequestClassification.lean:147`) | `thm:Blanc.Composition.BuilderRequestClassification.b_s2_exit` |
 
 ## D-S3
 
 ### Premises
 
-PENDING
+Assumes a configured execution history from canonical deposit deployment or a valid SolInv checkpoint, canonical SHA-256 precompile availability (empty code and no authority or CREATE at address 0x02), and no authority or CREATE collisions at system contract addresses.
 
 ### Non-claims
 
-PENDING
+Tracks committed deposit leaves and stored Merkle branch words; does not authenticate external RPC responses or assert consensus deposit-queue consumption.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Lift.BeaconDeposit.beacon_deposits` (`Blanc/Lift/BeaconDeposit/HistDeployment.lean:164`) | `thm:Blanc.Lift.BeaconDeposit.beacon_deposits` |
 
 ## R-S3
 
 ### Premises
 
-PENDING
+Assumes a kept covered-fork history with canonical EIP-4788 bytecode, empty code at SYSTEM_ADDRESS, and no transaction sender, EIP-7702 authority, or CREATE targeting SYSTEM_ADDRESS.
 
 ### Non-claims
 
-PENDING
+Without SYSTEM_ADDRESS cleanliness, a coded SYSTEM_ADDRESS account can spoof the system caller and overwrite ring slots mid-block, as demonstrated by the paired negative control.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Corpus.Proofs.RingHistory.R.r_s3` (`Blanc/Composition/Corpus/Proofs/RingHistory.lean:150`) | `thm:Blanc.Corpus.Proofs.RingHistory.R.r_s3` |
 
 ## H-S3
 
 ### Premises
 
-PENDING
+Assumes a kept covered-fork history with canonical EIP-2935 bytecode, empty code at SYSTEM_ADDRESS, and no transaction sender, EIP-7702 authority, or CREATE targeting SYSTEM_ADDRESS.
 
 ### Non-claims
 
-PENDING
+Without SYSTEM_ADDRESS cleanliness, a coded SYSTEM_ADDRESS account can spoof the system caller and overwrite stored block hashes mid-block, as demonstrated by the paired negative control.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Corpus.Proofs.RingHistory.H.h_s3` (`Blanc/Composition/Corpus/Proofs/RingHistory.lean:246`) | `thm:Blanc.Corpus.Proofs.RingHistory.H.h_s3` |
 
 ## W-S3
 
 ### Premises
 
-`block_word_fifo` takes a canonical Cancun deployment with its environmental Admission, a configured modern history and next block, the other system contracts installed at the checkpoint, no SYSTEM transaction sender or authority, no CREATE target at SYSTEM, and at most 2^254 committed submission occurrences over the extended history. The modern trace uses CoveredFork (Prague, Osaka, BPO1 or BPO2). Admission derives initial storage, canonical withdrawal code and checkpoint SYSTEM emptiness. Its BlockWordFifo conclusion includes initialization, an empty preactivation submission prefix, the exact request-boundary word model, emission, post-reset representation, FIFO, provenance and bookkeeping safety.
+Assumes canonical Cancun deployment admission, configured covered-fork history, canonical sibling system code at checkpoint, SYSTEM_ADDRESS sender/authority/CREATE exclusions, and at most 2^254 committed submissions.
 
 ### Non-claims
 
-This draft binding is conditional on the supplied traces and admission; it does not authenticate observed chain data, prove future block production, cover arbitrary occurrence overflow or clear stale storage outside the represented live queue. Word-fee behavior is preserved without assuming equality with the natural-number EIP fee. The existing pinned drain control establishes that checkpoint SYSTEM emptiness is load-bearing; the structural matrix checker does not require that control.
+Does not clear stale storage outside the active head-to-tail window or cover occurrence counts above 2^254; checkpoint SYSTEM_ADDRESS emptiness is load-bearing per the proved drain control.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Lift.WithdrawalRequest.block_word_fifo` (`Blanc/Lift/WithdrawalRequest/WordFifo.lean:641`) | `thm:Blanc.Lift.WithdrawalRequest.block_word_fifo` |
+| headline | `Blanc.Lift.WithdrawalRequest.block_word_fifo` (`Blanc/Lift/WithdrawalRequest/WordFifo.lean:635`) | `thm:Blanc.Lift.WithdrawalRequest.block_word_fifo` |
 
 ## C-S3
 
 ### Premises
 
-The pinned `history_fifo_mainnet` assumes the observed checkpoint in C-S4, a kept mainnet history, HistoryClean SYSTEM exclusions and at most 2^253 committed submissions. Its Fifo conclusion is exactly submissions = published records ++ remaining stored queue, in order. Separate source model/representation results and history_pointers carry further storage information.
+Assumes a kept covered-fork history from CheckpointStart, HistoryClean exclusions on SYSTEM_ADDRESS, and at most 2^253 committed consolidation submissions.
 
 ### Non-claims
 
-This cell remains incomplete: the pinned FIFO equality does not state the history function for the excess and count words or all bookkeeping. No implication from that equality to complete S3 storage was invented. A consolidation-specific closed coded-SYSTEM control has not been identified; W's drainer theorem is about different bytes. G5 separately owns the required control evidence.
+`Fifo` characterizes `submissions = emissions ++ remainingQueue` without asserting slots 0 to 3 or non-queue storage slots outside `remainingQueue`; the paired drain control shows a coded SYSTEM_ADDRESS caller drains queued requests before block publication.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Composition.ConsolidationRequestPublic.history_fifo` (`Blanc/Composition/ConsolidationRequestPublicHistory.lean:139`) | `thm:Blanc.Composition.ConsolidationRequestPublic.history_fifo` |
 
 ## B-S3
 
 ### Premises
 
-PENDING
+Assumes an Amsterdam kept history from initial builder storage, canonical EIP-8282 deposit and exit bytecodes, SYSTEM_ADDRESS cleanliness, and bounded submission counts.
 
 ### Non-claims
 
-PENDING
+Requires SYSTEM_ADDRESS cleanliness to exclude user-triggered dequeues and nonzero-calldata inhibitor writes; does not assert consensus execution of published requests.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| deposit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_deposit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:174`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_deposit` |
+| exit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_exit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:189`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_exit` |
 
 ## D-S4
 
 ### Premises
 
-PENDING
+Assumes a mainnet-configured block trace at block 11,052,984 with the canonical creation transaction at index 2 and successful receipt, empty deposit logs in the creation block, historical seam anchors, and address-0x02/system-address collision exclusions.
 
 ### Non-claims
 
-PENDING
+Conditional modeled execution-history bridge: Lean does not authenticate external RPC headers or Merkle-Patricia receipt/state proofs against canonical mainnet finality.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Lift.BeaconDeposit.BeaconDeploymentTo.solInv` (`Blanc/Lift/BeaconDeposit/HistDeployment.lean:121`) | `thm:Blanc.Lift.BeaconDeposit.BeaconDeploymentTo.solInv` |
 
 ## R-S4
 
 ### Premises
 
-PENDING
+Assumes a RingCheckpointObservation at mainnet block 22,431,083 recording header hash, state root, canonical EIP-4788 runtime bytes, and empty code at SYSTEM_ADDRESS, followed by a clean kept covered-fork history.
 
 ### Non-claims
 
-PENDING
+Observed-checkpoint route rather than a deployment-transaction trace; RPC header and account fields are unauthenticated model inputs and assert no initial ring-slot zeroes.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Corpus.Proofs.RingRoots.r_s4` (`Blanc/Composition/Corpus/Proofs/RingRoots.lean:10`) | `thm:Blanc.Corpus.Proofs.RingRoots.r_s4` |
 
 ## H-S4
 
 ### Premises
 
-PENDING
+Assumes a RingCheckpointObservation at mainnet block 22,431,083 recording header hash, state root, canonical EIP-2935 runtime bytes, and empty code at SYSTEM_ADDRESS, followed by a clean kept covered-fork history.
 
 ### Non-claims
 
-PENDING
+Observed-checkpoint route rather than a deployment-transaction trace; RPC header and account fields are unauthenticated model inputs and assert no pre-checkpoint ring contents.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Corpus.Proofs.RingRoots.h_s4` (`Blanc/Composition/Corpus/Proofs/RingRoots.lean:15`) | `thm:Blanc.Corpus.Proofs.RingRoots.h_s4` |
 
 ## W-S4
 
 ### Premises
 
-`deploy_mainnet` takes a mainnet-configured historical block trace, its position-0 transaction split, a following historical trace to the checkpoint, a WithdrawalDeploymentObservation and avoidance of CREATE targeting SYSTEM throughout the prefix. The observation records deployment block 21881389 and checkpoint 22431083, their hashes and roots, the keyless creation transaction and successful receipt, and the required account/code observations. The conclusion gives canonical runtime and InitialWords both immediately after the creation transaction and at the checkpoint; InitialWords means inhibitor excess and zero count, head and tail.
+Assumes mainnet historical traces across deployment block 21,881,389 (transaction split 0) to checkpoint block 22,431,083 satisfying WithdrawalDeploymentObservation and excluding CREATE targeting SYSTEM_ADDRESS.
 
 ### Non-claims
 
-This is a conditional modeled execution-history bridge. The observation values remain unadopted candidates; neither this theorem nor this draft authenticates headers, trie proofs, receipts, mainnet inclusion or the existence of the assumed traces. The binding does not itself adopt public provenance.
+Conditional modeled bridge: external header hashes, state roots, and receipt fields are not cryptographically authenticated inside Lean, and canonical chain inclusion is not proved.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Lift.WithdrawalRequest.deploy_mainnet` (`Blanc/Lift/WithdrawalRequest/HeadlineHistory.lean:212`) | `thm:Blanc.Lift.WithdrawalRequest.deploy_mainnet` |
+| headline | `Blanc.Lift.WithdrawalRequest.deploy_mainnet` (`Blanc/Lift/WithdrawalRequest/HeadlineHistory.lean:208`) | `thm:Blanc.Lift.WithdrawalRequest.deploy_mainnet` |
 
 ## C-S4
 
 ### Premises
 
-`history_fifo_mainnet` takes a kept history under mainnetChainConfig from a checkpoint satisfying ConsolidationCheckpointObservation, HistoryClean (no SYSTEM sender, authority or creation), and a 2^253 submission cap. The observation records last-header number 22431083, hash 0x28fb2c1d988435955e569451c6ad772f7fb5e61cddd7463c7b60e933ed5ff237 and state root 0xab350e0fe349aef68947ede26295f8946c34ce3af5e3ec76f4b26ddeef29c0e3, canonical consolidation runtime, inhibitor excess, zero count/head/tail, and empty code at SYSTEM. The theorem connects these observed start facts to its exact FIFO conclusion. Covered-fork membership follows from the supplied mainnet kept history and the modeled schedule.
+Assumes a mainnet kept history from ConsolidationCheckpointObservation at block 22,431,083 (hash 0x28fb2c1d988435955e569451c6ad772f7fb5e61cddd7463c7b60e933ed5ff237) with canonical EIP-7251 code, inhibitor excess, zero count/head/tail, HistoryClean, and 2^253 submission cap.
 
 ### Non-claims
 
-This is the observed-checkpoint route, not a deployment-transaction proof. Observations remain unadopted candidates, and Lean does not authenticate the RPC fields against the header root. The theorem assumes the observation and kept trace; it proves neither their existence nor canonical mainnet validity. The FIFO conclusion leaves the separate complete S3 bookkeeping gap in C-S3 open. No arbitrary remainder of storage is asserted zero.
+Observed-checkpoint route rather than a creation-transaction proof; RPC account and header fields are unauthenticated model inputs and assert nothing outside slots 0 through 3 at start.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Composition.ConsolidationRequestPublic.history_fifo_mainnet` (`Blanc/Composition/ConsolidationRequestPublicHistory.lean:229`) | `thm:Blanc.Composition.ConsolidationRequestPublic.history_fifo_mainnet` |
+| headline | `Blanc.Composition.ConsolidationRequestPublic.history_fifo_mainnet` (`Blanc/Composition/ConsolidationRequestPublicHistory.lean:224`) | `thm:Blanc.Composition.ConsolidationRequestPublic.history_fifo_mainnet` |
 
 ## B-S4
 
 ### Premises
 
-PENDING
+Assumes the adopted BuilderCheckpointObservation at block 26,391,669 (timestamp 1794399959, hash 0x2410154b2609d8811f1acde0d30fea3815da62d90648e262fae38d2b5e4bfb6f, stateRoot 0xc4eeecdcc9b8002f80699481d73abb807d3d3ce1286b0430ba6e2a4f3f15d60e), whole-storage hash matches for empty deposit storage and slot0=max exit storage, and empty SYSTEM_ADDRESS code.
 
 ### Non-claims
 
-PENDING
+Coverage starts at block 26,391,669 and excludes creation block 26,211,406 and the intervening segment; RPC account storageHash and header fields are trusted observations under hash-collision assumptions without in-Lean MPT path verification.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| deposit, exit | `Blanc.Composition.Corpus.Proofs.BuilderCheckpoint.b_s4` (`Blanc/Composition/Corpus/Proofs/BuilderCheckpoint.lean:108`) | `thm:Blanc.Composition.Corpus.Proofs.BuilderCheckpoint.b_s4` |
 
 ## W-S5
 
 ### Premises
 
-Given an actual WordFakeExponential.Run from excess with denominator 17 and initial accumulator 17, `fee_eq_spec_iff` proves that WordFee(output) equals fake_exponential(1, excess, 17) exactly when NatFeeDomain(excess, iterations) holds. NatFeeDomain quantifies a natural-number loop trace with the specified prefixed no-wrap bounds.
+Assumes execution of the bytecode's 256-bit word Taylor loop with factor 1 and denominator 17 from stored excess below B256.max.
 
 ### Non-claims
 
-Only the fee-domain component is proposed. The existing pinned existential underpayment refutation does not state a least excess or prove agreement at every earlier excess. The first-divergence component remains missing. This draft makes no reachable-domain or public provenance claim.
+For excess 2,893 and higher wrap points, 256-bit numerator multiplication wraps modulo 2^256 and strictly underquotes the natural-number EIP-7002 fake_exponential specification; per-word characterization makes no reachability claim.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
-| fee-domain | `Blanc.Lift.WithdrawalRequest.fee_eq_spec_iff` (`Blanc/Lift/WithdrawalRequest/HeadlineFee.lean:48`) | `thm:Blanc.Lift.WithdrawalRequest.fee_eq_spec_iff` |
+| fee-domain | `Blanc.Lift.WithdrawalRequest.fee_eq_spec_iff` (`Blanc/Lift/WithdrawalRequest/HeadlineFee.lean:46`) | `thm:Blanc.Lift.WithdrawalRequest.fee_eq_spec_iff` |
+| first-divergence | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s5_first_divergence` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:45`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s5_first_divergence` |
 
 ## C-S5
 
 ### Premises
 
-Pinned `fee_eq_spec_of_le` proves the actual quoted word fee equals fake_exponential(1, excess, 17) for every excess at most 2892. Pinned `fee_lt_spec_2893` proves strict underpayment at 2893. The source-level `Lift.ConsolidationRequest.fee_eq_spec_iff` characterizes equality exactly by the executed recurrence's NoWrapDomain.
+Assumes execution of the EIP-7251 bytecode's 256-bit word Taylor recurrence with factor 1 and denominator 17 from stored excess below B256.max.
 
 ### Non-claims
 
-Both required components remain unbound. The exact iff-domain theorem has no current typed theorem root. The two pinned numeric theorems together locate the first divergence, but neither individual type packages the complete least-divergence clause; no reviewed single aggregate key exists. The threshold equality theorem alone is not an exact characterization of every excess where equality holds, and these per-storage facts do not establish reachability.
+At excess 2,893 the word Taylor loop wraps modulo 2^256 and charges strictly less than the natural-number EIP-7251 fake_exponential formula; per-storage characterization makes no mainnet reachability claim.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| fee-domain | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s5_fee_domain` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:77`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s5_fee_domain` |
+| first-divergence | `Blanc.Composition.ConsolidationRequestPublic.fee_lt_spec_2893` (`Blanc/Composition/ConsolidationRequestPublicHeadlines.lean:174`) | `thm:Blanc.Composition.ConsolidationRequestPublic.fee_lt_spec_2893` |
 
 ## B-S5
 
 ### Premises
 
-PENDING
+Assumes canonical EIP-8282 deposit and exit bytecodes at Amsterdam; fee-domain theorems cover active excess words, and latch theorems cover nonzero-calldata SYSTEM_ADDRESS calls followed by ordinary empty-calldata system calls.
 
 ### Non-claims
 
-PENDING
+Word-fee arithmetic wraps first at excess 2,893; contrary to permanent kill-switch prose, writing B256.max to slot 0 via nonzero-calldata SYSTEM_ADDRESS call is cleared by the next empty-calldata system call.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| deposit-fee-domain | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_deposit_fee_domain` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:236`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_deposit_fee_domain` |
+| exit-fee-domain | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_exit_fee_domain` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:257`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_exit_fee_domain` |
+| reversible-latch | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_reversible_latch` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:278`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_reversible_latch` |
 
 ## D-S6
 
 ### Premises
 
-PENDING
+Assumes a kept covered-fork execution history with canonical deposit runtime bytes at the deposit address and standard EVM balance-fit bounds on incoming root/credit values.
 
 ### Non-claims
 
-PENDING
+Bounds balance from below (unsolicited SELFDESTRUCT or coinbase credits may raise it further); each committed deposit pays at least 1 ETH as an exact gwei multiple within uint64.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| balance, paid-amount | `Blanc.Composition.DepositValue.d_s6` (`Blanc/Composition/DepositValue.lean:133`) | `thm:Blanc.Composition.DepositValue.d_s6` |
 
 ## R-S6
 
 ### Premises
 
-PENDING
+Assumes a kept covered-fork history with canonical EIP-4788 bytecode, no transaction sender at the predeploy, and non-wrapping root/credit balance bounds.
 
 ### Non-claims
 
-PENDING
+The bytecode has no value-transferring opcode and accepts nonzero msg.value on user ring reads, so any ETH sent on a settled read remains permanently in the predeploy balance.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Corpus.Proofs.R.r_s6` (`Blanc/Composition/Corpus/Proofs/RingValue.lean:24`) | `thm:Blanc.Corpus.Proofs.R.r_s6` |
 
 ## H-S6
 
 ### Premises
 
-PENDING
+Assumes a kept covered-fork history with canonical EIP-2935 bytecode, no transaction sender at the predeploy, and non-wrapping root/credit balance bounds.
 
 ### Non-claims
 
-PENDING
+The bytecode has no value-transferring opcode and accepts nonzero msg.value on user block-hash reads, so any ETH sent on a settled read remains permanently in the predeploy balance.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Corpus.Proofs.H.h_s6` (`Blanc/Composition/Corpus/Proofs/RingValue.lean:39`) | `thm:Blanc.Corpus.Proofs.H.h_s6` |
 
 ## W-S6
 
 ### Premises
 
-`history_payments_mainnet` assumes the same mainnet historical deployment block, position-0 split, following prefix, observation and SYSTEM-target avoidance as W-S4, followed by a configured modern history. It proves checkpoint balance plus submissionPaid(history) is at most the final withdrawal-account balance. submissionPaid sums values of the settled submission-payment observations, including nested committed calls.
+Assumes the W-S4 deployment-to-checkpoint bridge followed by a configured modern covered-fork execution history.
 
 ### Non-claims
 
-The bound is an inequality and concerns committed submission payments, not reverted calls or an asserted accounting of unrelated transfers. It needs no FIFO occurrence bound. The deployment observation and trace-existence/authentication limitations in W-S4 remain.
+Lower-bound inequality over settled submission frames (including nested committed calls); reverted frames and unauthenticated RPC checkpoint caveats from W-S4 remain.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Lift.WithdrawalRequest.history_payments_mainnet` (`Blanc/Lift/WithdrawalRequest/HeadlineHistory.lean:228`) | `thm:Blanc.Lift.WithdrawalRequest.history_payments_mainnet` |
+| headline | `Blanc.Lift.WithdrawalRequest.history_payments_mainnet` (`Blanc/Lift/WithdrawalRequest/HeadlineHistory.lean:226`) | `thm:Blanc.Lift.WithdrawalRequest.history_payments_mainnet` |
 
 ## C-S6
 
 ### Premises
 
-`Blanc.Corpus.Proofs.Consolidation.c_s6` inhabits frozen C_S6: over a kept history with canonical installed code and covered forks, no transaction sender at the predeploy, HistoryRootsFit and HistoryCreditsFit, final balance is at least starting balance plus submissionsValue, and also plus all keptValue. These arithmetic premises prevent root-balance and tip/withdrawal-credit wrap.
+Assumes a kept covered-fork history with canonical EIP-7251 bytecode, no transaction sender at the predeploy, HistoryRootsFit, and HistoryCreditsFit.
 
 ### Non-claims
 
-The theorem exists as source proof, but no matching typed ClaimCheck example or full stable theorem key exists in the inherited manifest. No balance bound is inferred from queue FIFO alone, and reverted or ancestor-reverted calls are not included among kept values.
+Lower-bound inequality excluding reverted or ancestor-reverted frames; arithmetic fit premises rule out synthetic 256-bit account-balance wrap.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Corpus.Proofs.Consolidation.c_s6` (`Blanc/Composition/Corpus/Proofs/ConsolidationExecution.lean:54`) | `thm:Blanc.Corpus.Proofs.Consolidation.c_s6` |
 
 ## B-S6
 
 ### Premises
 
-PENDING
+Assumes an Amsterdam kept history with canonical EIP-8282 deposit and exit bytecodes and standard non-wrapping account-balance bounds.
 
 ### Non-claims
 
-PENDING
+Lower-bound inequality on contract ETH balances; consensus builder-balance crediting or payment debiting is governed separately by B-S9.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| deposit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_deposit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:284`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_deposit` |
+| exit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_exit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:298`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_exit` |
 
 ## D-S7
 
 ### Premises
 
-PENDING
+Assumes a configured covered-fork history establishing SolInv, canonical deposit code, non-static frame entry, properly encoded 416-byte deposit calldata, value >= 1 ETH with value % 10^9 = 0 and value / 10^9 < 2^64, deposit count < 2^32 - 1, and sufficient frame gas.
 
 ### Non-claims
 
-PENDING
+Stated at frame level over configured histories rather than outer transaction wrapper gas; does not validate BLS proof-of-possession validity, which consensus checks in D-S9.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Lift.BeaconDeposit.configuredHistory_deposit_live` (`Blanc/Lift/BeaconDeposit/Liveness.lean:20`) | `thm:Blanc.Lift.BeaconDeposit.configuredHistory_deposit_live` |
 
 ## R-S7
 
 ### Premises
 
-PENDING
+Assumes a covered fork, canonical EIP-4788 bytecode, fresh frame entry (empty stack, word-aligned memory), non-SYSTEM caller, 32-byte nonzero timestamp calldata matching the stored timestamp slot (`read = some w`), and residual gas plus `120 + sloadGas(timeKey t) + sloadGas(rootKey t)`.
 
 ### Non-claims
 
-PENDING
+Frame-level liveness for accepted reads only (whatever call value is supplied); miss/non-32-byte non-acceptance is proved by `R-S2` (`r_s2_control`) rather than `r_s7`, and transaction-level liveness is not claimed.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Corpus.Proofs.BeaconRoots.r_s7` (`Blanc/Corpus/Proofs/BeaconRootsFrames.lean:44`) | `thm:Blanc.Corpus.Proofs.BeaconRoots.r_s7` |
 
 ## H-S7
 
 ### Premises
 
-PENDING
+Assumes a covered fork, canonical EIP-2935 bytecode, fresh frame entry (empty stack, word-aligned memory), non-SYSTEM caller, 32-byte block-number query in `[max(number - 8191, 0), number - 1]` (`InWindow`), and residual gas plus `125 + sloadGas(q mod 8191)`.
 
 ### Non-claims
 
-PENDING
+Frame-level liveness for in-window reads only (whatever call value is supplied); out-of-window and non-32-byte non-acceptance are proved by `H-S2` (`h_s2_control`) rather than `h_s7`, and transaction-level liveness is not claimed.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Corpus.Proofs.HistoryStorage.h_s7` (`Blanc/Corpus/Proofs/HistoryStorage.lean:52`) | `thm:Blanc.Corpus.Proofs.HistoryStorage.h_s7` |
 
 ## W-S7
 
 ### Premises
 
-The pinned `history_submission_live` and its mainnet instance prove exact fresh 56-byte submission cost and residual gas under sufficient SpecFee payment, with an inhibitor rejection arm. Separate source-level `exec_submission_word_live` and `exec_fee_getter_word_live` use the actual word-fee guards and closed submission/getter charges.
+Assumes a covered fork, canonical EIP-7002 bytecode, non-SYSTEM caller, active slot 0 (excess != B256.max), 56-byte dynamic frame with value >= actual WordFee for submissions, or empty zero-value calldata for the fee getter.
 
 ### Non-claims
 
-This cell remains incomplete: paying the natural-number SpecFee is stronger than the bytecode's actual word-fee admission guard outside the equality domain. No existing full theorem keys and typed claim examples were found for both actual-guard branches. The narrower pinned sufficient-payment theorem is not substituted for the complete S7 clause.
+Uses the bytecode's actual 256-bit word-fee threshold rather than natural-number SpecFee; frames with slot 0 equal to B256.max revert.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s7_headline` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:382`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s7_headline` |
 
 ## C-S7
 
 ### Premises
 
-Pinned `submission_live` uses the actual quoted word fee, not a sufficient natural-number SpecFee bound. It assumes canonical code and target, a covered fork, a non-SYSTEM caller, 96-byte calldata, a dynamic frame, active slot 0 and enough value for quotedFee. A fresh empty-stack/empty-memory run from G + submissionCharge returns exactly G for every G above the stipend; submissionCharge is 269 + 87*quotedIterations + the stated storage-read and store/memory/copy/log charges. Separate `Lift.ConsolidationRequest.exec_fee_read_exact` gives the getter's exact-charge execution under its own actual guards.
+Assumes a covered fork, canonical EIP-7251 bytecode, non-SYSTEM caller, active slot 0 (excess != B256.max), 96-byte dynamic frame with value >= quotedFee for submissions, or empty zero-value calldata for the fee getter.
 
 ### Non-claims
 
-This cell remains incomplete because the pinned theorem covers the submission branch only, while the actual-guard fee-getter result has no typed theorem root. Unlike W's sufficient-payment liveness, C's submission theorem already uses the correct word-fee guard; no SpecFee restriction is introduced here. No full-cell binding is proposed from a single branch.
+Uses the bytecode's actual quoted word fee rather than natural-number SpecFee; frames arriving while slot 0 holds B256.max revert.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s7_headline` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:413`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s7_headline` |
 
 ## B-S7
 
 ### Premises
 
-PENDING
+Assumes the Amsterdam fork, canonical EIP-8282 deposit and exit bytecodes, non-SYSTEM caller, active slot 0 (excess != B256.max), exact submission calldata length with value >= quoted word fee, or empty zero-value calldata for fee reads.
 
 ### Non-claims
 
-PENDING
+States frame-level regular gas and excludes outer transaction intrinsic/state gas; active inhibitor latch (slot 0 = B256.max) causes user submissions and fee reads to revert.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| deposit-acceptance-gas | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_deposit_acceptance_gas` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:309`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_deposit_acceptance_gas` |
+| exit-acceptance-gas | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_exit_acceptance_gas` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:315`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_exit_acceptance_gas` |
 
 ## D-S8
 
 ### Premises
 
-PENDING
+Assumes a kept covered-fork history from valid deposit storage with canonical deposit code, complete block receipts, and attribution of deposit-address logs to canonical deposit frames.
 
 ### Non-claims
 
-PENDING
+Covers the execution half only (same-block request extraction, record layout, order, and request-phase preservation); consensus deposit-queue scheduling and crediting belong to D-S9.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| record-shape, same-block-list, request-order, frame-phase | `Blanc.Composition.DepositRequests.d_s8` (`Blanc/Composition/DepositRequests.lean:72`) | `thm:Blanc.Composition.DepositRequests.d_s8` |
 
 ## R-S8
 
 ### Premises
 
-PENDING
+The time statement assumes a clean kept covered-fork history where no later block timestamp is congruent modulo 8,191. The slot statement additionally assumes an affine slot clock timestamp = t0 + SECONDS_PER_SLOT * slot with positive SECONDS_PER_SLOT and slot gap < 8,191.
 
 ### Non-claims
 
-PENDING
+Wall-clock or variable-interval schedules violate the slot bound if timestamps collide modulo 8,191; per adopted decision, slot wrap at delta = 8,191 is witnessed by the arithmetic `writeAll` mechanism control (`r_s8_slot_control`) rather than an 8,191-block closed `RingJoint` EVM trace.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| time | `Blanc.Composition.BeaconRootsRetention.r_s8_time` (`Blanc/Composition/BeaconRootsRetention.lean:7`) | `thm:Blanc.Composition.BeaconRootsRetention.r_s8_time` |
+| slot | `Blanc.Composition.Corpus.Proofs.RingJointRetention.r_s8_slot` (`Blanc/Composition/Corpus/Proofs/RingJointRetention.lean:935`) | `thm:Blanc.Composition.Corpus.Proofs.RingJointRetention.r_s8_slot` |
 
 ## H-S8
 
 ### Premises
 
-PENDING
+Assumes a clean kept covered-fork history with canonical EIP-2935 bytecode and contiguous block numbers across the suffix.
 
 ### Non-claims
 
-PENDING
+Queries at the current block number or at number - 8192 revert; slots never reached by the block-number range retain their pre-history storage values.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| retention, endpoint-rejection, unwritten-slot | `Blanc.Composition.Corpus.Proofs.RingJointRetention.h_s8` (`Blanc/Composition/Corpus/Proofs/RingJointRetention.lean:1096`) | `thm:Blanc.Composition.Corpus.Proofs.RingJointRetention.h_s8` |
 
 ## W-S8
 
 ### Premises
 
-`history_delivery_mainnet` uses the W-S4 observed deployment bridge, configured histories through blocks B and D, and an ExtendsBy relation of depth q/16 between those extended histories. The latter history excludes SYSTEM senders, authorities and CREATE targets and contains at most 2^254 committed submissions; the observation supplies the other checkpoint system code. For each record actually at queueAtRequests(B)[q], Delivered states blockWithdrawals(D)[q%16] is that record, with the exact preceding prefix from B's queue after dropping 16*(q/16) entries.
+Assumes the W-S4 deployment bridge, configured covered-fork histories to block B and depth q / 16 extension to D, SYSTEM_ADDRESS exclusions, sibling system code, and <= 2^254 submissions.
 
 ### Non-claims
 
-The theorem is conditional on the admitted extension and queue membership. It does not produce future blocks, assert wall-clock latency, promise consensus acceptance or prove withdrawal crediting. Existing request-seam rejection and one-entry late-seam controls have no full theorem keys in the inherited manifest; the latter is an abstract queue counterexample. The structural checker does not enforce either control.
+Conditional on the existence of the admitted extension of depth q / 16; does not prove future block production, wall-clock latency, or consensus balance crediting.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Lift.WithdrawalRequest.history_delivery_mainnet` (`Blanc/Lift/WithdrawalRequest/HeadlineHistory.lean:244`) | `thm:Blanc.Lift.WithdrawalRequest.history_delivery_mainnet` |
+| headline | `Blanc.Lift.WithdrawalRequest.history_delivery_mainnet` (`Blanc/Lift/WithdrawalRequest/HeadlineHistory.lean:242`) | `thm:Blanc.Lift.WithdrawalRequest.history_delivery_mainnet` |
 
 ## C-S8
 
 ### Premises
 
-`Blanc.Corpus.Proofs.Consolidation.c_s8` inhabits frozen C_S8 under a kept covered-fork history, CheckpointStart, HistoryClean and the 2^253 submission cap. If the history contains B at j and D at j+q/2 and B's request-boundary queue has r at q, D publishes r at q%2 with the exact preceding boundary-queue entries; r is committed submission number emissions-before-B plus q.
+Assumes a kept covered-fork history from CheckpointStart, HistoryClean exclusions, <= 2^253 submissions, and blocks B at index j and D at index j + q / 2 in the history.
 
 ### Non-claims
 
-All three required components remain unbound because the complete frozen proof has no existing typed theorem root. It assumes the destination block exists and promises no wall-clock production or consensus crediting. The exact cap-two/cap-one and omitted-type-2-publication control is already proved as c_s8_control with preserved narrow-build evidence, but is also unpinned; it was not rerun here. G5 separately owns control acceptance.
+Conditional on block D existing in the history; proves no wall-clock latency or consensus consolidation application, and depends on the per-block cap of 2 per the proved control.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| occurrence, delivery-block, record-position | `Blanc.Corpus.Proofs.Consolidation.c_s8` (`Blanc/Composition/Corpus/Proofs/ConsolidationLatency.lean:34`) | `thm:Blanc.Corpus.Proofs.Consolidation.c_s8` |
 
 ## B-S8
 
 ### Premises
 
-PENDING
+Assumes clean Amsterdam kept histories for both EIP-8282 contracts; budget theorems sum paid word fees across all users and blocks (excluding principal and gas), and delivery composes those queue bounds with built-upon Amsterdam payload extensions of depth `q / 64` (deposit, offset `q mod 64`) and `q / 16` (exit, offset `q mod 16`).
 
 ### Non-claims
 
-PENDING
+Mathematical fee-budget instances make no live ETH-supply claim; delivery is conditional on built-upon Amsterdam payloads without inhibitor latching and promises no wall-clock latency.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| deposit-history-queue-budget | `Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_every_boundary` (`Blanc/Composition/BuilderRequestActualFeeBounds.lean:111`) | `thm:Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_every_boundary` |
+| exit-history-queue-budget | `Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_every_boundary` (`Blanc/Composition/BuilderRequestActualFeeBounds.lean:123`) | `thm:Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_every_boundary` |
+| deposit-conditional-delivery | `Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_delivery` (`Blanc/Composition/BuilderRequestActualFeeBounds.lean:189`) | `thm:Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_delivery` |
+| exit-conditional-delivery | `Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_delivery` (`Blanc/Composition/BuilderRequestActualFeeBounds.lean:239`) | `thm:Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_delivery` |
 
 ## D-S9
 
 ### Premises
 
-PENDING
+Assumes ValidJointD over Electra/Prague or Fulu/Osaka/BPO with real BLS verification enabled (bls = true), canonical deposit and sibling system code, complete attributed receipts, and post-cutover AnchorLedgerD bounding legacy Eth1-bridge deposits without a 2020 bridge-finished premise.
 
 ### Non-claims
 
-PENDING
+`D9FateJoined` and `D9ConservationJoined` partition post-cutover request occurrences (`cutoverCount <= k < E_final`) and exclude the pre-cutover legacy Eth1 deposit prefix (`k < cutoverCount`) from request-occurrence fate tracking. A new pubkey with an invalid BLS proof of possession receives no validator credit while its paid ETH remains permanently in the deposit contract; positive new-validator registration witnesses are conditional on real-BLS signature acceptance, and consensus enforces request list equality independently of blockHash.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| joined-delivery | `Blanc.Composition.DepositJoint.d9_delivery` (`Blanc/Composition/DepositJoint.lean:542`) | `thm:Blanc.Composition.DepositJoint.d9_delivery` |
+| joined-fate-credit | `Blanc.Composition.DepositJoint.d9_fate_joined` (`Blanc/Composition/DepositJoint.lean:763`) | `thm:Blanc.Composition.DepositJoint.d9_fate_joined` |
+| joined-conservation | `Blanc.Composition.DepositJoint.d9_conservation_joined` (`Blanc/Composition/DepositJoint.lean:609`) | `thm:Blanc.Composition.DepositJoint.d9_conservation_joined` |
 
 ## R-S9
 
 ### Premises
 
-PENDING
+Assumes a valid Electra/Prague or Fulu/Osaka/BPO joint step with canonical EIP-4788 code and nonzero payload timestamp; skipped-slot SSZ header equality additionally assumes either consecutive slots (prev.slot + 1 = curr.slot) or hash_tree_root prev != 0.
 
 ### Non-claims
 
-PENDING
+Joint-step parent_beacon_block_root = block.message.parent_root holds unconditionally, whereas across skipped slots a hypothetical zero BeaconState tree root would trigger Phase 0 sentinel replacement in process_slot, as witnessed by the proved sentinel control.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Composition.Corpus.Proofs.RingJointRetention.r_s9` (`Blanc/Composition/Corpus/Proofs/RingJointRetention.lean:182`) | `thm:Blanc.Composition.Corpus.Proofs.RingJointRetention.r_s9` |
 
 ## H-S9
 
 ### Premises
 
-PENDING
+Assumes a clean kept covered-fork history with canonical EIP-2935 bytecode and contiguous `parentHash`-linked execution headers (`H_S9` chain form).
 
 ### Non-claims
 
-PENDING
+Binds the execution-chain form `h_s9` (`H_S9`) within the 8,191-block ring window (with joint corollary `h_s9_joint` proved alongside it in `RingJointRetention.lean`); does not prove fork-choice canonicality or retain hashes older than 8,191 blocks.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Composition.Corpus.Proofs.RingJointRetention.h_s9` (`Blanc/Composition/Corpus/Proofs/RingJointRetention.lean:1154`) | `thm:Blanc.Composition.Corpus.Proofs.RingJointRetention.h_s9` |
 
 ## W-S9
 
 ### Premises
 
-The source ValidJoint package includes deployment and admission, the pre-anchor execution history, a JointRun, AnchorInv, preset balance/epoch bounds, other installed code, SYSTEM exclusions and the occurrence cap. Existing theorems separately address exact authorization position, occurrence fate, processing outcome, retained payments, crediting recipient, first-loop budget, floor, compounding and address preservation. Their joint scope is Electra/Prague or Fulu/Osaka/BPO; signature-checking mode is an explicit parameter.
+Assumes ValidJoint over Electra/Prague or Fulu/Osaka/BPO with deployment/checkpoint admission, AnchorInv, preset balance/epoch bounds, sibling system code, SYSTEM_ADDRESS exclusions, and <= 2^254 submissions, parameterized explicitly by signature-verification mode bls.
 
 ### Non-claims
 
-All nine bindings remain missing: no matching full stable theorem keys or typed ClaimCheck examples were found for these public joint declarations. Theorems assume the supplied joint run and anchor invariant; they do not establish an inhabited real-BLS run, Gloas coverage or eventual withdrawal. Bad-credential/source, ignored-reason, order, payload and anchor-invariant controls also lack inherited theorem keys. The structural checker requires the nine headline components but has no control-coverage requirement.
+Covers Electra and Fulu (not Gloas); requests failing validator/credential/balance/exit checks take the proved ignored outcome leaving beacon state unchanged while retaining paid fees.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| authorization-position | `Blanc.Lift.WithdrawalRequest.ValidJoint.authorization` (`Blanc/Lift/WithdrawalRequest/JointAuthorization.lean:212`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.authorization` |
+| occurrence-fate | `Blanc.Lift.WithdrawalRequest.ValidJoint.fate` (`Blanc/Lift/WithdrawalRequest/JointFate.lean:78`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.fate` |
+| outcome | `Blanc.Lift.WithdrawalRequest.ValidJoint.fate_outcome` (`Blanc/Lift/WithdrawalRequest/JointFate.lean:159`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.fate_outcome` |
+| retained-budget | `Blanc.Lift.WithdrawalRequest.ValidJoint.fee_budget_retained_aggregate` (`Blanc/Lift/WithdrawalRequest/JointFate.lean:201`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.fee_budget_retained_aggregate` |
+| crediting-recipient | `Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_recipient` (`Blanc/Lift/WithdrawalRequest/JointCrediting.lean:58`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_recipient` |
+| crediting-loop1 | `Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1` (`Blanc/Lift/WithdrawalRequest/JointCrediting.lean:111`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1` |
+| crediting-floor | `Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_floor` (`Blanc/Lift/WithdrawalRequest/JointCrediting.lean:195`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_floor` |
+| crediting-compounding | `Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1_compounding` (`Blanc/Lift/WithdrawalRequest/JointCrediting.lean:177`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1_compounding` |
+| crediting-address | `Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_address` (`Blanc/Lift/WithdrawalRequest/JointCrediting.lean:376`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_address` |
 
 ## C-S9
 
 ### Premises
 
-The frozen authorization and fate forms use ValidJointC: CheckpointStart, pre-anchor configured execution history, an actual JointRun, HistoryClean and the 2^253 occurrence bound. Balance uses ValidJointCBalance, adding PendingDistinct only there. Authorization retains the exact mid-list source credential/caller and submission/feed position. Fate retains pre-anchor publication, unique request/outcome/application or final queue position. Balance requires ordered acceptance and per-call queue-consumption traces, including both sides of an Electra-to-Fulu crossing.
+Authorization and fate assume ValidJointC (CheckpointStart, pre-anchor history, JointRun, HistoryClean, <= 2^253 cap); balance conservation assumes ValidJointCBalance (adding PendingDistinct and ordered acceptance/consumption traces across Electra-to-Fulu crossings).
 
 ### Non-claims
 
-No inhabitants or typed roots for the three frozen C-S9 statements are present. G1 consensus classifier/queue facts alone do not supply the required cross-layer codec, positional trace and accepted-stream composition. The target is checked active, compounding and non-exiting at acceptance, with no target signature or source-address match; processing skips slashed sources and waits for withdrawability without repeating target checks. Authorization deletion controls, all ignored/acting/priority witnesses, shifted-seam control and equal-index balance control remain frozen obligations without exact inhabitants. No real-BLS run or mainnet validity is asserted.
+Acceptance checks target active/compounding/non-exiting status without target signature or caller-to-target address match; queued epoch processing skips slashed sources and waits for withdrawability without re-checking target eligibility.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| authorization | `Blanc.Composition.ConsolidationRequestJoint.c_s9_authorization` (`Blanc/Composition/ConsolidationRequestJoint.lean:326`) | `thm:Blanc.Composition.ConsolidationRequestJoint.c_s9_authorization` |
+| fate | `Blanc.Composition.ConsolidationRequestJoint.c_s9_fate` (`Blanc/Composition/ConsolidationRequestJoint.lean:339`) | `thm:Blanc.Composition.ConsolidationRequestJoint.c_s9_fate` |
+| balance | `Blanc.Composition.ConsolidationRequestBalance.c_s9_balance` (`Blanc/Composition/ConsolidationRequestBalance.lean:976`) | `thm:Blanc.Composition.ConsolidationRequestBalance.c_s9_balance` |
 
 ## B-S9
 
 ### Premises
 
-PENDING
+Assumes ValidJointG at Gloas/Amsterdam with explicit focused premises; focused no-preanchor fate corollaries additionally assume an explicit pre-anchor prefix containing no Amsterdam block, and computational checker/replay soundness targets exact ValidJointG fields with real BLS.
 
 ### Non-claims
 
-PENDING
+Preserves modulo-2^256 / saturation arithmetic domains unless bounded; payment-debit-at-most-once covers quorum, settlement, and old-parent paths while stating the exact anchor-crossing first-bid boundary, and theorem/checker soundness does not supply an external multi-client replay trace.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| deposit-position-fate | `Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate` (`Blanc/Composition/BuilderRequestJointGFate.lean:309`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate` |
+| exit-position-fate | `Blanc.Lift.BuilderRequest.ValidJointG.exit_fate` (`Blanc/Composition/BuilderRequestJointGFate.lean:396`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.exit_fate` |
+| registration-authorization-credit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s9_registration_authorization_credit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:321`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s9_registration_authorization_credit` |
+| exit-authorization-caller | `Blanc.Lift.BuilderRequest.ValidJointG.exit_authorization_caller` (`Blanc/Composition/BuilderRequestJointGExitUnique.lean:84`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.exit_authorization_caller` |
+| exit-resolution | `Blanc.Lift.BuilderRequest.ValidJointG.exit_resolution_unique` (`Blanc/Composition/BuilderRequestJointGExitUnique.lean:62`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.exit_resolution_unique` |
+| payment-debit-at-most-once | `Blanc.Lift.BuilderRequest.ValidJointG.payment_debit_at_most_once` (`Blanc/Composition/BuilderRequestJointGDebitOnce.lean:1003`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.payment_debit_at_most_once` |
+| deposit-focused-fate-no-preanchor | `Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate_no_pre_anchor_emissions` (`Blanc/Composition/BuilderRequestJointGFateFocused.lean:29`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate_no_pre_anchor_emissions` |
+| exit-focused-fate-no-preanchor | `Blanc.Lift.BuilderRequest.ValidJointG.exit_fate_no_pre_anchor_emissions` (`Blanc/Composition/BuilderRequestJointGFateFocused.lean:59`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.exit_fate_no_pre_anchor_emissions` |
 
 ## D-S10
 
 ### Premises
 
-PENDING
+Assumes the Amsterdam fork, canonical deposit runtime bytes at the deposit address, complete block receipts, and attribution of deposit-topic logs at the deposit address to settled canonical deposit frames via the step-capability soundness lift.
 
 ### Non-claims
 
-PENDING
+Safety-only statement for Amsterdam row S10 (no Amsterdam deposit gas bound or post-S10 Amsterdam history/Gloas deposit claim); paired Amsterdam short-log control proves the canonical code premise remains load-bearing.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| log-shape, parse | `Blanc.Composition.DepositParse.d_s10` (`Blanc/Composition/DepositParse.lean:119`) | `thm:Blanc.Composition.DepositParse.d_s10` |
 
 ## R-S10
 
 ### Premises
 
-PENDING
+Assumes the Amsterdam fork and canonical EIP-4788 bytecode installed at the beacon-roots predeploy address, with arbitrary initial contract storage.
 
 ### Non-claims
 
-PENDING
+RegularGasWithin bounds regular execution gas only and excludes Amsterdam state gas; Amsterdam coverage for EIP-4788 is confined to row S10.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Corpus.Proofs.R.r_s10` (`Blanc/Composition/Corpus/Proofs/RingTotality.lean:60`) | `thm:Blanc.Corpus.Proofs.R.r_s10` |
 
 ## H-S10
 
 ### Premises
 
-PENDING
+Assumes the Amsterdam fork, canonical EIP-2935 bytecode installed at the history-storage predeploy address, `blockHashes.getLast? = some lastHash`, and arbitrary initial contract storage.
 
 ### Non-claims
 
-PENDING
+RegularGasWithin bounds regular execution gas only and excludes Amsterdam state gas; Amsterdam coverage for EIP-2935 is confined to row S10.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Corpus.Proofs.H.h_s10` (`Blanc/Composition/Corpus/Proofs/RingTotality.lean:121`) | `thm:Blanc.Corpus.Proofs.H.h_s10` |
 
 ## W-S10
 
 ### Premises
 
-The source-level `Amsterdam.system_call_ok` assumes Amsterdam and canonical installed code, with arbitrary storage. It concludes checked-call success at the explicit sysState post-state and RegularGasWithin 163000, excluding state gas.
+Assumes the Amsterdam fork and canonical EIP-7002 bytecode (plus canonical sibling request bytecodes for the composed four-contract request phase), with arbitrary initial storage.
 
 ### Non-claims
 
-This cell remains incomplete: the existing manifest contains no full theorem key or typed ClaimCheck example for that declaration. Its sysState closure must be mapped to the complete S1 storage clause before a full-cell binding can be proposed. The regular-gas result does not bound Amsterdam state gas.
+RegularGasWithin excludes Amsterdam state gas; Amsterdam coverage for EIP-7002 is confined to row S10 and the ordered four-contract system request pass.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s10_headline` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:443`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s10_headline` |
 
 ## C-S10
 
 ### Premises
 
-The source-level `Lift.SystemExecution.ConsolidationRequest.Amsterdam.system_call_ok` assumes Amsterdam and canonical installed code, with arbitrary storage. It returns the explicit sysState post-state and RegularGasWithin 75000. The separate request_phase source theorem composes the four actual Amsterdam system calls in rule order, at the states preceding calls leave.
+Assumes the Amsterdam fork and canonical EIP-7251 bytecode (plus canonical sibling request bytecodes for the composed four-contract request phase), with arbitrary initial storage.
 
 ### Non-claims
 
-Neither the individual Amsterdam theorem nor RequestPhaseAmsterdam.request_phase has an existing typed theorem root here. The latter does not itself expose the individual gas bound or prove receipt-derived deposit parsing. RegularGasWithin excludes state gas; no Amsterdam claim beyond S10 is introduced.
+RegularGasWithin excludes Amsterdam state gas; Amsterdam coverage for EIP-7251 is confined to row S10 and the ordered four-contract system request pass.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| headline | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s10_headline` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:492`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s10_headline` |
 
 ## B-S10
 
 ### Premises
 
-PENDING
+Assumes the Amsterdam fork and canonical EIP-8282 deposit and exit bytecodes (together with canonical withdrawal and consolidation bytecodes in the full four-contract pass) from arbitrary storage.
 
 ### Non-claims
 
-PENDING
+Covers the Amsterdam request-phase system-call pass and regular-gas bounds; excludes Amsterdam state gas and consensus request-outcome application (covered in B-S9).
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
+| deposit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_deposit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:358`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_deposit` |
+| exit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_exit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:370`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_exit` |
 
 ## Implementation notes
 
-This unadopted draft has no production theorem/pin mappings. Exact typed examples,
-certified closure roots, clause review and user wording/provenance adoption remain owed.
-Standalone checker success would establish structure only; final acceptance also requires
-the existing exact-candidate claims and closure-hash gates and their certified build.
+Every applicable cell of the protocol-contract matrix (`D`, `R`, `H`, `W`, `C`, `B` across `S1`–`S10`, with `D-S5`, `R-S5`, and `H-S5` fixed `N/A (fee row)`) is bound above to a public Lean theorem whose exact statement and transitive definition closure are pinned in `scripts/ClaimCheck.lean` and hashed in `scripts/claim-pin-hash/roots.tsv`. Structural matrix verification (`scripts/check-protocol-contract-corpus.sh`) operates alongside `scripts/check-claims.sh`, `scripts/check-claim-hash.sh`, and the checked build certificate.
 
-Revision 4 keeps both builder contracts and every original obligation. Future focused
-B references must cover P1 history-wide queue fee budgets and conditional Amsterdam
-payload delivery; P2 precise legible statements with complete premises; P3 actual
-debit-at-most-once with bid occurrence identity, quorum/settlement/old-parent paths
-and the exact first-crossing-bid limitation if unresolved; P4 the explicit
-no-Amsterdam prefix and resulting focused fate. No unwritten proof names are proposed.
-P5 real-BLS nontrivial exact-ValidJointG applicability evidence needs its separate
-measured route and exact checker/witness boundary; this matrix parser cannot supply it.
-P6/P7 remain assessed/optional. No observation, public count, external comparison or
-publication is adopted by this file.
+Cross-family scope boundaries and byte-versus-prose disclosures:
 
-R-S8 uses both time and slot statements and the adopted arithmetic control limitation.
-R-S9 retains the exact skipped-slot guard; H-S9 requires its chain form.
-D-S9 keeps real BLS and its conditional positive-witness disclosure. New S4 records
-remain provenance decisions. Amsterdam for D/R/H/W/C is confined to S10.
-
-Later real G3 control: on the fully certified complete candidate, delete one actual
-required roots.tsv row in a disposable copy; the direct checker must identify its
-cell/component/key. Restore identical bytes and show green. Synthetic self-tests
-do not supply this full-candidate evidence. No root artifact is written here.
+- **Bytecode departures from EIP prose:** EIP-7002 (`W-S5`), EIP-7251 (`C-S5`), and both EIP-8282 contracts (`B-S5`) wrap their 256-bit Taylor numerator multiplication first at stored excess `2,893`, strictly underquoting the natural-number `fake_exponential` specification. Both EIP-8282 contracts (`B-S2`, `B-S5`) clear a `B256.max` inhibitor word written to slot `0` by a nonzero-calldata `SYSTEM_ADDRESS` call on the next empty-calldata system call rather than latching permanently. EIP-4788 (`R-S2`, `R-S6`) and EIP-2935 (`H-S2`, `H-S6`) omit a zero-value check on user reads and retain any ETH sent on settled read frames.
+- **Ring and joint boundaries (`R`, `H`, `D`):** `R-S8` pairs unconditional timestamp congruence (`r_s8_time`) with affine slot retention (`r_s8_slot`) and an arithmetic `writeAll` slot-grid wrap control (`r_s8_slot_control`). `R-S9` proves unconditional `jointBlockInput` root equality and guards skipped-slot SSZ header relationships by `prev.slot + 1 = curr.slot ∨ hash_tree_root prev ≠ 0` (`r_s9_control`). `H-S9` establishes contiguous chain-hash provenance without skipped-slot ambiguity. `D-S9` runs with real BLS enabled (`bls = true`), bounds legacy Eth1-bridge deposits via post-cutover `AnchorLedgerD` without imposing a finished-bridge premise at block `11,052,984`, discloses that invalid-signature new-pubkey deposits leave paid ETH in the deposit contract without validator credit, and pairs conditional real-BLS registration witnesses with closed invalid-signature, top-up, list-versus-hash seam, and replay controls.
+- **Builder focused theorems and applicability (`B`):** `B-S2` uses unrestricted Form B without `HistoryClean` or `SystemCodeAbsent`. `B-S4` begins at observed checkpoint block `26,391,669` (whole-storage `storageHash` roots for empty deposit storage and `slot0 = max` exit storage, leaving creation block `26,211,406` and the intervening prefix outside checkpoint coverage). `B-S8` proves history-wide multi-user queue fee budgets at every request boundary composed with conditional `⌊q / 64⌋` (deposit, offset `q mod 64`) and `⌊q / 16⌋` (exit, offset `q mod 16`) delivery on built-upon Amsterdam payloads. `B-S9` provides focused premise-explicit headlines, explicit no-Amsterdam-prefix fate corollaries, payment-debit-at-most-once across quorum/settlement/old-parent paths with its exact anchor-crossing first-bid boundary, and computational checker/replay soundness tied to the exact `ValidJointG` premise bundle under real BLS without claiming an external multi-client trace.
+- **Observation and fork boundaries:** Mainnet deployment and checkpoint records (`11,052,984`, `21,881,389`, `22,431,083`, `26,391,669`) are modeled provenance hypotheses whose external RPC header and trie responses are not authenticated inside Lean. Amsterdam execution for `D`, `R`, `H`, `W`, and `C` is confined to row `S10` (regular gas / settled deposit log safety), while `B` covers Amsterdam execution and Gloas joint transitions across `S1`–`S10`.

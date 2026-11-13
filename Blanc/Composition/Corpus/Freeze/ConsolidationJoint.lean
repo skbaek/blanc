@@ -6,9 +6,9 @@ import Blanc.Composition.ConsolidationRequestPublicHistory
 /-!
 # Freeze record (G0, part cb): EIP-7251 across the layers, C-S9 (authorization, fate, balance)
 
-Statements only, against Blanc main `7f2a69ba` and Jaune `c30cf0a5`, on the Electra/Fulu joint chain
-(`Blanc.JointRun`, `Blanc/JointHistory.lean`) paired with Prague to BPO2. Nothing here is proved, registered in the
-layering classification, or imported by the root.
+Frozen statement definitions (`def … : Prop`) from G0 against Blanc `7f2a69ba` and Jaune `c30cf0a5`, on the
+Electra/Fulu joint chain (`Blanc.JointRun`, `Blanc/JointHistory.lean`) paired with Prague to BPO2, classified in
+`scripts/check-layering.py`, imported by `Blanc.lean`, and proved in `Blanc/Composition/`.
 
 Jaune at this pin has no classification of `process_consolidation_request`. The freeze therefore carries its own
 (`classify`, `applyOutcome`), transcribed from `JauneConsensus.processConsolidationRequest`

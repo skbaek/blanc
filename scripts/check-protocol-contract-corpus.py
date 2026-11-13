@@ -110,10 +110,66 @@ for component in REQUIRED['B-S2']:
 for component in REQUIRED['B-S4']:
     FROZEN[('B-S4', component)] = 'Blanc.Corpus.Freeze.Builder.B_S4'
 
-# No actual new aggregate pin has been clause-reviewed/adopted yet. Add entries
-# only with an exact reviewed typed aggregate + real certified key, never a free
-# covers-all toggle. Key: (cell, sorted components); value: (theorem, pin, frozen).
-APPROVED_AGGREGATES: dict[tuple[str, tuple[str, ...]], tuple[str, str, str | None]] = {}
+# Clause-reviewed frozen multi-component aggregates whose G0 frozen `Prop`
+# definition conjoins every listed component in a single typed theorem.
+# Key: (cell, sorted components); value: (theorem, pin, frozen).
+APPROVED_AGGREGATES: dict[tuple[str, tuple[str, ...]], tuple[str, str, str | None]] = {
+    ('D-S1', ('log-shape', 'parse')): (
+        'Blanc.Composition.DepositParse.d_s1',
+        'thm:Blanc.Composition.DepositParse.d_s1',
+        'Blanc.Corpus.Freeze.Deposit.D_S1',
+    ),
+    ('D-S2', ('count-view', 'deposit', 'erc165', 'root-view')): (
+        'Blanc.Composition.DepositClassified.d_s2',
+        'thm:Blanc.Composition.DepositClassified.d_s2',
+        'Blanc.Corpus.Freeze.Deposit.D_S2',
+    ),
+    ('D-S6', ('balance', 'paid-amount')): (
+        'Blanc.Composition.DepositValue.d_s6',
+        'thm:Blanc.Composition.DepositValue.d_s6',
+        'Blanc.Corpus.Freeze.Deposit.D_S6',
+    ),
+    ('D-S8', ('frame-phase', 'record-shape', 'request-order', 'same-block-list')): (
+        'Blanc.Composition.DepositRequests.d_s8',
+        'thm:Blanc.Composition.DepositRequests.d_s8',
+        'Blanc.Corpus.Freeze.Deposit.D_S8',
+    ),
+    ('D-S10', ('log-shape', 'parse')): (
+        'Blanc.Composition.DepositParse.d_s10',
+        'thm:Blanc.Composition.DepositParse.d_s10',
+        'Blanc.Corpus.Freeze.Deposit.D_S10',
+    ),
+    ('C-S2', ('all-success-arms', 'exact-effects', 'unconditional-output')): (
+        'Blanc.Corpus.Proofs.Consolidation.c_s2',
+        'thm:Blanc.Corpus.Proofs.Consolidation.c_s2',
+        'Blanc.Corpus.Freeze.Consolidation.C_S2',
+    ),
+    ('C-S8', ('delivery-block', 'occurrence', 'record-position')): (
+        'Blanc.Corpus.Proofs.Consolidation.c_s8',
+        'thm:Blanc.Corpus.Proofs.Consolidation.c_s8',
+        'Blanc.Corpus.Freeze.Consolidation.C_S8',
+    ),
+    ('B-S2', ('deposit-fee-read', 'deposit-submission', 'deposit-system-empty', 'deposit-system-latch')): (
+        'Blanc.Composition.BuilderRequestClassification.b_s2_deposit',
+        'thm:Blanc.Composition.BuilderRequestClassification.b_s2_deposit',
+        'Blanc.Corpus.Freeze.Builder.B_S2_deposit',
+    ),
+    ('B-S2', ('exit-fee-read', 'exit-submission', 'exit-system-empty', 'exit-system-latch')): (
+        'Blanc.Composition.BuilderRequestClassification.b_s2_exit',
+        'thm:Blanc.Composition.BuilderRequestClassification.b_s2_exit',
+        'Blanc.Corpus.Freeze.Builder.B_S2_exit',
+    ),
+    ('B-S4', ('deposit', 'exit')): (
+        'Blanc.Composition.Corpus.Proofs.BuilderCheckpoint.b_s4',
+        'thm:Blanc.Composition.Corpus.Proofs.BuilderCheckpoint.b_s4',
+        'Blanc.Corpus.Freeze.Builder.B_S4',
+    ),
+    ('H-S8', ('endpoint-rejection', 'retention', 'unwritten-slot')): (
+        'Blanc.Composition.Corpus.Proofs.RingJointRetention.h_s8',
+        'thm:Blanc.Composition.Corpus.Proofs.RingJointRetention.h_s8',
+        'Blanc.Corpus.Freeze.HistoryStorage.H_S8',
+    ),
+}
 PLACEHOLDER = re.compile(r'\b(?:pending|unmapped|todo|tbd|placeholder)\b', re.I)
 DIGEST = re.compile(r'[0-9a-f]{64}')
 

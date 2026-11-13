@@ -153,7 +153,4 @@ theorem d_s6 : D_S6 := by
       refine ⟨hlow, hmod, hhigh, fun ev hfl => hev ev ?_⟩
       simpa only [frameLogs, Exec.Frame.post, Execution.committedPost] using hfl
 
-/-- Alias matching the corpus matrix naming convention. -/
-theorem D_S6_proved : D_S6 := d_s6
-
 end Blanc.Composition.DepositValue

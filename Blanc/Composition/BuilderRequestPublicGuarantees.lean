@@ -10,7 +10,7 @@ import Blanc.Lift.BuilderRequest.FeeDomain
 import Blanc.Lift.BuilderRequest.Message
 import Blanc.Lift.BuilderRequest.Surplus
 import Blanc.Lift.BuilderRequest.ValueKept
-import Blanc.Composition.RequestPhaseAmsterdam
+import Blanc.Composition.RequestPhaseAmsterdamBase
 import Blanc.RequestFeeWordBound
 
 /-!

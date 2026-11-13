@@ -138,7 +138,4 @@ theorem d_s2 : Blanc.Corpus.Freeze.Deposit.D_S2 := by
     d.classification_inputs idx fr hlookup htarget
   exact ⟨hinv, frame_classifiedH fr _ hpc himage hfork hfresh hcd hsha htarget hinv⟩
 
-/-- Alias matching the integration header signature. -/
-theorem D_S2_proved : Blanc.Corpus.Freeze.Deposit.D_S2 := d_s2
-
 end Blanc.Composition.DepositClassified

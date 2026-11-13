@@ -120,7 +120,4 @@ theorem d_s8 : D_S8 := by
     unfold KeptBlock.keptAt BodyRun.roots
     rw [List.flatMap_append, List.flatMap_append, hpre, hreq, List.nil_append, List.append_nil]
 
-/-- Alias matching the corpus matrix naming convention. -/
-theorem D_S8_proved : D_S8 := d_s8
-
 end Blanc.Composition.DepositRequests
