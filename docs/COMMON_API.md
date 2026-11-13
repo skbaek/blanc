@@ -5527,6 +5527,15 @@ every shared module with its own summary and the branches that cite it.
 - Concrete runs checked by kernel evaluation of Jaune's own `Evm.step`:
   `ConcreteRun.stepN` (at most `n` continuing steps) and `stepN_add`, in
   [`Blanc/ConcreteRun.lean`](../Blanc/ConcreteRun.lean).
+  `ConcreteRun.derive` constructs a complete original `Jaune.Exec` from a
+  finite branch-depth limit, using only `Evm.step`, frame entry, settlement and
+  parent resumption. It covers all six constructors and returns `none` on
+  exhaustion rather than accepting a prefix. The limit is a branch-depth
+  bound, not a whole-tree instruction budget. Its returned derivation uses
+  Jaune's existing `exec_iff_exec_eq` adequacy bridge. The builder applicability
+  consumer `Checks.replaySystem` specializes it to the actual installed code
+  of the two builder system messages; frame evidence alone is not block/body
+  dispatch or a full `ValidJointG` witness.
 - For retained frames after a concrete continuing prefix, use
   [`Blanc/ConcreteRunKept.lean`](../Blanc/ConcreteRunKept.lean)'s
   `ConcreteRun.Exec.keptAt_ofStepN`. It relates the original gas-bearing

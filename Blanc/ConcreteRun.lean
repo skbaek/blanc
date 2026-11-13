@@ -116,4 +116,37 @@ elab "kernel_rfl" : tactic => closeMainGoalUsing `kernel_rfl fun type _ => do
     mkAuxLemma lemmaLevels type pf
   return mkConst name (lemmaLevels.map .param)
 
+/-- Construct a complete canonical derivation using only Jaune's original
+`Evm.step`, frame entry, settlement and parent resumption. All six `Exec`
+constructors are covered, including immediate child outcomes and settlement
+errors. Exhaustion rejects; an accepted prefix alone is never returned.
+
+`depth` bounds the length of each branch of the derivation tree, not the total
+instruction count across siblings. This is a finite certificate producer, not
+a replacement for the interpreter or a completeness claim at a chosen depth. -/
+def derive : (depth : Nat) → (evm : Evm) →
+    Option (Σ out : Execution, Jaune.Exec evm.pc evm.sta evm.dyna out)
+  | 0, _ => none
+  | depth + 1, evm =>
+    match step : Evm.step evm with
+    | .halt out => some ⟨out, .halt step⟩
+    | .cont pc devm => do
+      let ⟨out, tail⟩ ← derive depth ⟨pc, evm.sta, devm⟩
+      some ⟨out, .cont step tail⟩
+    | .spawn frame resume pc =>
+      match enter : frame.enter with
+      | .done result =>
+        match settled : resume.run result with
+        | .error error => some ⟨.error error, .doneErr step enter settled⟩
+        | .ok devm => do
+          let ⟨out, tail⟩ ← derive depth ⟨pc, evm.sta, devm⟩
+          some ⟨out, .doneOk step enter settled tail⟩
+      | .run child => do
+        let ⟨raw, childRun⟩ ← derive depth child
+        match settled : resume.run (frame.settle raw) with
+        | .error error => some ⟨.error error, .runErr step enter childRun settled⟩
+        | .ok devm => do
+          let ⟨out, tail⟩ ← derive depth ⟨pc, evm.sta, devm⟩
+          some ⟨out, .runOk step enter childRun settled tail⟩
+
 end Blanc.ConcreteRun
