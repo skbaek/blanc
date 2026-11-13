@@ -30,3 +30,7 @@ lean_exe «blanc» where
 lean_exe «simpCollector» where
   root := `scripts.SimpCollector
   supportInterpreter := true
+
+/-- Exact-input original real-BLS PCC applicability replay; runtime requires host admission. -/
+lean_exe «pccReplay» where
+  root := `scripts.PccReplay
