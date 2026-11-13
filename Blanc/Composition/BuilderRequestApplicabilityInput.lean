@@ -1,3 +1,5 @@
+import Blanc.Composition.BuilderRequestApplicability.Checks
+import Blanc.Composition.BuilderRequestJointG
 import Blanc.Composition.BuilderRequestPublicObservers
 import Blanc.Lift.SystemWordWriter
 import Blanc.Lift.WithdrawalRequest.DrainTx
@@ -105,3 +107,43 @@ def accounts (full : Bool) (parentHash : Option B256) : List (Adr × Acct) :=
 
 end Blanc.Composition.BuilderRequestApplicabilityInput
 
+
+/-! ## Separate clean P5 replay input checks
+
+The unrestricted coded-SYSTEM worlds above witness Form B success arms. They
+are not clean P5 inputs. These checks instead accept a supplied pre-Gloas joint
+state and use real BLS and the original joint interpreter.
+-/
+namespace Blanc.Composition.BuilderRequestApplicabilityInput
+open Jaune JauneConsensus Blanc.Lift
+open Blanc.Composition.BuilderRequestApplicability.Checks
+
+/-- The exact two nontrivial pre-Gloas anchor obligations of `ValidJointG`:
+the finalized epoch is not ahead of the slot, and the execution head hash is the
+beacon state's latest execution payload hash. Pending-payload coherence and bid
+witnesses are trivial at this constructor, without selecting a Gloas anchor. -/
+def PreAnchor {P : Preset} (cfg : ChainConfig) (state : JointState P) : Prop :=
+  BuilderRequest.GAnchorInv (.pre state) ∧ Blanc.GJointInv cfg (.pre state)
+
+instance instDecidablePreAnchor {P : Preset} (cfg : ChainConfig) (state : JointState P) :
+    Decidable (PreAnchor cfg state) := by
+  unfold PreAnchor BuilderRequest.GAnchorInv Blanc.GJointInv
+    Blanc.ExecHeadIsLatestBlockHash Blanc.ParentPayloadCoherence
+    Blanc.ExpectedWithdrawalsLedger JauneConsensus.Facts.Gloas.Inv.FinalizedNotAheadF
+  infer_instance
+
+/-- Replay with the exact pre-Gloas anchor invariants checked, in addition to the
+twelve finite fields on the computed states. No anchor property or successful
+trace is an input. This remains partial: cleanliness, history value bounds and
+the nontrivial activity requirements are not established here. -/
+def replayAnchored {P : Preset} (cfg : ChainConfig) (ccfg : Config) (state : JointState P)
+    (inputs : List (Blanc.JointGloasReplayStep.Input P)) :
+    Option {out : GJointState P × List (GJointState P) //
+      Blanc.JointGloasReplayStep.Admits cfg ccfg true (.pre state) out.1 inputs out.2 ∧
+        FiniteApplicability ccfg state.exec out.2 ∧ PreAnchor cfg state} := do
+  if anchor : PreAnchor cfg state then
+    let cert ← replayFinite cfg ccfg state inputs
+    some ⟨cert.val, cert.property.1, cert.property.2, anchor⟩
+  else none
+
+end Blanc.Composition.BuilderRequestApplicabilityInput
