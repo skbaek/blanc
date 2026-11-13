@@ -1043,15 +1043,6 @@ private theorem Step.ofExecution_eq_cont {nextPc : Nat} {ex : Execution}
       simp only [Step.ofExecution, Step.cont.injEq] at h
       rw [h.2]
 
-private theorem Step.ofExecution_ne_halt_ok {nextPc : Nat} {ex : Execution} {post : Devm}
-    (h : Step.ofExecution nextPc ex = .halt (.ok post)) : False := by
-  cases ex <;> simp only [Step.ofExecution, Step.halt.injEq, reduceCtorEq] at h
-
-private theorem Step.ofExecution_ne_spawn {nextPc : Nat} {ex : Execution}
-    {frame : Frame} {resume : Resume} {pc' : Nat}
-    (h : Step.ofExecution nextPc ex = .spawn frame resume pc') : False := by
-  cases ex <;> simp only [Step.ofExecution, reduceCtorEq] at h
-
 private theorem genericCreateAmsterdam_step_done_logs
     {sevm : Sevm} {state : StateGasRules} {pre post : Devm} {endowment : B256} {address : Adr}
     {mi ms : Nat}

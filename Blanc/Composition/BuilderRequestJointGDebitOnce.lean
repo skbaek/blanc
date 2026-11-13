@@ -358,14 +358,14 @@ theorem _root_.Blanc.GJointRun.debitSpent_fst_nodup {s₀ s : GJointState P}
   exact (List.nodup_append.mp h).1
 
 private theorem debitBatches_snoc {s₀ s : GJointState P} (run : GJointRun cfg ccfg bls s₀ s)
-    (C : GJointRunStep (P := P) cfg ccfg bls) (hC : s = C.preState) :
+    (C : GJointRunStep (P := P) cfg ccfg bls) (hC : C.preState = s) :
     (run.snoc C hC).debitBatches = run.debitBatches ++ [stepDebitBatch run.steps.length C] := by
   unfold GJointRun.debitBatches
   rw [GJointRun.steps_snoc, List.zipIdx_append, List.map_append]
   simp only [Nat.zero_add, List.zipIdx_cons, List.zipIdx_nil, List.map_cons, List.map_nil]
 
 private theorem debitEffects_snoc {s₀ s : GJointState P} (run : GJointRun cfg ccfg bls s₀ s)
-    (C : GJointRunStep (P := P) cfg ccfg bls) (hC : s = C.preState) :
+    (C : GJointRunStep (P := P) cfg ccfg bls) (hC : C.preState = s) :
     (run.snoc C hC).debitEffects = run.debitEffects ++ stepDebitBatch run.steps.length C := by
   unfold GJointRun.debitEffects
   rw [debitBatches_snoc, List.flatten_append, List.flatten_cons, List.flatten_nil, List.append_nil]
@@ -389,14 +389,14 @@ theorem _root_.Blanc.GJointRun.debitLeft_map_snd
       have h0 : stepDebitBatch run.steps.length (.pre D) = [] := rfl
       rw [h0]
       change (GJointRun.debitLeft run).map Prod.snd = []
-      rw [ih, hC]
+      rw [ih, ← hC]
       rfl
     | crossing X =>
       have h0 : stepDebitBatch run.steps.length (.crossing X) = [] := rfl
       rw [h0]
       change (GJointRun.debitLeft run).map Prod.snd = X.postB.builder_pending_withdrawals.toArray.toList
       obtain ⟨-, -, -, -, -, -, -, -, -, hwpost⟩ := X.withdrawal_prefix_zero hq
-      rw [ih, hC, hwpost]
+      rw [ih, ← hC, hwpost]
       rfl
     | gloas D =>
       subst hC
@@ -449,8 +449,8 @@ theorem _root_.Blanc.GJointRun.debitBefore_queue_eq
         unfold GJointRun.debitBefore
         rw [debitBatches_snoc, List.take_left' hlen]
         change run.debitLeft.map Prod.snd = C.preState.builderQueue
-        rw [← hC]
-        exact run.debitLeft_map_snd hq hspe
+        exact (run.debitLeft_map_snd hq hspe).trans
+          (congrArg GJointState.builderQueue hC).symm
       · cases hS
 
 /-! ## Cursor monotonicity, step increments, and global positions -/
@@ -495,7 +495,8 @@ private theorem step_deliveries_eq
       have hm := congrArg List.length (show
         ((run.debitBefore i).queue ++ stepDebitTags i (.gloas D)).map Prod.snd =
           s2.builder_pending_withdrawals.toArray.toList by
-        rw [List.map_append, hpre, stepDebitTags_map_snd, ← hq2])
+        rw [List.map_append, hpre, stepDebitTags_map_snd]
+        exact hq2.symm)
       simpa only [List.length_map, Array.length_toList] using hm
     rw [hdeq, hlen]
     exact hp.1
@@ -521,6 +522,7 @@ theorem _root_.Blanc.GJointRun.debitCursor_succ
     (RequestQueue.deliveries 1 (run.debitBefore i) (stepDebitBatch i S)).flatten.length = _
   obtain ⟨hdel, hle⟩ := step_deliveries_eq hq hspe run hS
   rw [hdel, List.length_take_of_le hle]
+  rfl
 
 theorem _root_.Blanc.GJointRun.debitCursor_mono {s₀ s : GJointState P}
     (run : GJointRun cfg ccfg bls s₀ s) {i j : Nat} (hij : i ≤ j) :
@@ -900,7 +902,7 @@ theorem _root_.Blanc.GJointRun.bid_debit_attribution
     (hlook : run.lookupPush origin = some p)
     (hslot : p.slot = D.paySlot) :
     e = D.payW ∧ p.w = D.payW ∧
-      ∃ j_app k_app D_app (f : PaymentFate run j),
+      ∃ j_app k_app D_app, ∃ f : PaymentFate run j,
         origin = Sum.inr (j_app, k_app) ∧
         run.steps[j_app]? = some (.gloas D_app) ∧
         D_app.pushes[k_app]? = some p ∧
@@ -971,7 +973,7 @@ theorem payment_debit_at_most_once_focused
       run.steps[j]? = some (.gloas D) → U64.zero < D.bid.value →
       (origin, e) ∈ run.debitSpent → run.lookupPush origin = some p → p.slot = D.paySlot →
       e = D.payW ∧ p.w = D.payW ∧
-        ∃ j_app k_app D_app (f : PaymentFate run j),
+        ∃ j_app k_app D_app, ∃ f : PaymentFate run j,
           origin = Sum.inr (j_app, k_app) ∧
           run.steps[j_app]? = some (.gloas D_app) ∧
           D_app.pushes[k_app]? = some p ∧
@@ -1036,7 +1038,7 @@ theorem payment_debit_at_most_once (v : ValidJointG cfg ccfg bls checkpoint anch
       v.run.steps[j]? = some (.gloas D) → U64.zero < D.bid.value →
       (origin, e) ∈ v.run.debitSpent → v.run.lookupPush origin = some p → p.slot = D.paySlot →
       e = D.payW ∧ p.w = D.payW ∧
-        ∃ j_app k_app D_app (f : PaymentFate v.run j),
+        ∃ j_app k_app D_app, ∃ f : PaymentFate v.run j,
           origin = Sum.inr (j_app, k_app) ∧
           v.run.steps[j_app]? = some (.gloas D_app) ∧
           D_app.pushes[k_app]? = some p ∧
@@ -1064,8 +1066,15 @@ private theorem applyWithdrawals_singleton_zero (s : Gloas.BeaconState P) (b0 : 
       s1.builders.toArray[0]? = some b1 ∧
       b1.balance.toNat + amt.toNat = b0.balance.toNat := by
   intro w
-  have hvi : Gloas.isBuilderIndex w.validator_index = true := by decide
-  have hcbi : Gloas.convertValidatorIndexToBuilderIndex w.validator_index = .ok U64.zero := rfl
+  have hvi : Gloas.isBuilderIndex w.validator_index = true := by
+    change Gloas.isBuilderIndex Gloas.BUILDER_INDEX_FLAG = true
+    decide
+  have hroutes : Routes U64.zero w := by
+    change Gloas.convertBuilderIndexToValidatorIndex U64.zero = .ok Gloas.BUILDER_INDEX_FLAG
+    rw [convertBuilderIndexToValidatorIndex_eq_ok_iff]
+    rfl
+  have hcbi : Gloas.convertValidatorIndexToBuilderIndex w.validator_index = .ok U64.zero :=
+    convertValidatorIndexToBuilderIndex_of_routes hroutes (by change 0 < 2 ^ 40; decide)
   have hsub_ok : ∃ bal1, Gloas.saturatingSubGwei b0.balance amt = .ok bal1 := by
     unfold Gloas.saturatingSubGwei
     split
@@ -1090,6 +1099,7 @@ private theorem applyWithdrawals_singleton_zero (s : Gloas.BeaconState P) (b0 : 
   simp only [w, bind, Except.bind, pure, Except.pure, hbal1, Except.ok.injEq] at hg
   refine ⟨{ s with builders := bs }, b1, ?_, ?_, ?_⟩
   · unfold Gloas.applyWithdrawals
+    dsimp only
     have hwl : (#[w] : Array JauneConsensus.Withdrawal).toList = [w] := rfl
     rw [← Array.forIn_toList, hwl]
     simp only [List.forIn_cons, List.forIn_nil, hvi, ite_true, hcbi, bind_assoc, pure_bind, bind_pure]

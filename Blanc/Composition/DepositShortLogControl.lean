@@ -43,6 +43,7 @@ def loggerPost (base : Devm) (target : Adr) (gas : Nat) : Devm :=
   (base.addLog (logAt target)).setMach ⟨[], .empty, gas, base.stateGas⟩
 
 private theorem logger_run_any {sevm : Sevm} {base : Devm} {gas : Nat}
+    (push0 : sevm.benvStat.rules.op.push0 = true)
     (nonstatic : sevm.isStatic = false) :
     Func.RunCompiled [] sevm
       (base.setMach ⟨[], .empty, gas + 757, base.stateGas⟩) program
@@ -62,7 +63,7 @@ private theorem logger_run {sevm : Sevm} {base : Devm} {gas : Nat}
     Func.RunCompiled [] sevm
       (base.setMach ⟨[], .empty, gas + 757, base.stateGas⟩) program
       (loggerPost base sevm.currentTarget gas) :=
-  logger_run_any nonstatic
+  logger_run_any _covered.rules_push0 nonstatic
 
 /-- The original interpreter really emits the short log from this fresh message.
 The world and inherited deletion set remain symbolic. -/
@@ -293,7 +294,8 @@ theorem logger_message_amsterdam {msg : Msg}
       post.accountsToDelete = msg.inheritedDeletions ∧ post.gasLeft = msg.gas - 757 := by
   let post := loggerPost (Lift.userEntry msg msg.benv) msg.currentTarget (msg.gas - 757)
   have run := logger_run_any (sevm := Lift.userSevm msg shortCode msg.benv)
-    (base := Lift.userEntry msg msg.benv) (gas := msg.gas - 757) nonstatic
+    (base := Lift.userEntry msg msg.benv) (gas := msg.gas - 757)
+    (by change msg.benv.stat.rules.op.push0 = true; rw [amsterdam_rules hfork]; rfl) nonstatic
   rw [Nat.sub_add_cancel enough] at run
   change Func.RunCompiled [] (Lift.userSevm msg shortCode msg.benv)
     (Lift.userEntry msg msg.benv) program post at run
@@ -326,21 +328,23 @@ theorem logger_message_amsterdam {msg : Msg}
       unfold Lift.userEntry Lift.systemCallBase Devm.balReadAccount
       dsimp only
       by_cases h : msg.benv.stat.rules.bal.isSome = true <;> simp only [h, ↓reduceIte] <;> rfl
-    have hinitLogs : (initDevm msg).logs = [] := by
-      have hsg := amsterdam_stateGas hfork
-      show (match msg.benv.stat.rules.stateGas with
-        | none => []
-        | some _ => if msg.shouldTransferValue then (Devm.emitTransferLog _ _ _ _).logs else []) = _
-      rw [hsg]
-      by_cases h : msg.shouldTransferValue = true
-      · simp only [h, ↓reduceIte, Devm.emitTransferLog, hvalue, or_true]
-        rfl
-      · simp only [h, Bool.false_eq_true, ↓reduceIte]
+    have hinitLogs : (initDevm msg).logs = [] :=
+      Lift.initDevm_logs_of_staticTransfer (Or.inr (Or.inl hvalue))
     rw [hbaseLogs, hinitLogs, List.nil_append]
-  have hcall := Lift.processMessageCall_ok hfork hauth htarget installed nonempty nondelegated
-    hprecomp (Msg.benvAfterTransfer_of_value_zero hvalue) executed hbase.1
-    (by change 0 ≤ (Lift.userEntry msg msg.benv).refundCounter; rw [hbase.2.2.1]; decide)
-  exact ⟨post, hcall, rfl, hlogs, hbase.1, hbase.2.1, hbase.2.2.1, hbase.2.2.2, rfl⟩
+  have herr : post.error = none := by
+    simpa only [post, loggerPost, Devm.setMach_error, Devm.addLog_error] using hbase.1
+  have hrefund : post.refundCounter = 0 := by
+    simpa only [post, loggerPost, Devm.setMach_refundCounter, Devm.addLog_refundCounter] using hbase.2.2.1
+  have hcall := Lift.processMessageCall_ok (M := msg) (code := shortCode)
+    (benv := msg.benv) (post := post) hfork hauth htarget installed nonempty nondelegated
+    hprecomp (Msg.benvAfterTransfer_of_value_zero hvalue) executed herr
+    (by rw [hrefund])
+  have hout : post.output = [] := by
+    simpa only [post, loggerPost, Devm.setMach_output, Devm.addLog_output] using hbase.2.1
+  have hdel : post.accountsToDelete = msg.inheritedDeletions := by
+    simpa only [post, loggerPost, Devm.setMach_accountsToDelete, Devm.addLog_accountsToDelete]
+      using hbase.2.2.2
+  exact ⟨post, hcall, rfl, hlogs, herr, hout, hrefund, hdel, rfl⟩
 
 /-- Closed Amsterdam block environment installing `shortCode` at the deposit contract address. -/
 def controlBenvA (sender : Adr) : Benv :=
@@ -371,7 +375,7 @@ theorem control_transaction_amsterdam {sender : Adr}
       type := rfl
       chain := rfl
       prioLe := by decide
-      baseLe := by decide
+      baseLe := by change 0 ≤ 8; decide
       cost := by
         have hrules : benv.stat.rules = amsterdamRules := amsterdam_rules (s := benv.stat) rfl
         have hsg : amsterdamRules.stateGas = some amsterdamStateGasRules :=
@@ -386,8 +390,8 @@ theorem control_transaction_amsterdam {sender : Adr}
       intrinsic := by decide
       floor := by decide
       budget := by decide
-      room := by decide
-      stateRoom := by decide
+      room := by change 2 ^ 20 ≤ 2 ^ 25; decide
+      stateRoom := by change 2 ^ 20 ≤ 2 ^ 25; decide
       recover := recovered
       nonce := by
         change ((controlState sender).get sender).nonce = 2
