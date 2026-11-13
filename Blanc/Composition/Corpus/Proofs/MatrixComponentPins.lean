@@ -348,7 +348,8 @@ theorem b_s9_registration_authorization_credit {P : Preset} {cfg : ChainConfig}
           Jaune.Bytes.toAdr? (req.withdrawal_credentials.toBytes.drop 12) = some addr ∧
           computeEpochAtSlot P m.slot = .ok e ∧
           m'.builders.toArray[i]? = some (freshBuilder req.pubkey addr req.amount e)) := by
-  refine ⟨v.deposit_value, fun stepD created => ?_⟩
+  refine ⟨v.deposit_value, ?_⟩
+  intro j D stepD i created
   obtain ⟨k, req, tr, m, m', amount, dom, addr, e, hreq, htr, hm, hm', hcl, hamt,
     -, hpre, hdom, hv, haddr, he, hat, -⟩ :=
     v.registration_authorization rfl stepD created
@@ -451,7 +452,7 @@ theorem w_s10_headline :
         Blanc.Lift.RequestSystem.RegularGasWithin out.gasLeft 163000) ∧
     (∀ {benv0 final benv : Benv} {txs : List Tx} {bal0 : BalBuilder}
       {out0 : BlockOutput} {senders : List (Adr × Tx)} {roots : List Blanc.Root}
-      (wds : List Withdrawal),
+      (wds : List Jaune.Withdrawal),
       benv0.stat.fork = .amsterdam →
       benv0.state.getCode depositContractAddress = BeaconDeposit.code →
       Blanc.TransactionsRoots txs.putIndex benv0 { BlockOutput.init with bal := bal0 }
@@ -501,7 +502,7 @@ theorem c_s10_headline :
         Blanc.Lift.RequestSystem.RegularGasWithin out.gasLeft 75000) ∧
     (∀ {benv0 final benv : Benv} {txs : List Tx} {bal0 : BalBuilder}
       {out0 : BlockOutput} {senders : List (Adr × Tx)} {roots : List Blanc.Root}
-      (wds : List Withdrawal),
+      (wds : List Jaune.Withdrawal),
       benv0.stat.fork = .amsterdam →
       benv0.state.getCode depositContractAddress = BeaconDeposit.code →
       Blanc.TransactionsRoots txs.putIndex benv0 { BlockOutput.init with bal := bal0 }

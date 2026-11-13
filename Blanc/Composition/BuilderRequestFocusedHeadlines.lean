@@ -972,7 +972,7 @@ theorem payment_debit_at_most_once_of_focused {checkpoint : BlockChain} {anchor 
       v.run.steps[j]? = some (.gloas D) → U64.zero < D.bid.value →
       (origin, e) ∈ v.run.debitSpent → v.run.lookupPush origin = some p → p.slot = D.paySlot →
       e = D.payW ∧ p.w = D.payW ∧
-        ∃ j_app k_app D_app (f : PaymentFate v.run j),
+        ∃ j_app k_app D_app, ∃ f : PaymentFate v.run j,
           origin = Sum.inr (j_app, k_app) ∧
           v.run.steps[j_app]? = some (.gloas D_app) ∧
           D_app.pushes[k_app]? = some p ∧
