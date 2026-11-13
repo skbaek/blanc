@@ -29,7 +29,7 @@ Does not claim parsing totality when foreign or unverified runtime bytes inhabit
 
 | Components | Theorem | Pin |
 |---|---|---|
-| log-shape, parse | `Blanc.Composition.DepositParse.d_s1` (`Blanc/Composition/DepositParse.lean:65`) | `thm:Blanc.Composition.DepositParse.d_s1` |
+| log-shape, parse | `Blanc.Composition.DepositParse.d_s1` (`Blanc/Composition/DepositParse.lean:66`) | `thm:Blanc.Composition.DepositParse.d_s1` |
 
 ## R-S1
 
@@ -77,7 +77,7 @@ Bounds checked system-call gas without stating the post-state directly in the he
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Lift.WithdrawalRequest.system_call_succeeds` (`Blanc/Lift/WithdrawalRequest/HeadlineSystem.lean:28`) | `thm:Blanc.Lift.WithdrawalRequest.system_call_succeeds` |
+| headline | `Blanc.Lift.WithdrawalRequest.system_call_succeeds` (`Blanc/Lift/WithdrawalRequest/HeadlineSystem.lean:30`) | `thm:Blanc.Lift.WithdrawalRequest.system_call_succeeds` |
 
 ## C-S1
 
@@ -93,7 +93,7 @@ Bounds checked system-call gas without stating the post-state in the headline ex
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Composition.ConsolidationRequestPublic.system_call_succeeds` (`Blanc/Composition/ConsolidationRequestPublicHeadlines.lean:41`) | `thm:Blanc.Composition.ConsolidationRequestPublic.system_call_succeeds` |
+| headline | `Blanc.Composition.ConsolidationRequestPublic.system_call_succeeds` (`Blanc/Composition/ConsolidationRequestPublicHeadlines.lean:43`) | `thm:Blanc.Composition.ConsolidationRequestPublic.system_call_succeeds` |
 
 ## B-S1
 
@@ -109,8 +109,8 @@ Bounds regular execution gas only and excludes Amsterdam state gas; does not ass
 
 | Components | Theorem | Pin |
 |---|---|---|
-| deposit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_deposit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:126`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_deposit` |
-| exit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_exit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:150`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_exit` |
+| deposit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_deposit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:129`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_deposit` |
+| exit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_exit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:153`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s1_exit` |
 
 ## D-S2
 
@@ -126,7 +126,7 @@ Classifies settled frames of the canonical deposit runtime only; reverted frames
 
 | Components | Theorem | Pin |
 |---|---|---|
-| deposit, root-view, count-view, erc165 | `Blanc.Composition.DepositClassified.d_s2` (`Blanc/Composition/DepositClassified.lean:132`) | `thm:Blanc.Composition.DepositClassified.d_s2` |
+| deposit, root-view, count-view, erc165 | `Blanc.Composition.DepositClassified.d_s2` (`Blanc/Composition/DepositClassified.lean:135`) | `thm:Blanc.Composition.DepositClassified.d_s2` |
 
 ## R-S2
 
@@ -142,7 +142,7 @@ User-originated ring reads do not reject nonzero call value in the bytecode, so 
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Corpus.Proofs.BeaconRoots.r_s2` (`Blanc/Corpus/Proofs/BeaconRootsClassification.lean:10`) | `thm:Blanc.Corpus.Proofs.BeaconRoots.r_s2` |
+| headline | `Blanc.Corpus.Proofs.BeaconRoots.r_s2` (`Blanc/Corpus/Proofs/BeaconRootsClassification.lean:11`) | `thm:Blanc.Corpus.Proofs.BeaconRoots.r_s2` |
 
 ## H-S2
 
@@ -158,7 +158,7 @@ User-originated reads do not reject nonzero call value in the bytecode, so incom
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Corpus.Proofs.HistoryStorage.h_s2` (`Blanc/Corpus/Proofs/HistoryStorage.lean:13`) | `thm:Blanc.Corpus.Proofs.HistoryStorage.h_s2` |
+| headline | `Blanc.Corpus.Proofs.HistoryStorage.h_s2` (`Blanc/Corpus/Proofs/HistoryStorage.lean:14`) | `thm:Blanc.Corpus.Proofs.HistoryStorage.h_s2` |
 
 ## W-S2
 
@@ -174,7 +174,7 @@ Stated at the established fresh-frame entry contract for EIP-7002; incoming call
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Lift.WithdrawalRequest.exec_frame_effect` (`Blanc/Lift/WithdrawalRequest/FrameEffects.lean:32`) | `thm:Blanc.Lift.WithdrawalRequest.exec_frame_effect` |
+| headline | `Blanc.Lift.WithdrawalRequest.exec_frame_effect` (`Blanc/Lift/WithdrawalRequest/FrameEffects.lean:33`) | `thm:Blanc.Lift.WithdrawalRequest.exec_frame_effect` |
 
 ## C-S2
 
@@ -190,7 +190,7 @@ System dequeue output uses unconditional word subtraction even if synthetic stor
 
 | Components | Theorem | Pin |
 |---|---|---|
-| all-success-arms, unconditional-output, exact-effects | `Blanc.Corpus.Proofs.Consolidation.c_s2` (`Blanc/Composition/Corpus/Proofs/ConsolidationExecution.lean:18`) | `thm:Blanc.Corpus.Proofs.Consolidation.c_s2` |
+| all-success-arms, unconditional-output, exact-effects | `Blanc.Corpus.Proofs.Consolidation.c_s2` (`Blanc/Composition/Corpus/Proofs/ConsolidationExecution.lean:19`) | `thm:Blanc.Corpus.Proofs.Consolidation.c_s2` |
 
 ## B-S2
 
@@ -206,8 +206,8 @@ Includes the nonzero-calldata SYSTEM_ADDRESS arm writing B256.max to slot 0 and 
 
 | Components | Theorem | Pin |
 |---|---|---|
-| deposit-system-empty, deposit-system-latch, deposit-submission, deposit-fee-read | `Blanc.Composition.BuilderRequestClassification.b_s2_deposit` (`Blanc/Composition/BuilderRequestClassification.lean:139`) | `thm:Blanc.Composition.BuilderRequestClassification.b_s2_deposit` |
-| exit-system-empty, exit-system-latch, exit-submission, exit-fee-read | `Blanc.Composition.BuilderRequestClassification.b_s2_exit` (`Blanc/Composition/BuilderRequestClassification.lean:147`) | `thm:Blanc.Composition.BuilderRequestClassification.b_s2_exit` |
+| deposit-system-empty, deposit-system-latch, deposit-submission, deposit-fee-read | `Blanc.Composition.BuilderRequestClassification.b_s2_deposit` (`Blanc/Composition/BuilderRequestClassification.lean:141`) | `thm:Blanc.Composition.BuilderRequestClassification.b_s2_deposit` |
+| exit-system-empty, exit-system-latch, exit-submission, exit-fee-read | `Blanc.Composition.BuilderRequestClassification.b_s2_exit` (`Blanc/Composition/BuilderRequestClassification.lean:149`) | `thm:Blanc.Composition.BuilderRequestClassification.b_s2_exit` |
 
 ## D-S3
 
@@ -223,7 +223,7 @@ Tracks committed deposit leaves and stored Merkle branch words; does not authent
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Lift.BeaconDeposit.beacon_deposits` (`Blanc/Lift/BeaconDeposit/HistDeployment.lean:164`) | `thm:Blanc.Lift.BeaconDeposit.beacon_deposits` |
+| headline | `Blanc.Lift.BeaconDeposit.beacon_deposits` (`Blanc/Lift/BeaconDeposit/HistDeployment.lean:168`) | `thm:Blanc.Lift.BeaconDeposit.beacon_deposits` |
 
 ## R-S3
 
@@ -239,7 +239,7 @@ Without SYSTEM_ADDRESS cleanliness, a coded SYSTEM_ADDRESS account can spoof the
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Corpus.Proofs.RingHistory.R.r_s3` (`Blanc/Composition/Corpus/Proofs/RingHistory.lean:150`) | `thm:Blanc.Corpus.Proofs.RingHistory.R.r_s3` |
+| headline | `Blanc.Corpus.Proofs.RingHistory.R.r_s3` (`Blanc/Composition/Corpus/Proofs/RingHistory.lean:151`) | `thm:Blanc.Corpus.Proofs.RingHistory.R.r_s3` |
 
 ## H-S3
 
@@ -255,7 +255,7 @@ Without SYSTEM_ADDRESS cleanliness, a coded SYSTEM_ADDRESS account can spoof the
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Corpus.Proofs.RingHistory.H.h_s3` (`Blanc/Composition/Corpus/Proofs/RingHistory.lean:246`) | `thm:Blanc.Corpus.Proofs.RingHistory.H.h_s3` |
+| headline | `Blanc.Corpus.Proofs.RingHistory.H.h_s3` (`Blanc/Composition/Corpus/Proofs/RingHistory.lean:247`) | `thm:Blanc.Corpus.Proofs.RingHistory.H.h_s3` |
 
 ## W-S3
 
@@ -271,7 +271,7 @@ Does not clear stale storage outside the active head-to-tail window or cover occ
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Lift.WithdrawalRequest.block_word_fifo` (`Blanc/Lift/WithdrawalRequest/WordFifo.lean:635`) | `thm:Blanc.Lift.WithdrawalRequest.block_word_fifo` |
+| headline | `Blanc.Lift.WithdrawalRequest.block_word_fifo` (`Blanc/Lift/WithdrawalRequest/WordFifo.lean:641`) | `thm:Blanc.Lift.WithdrawalRequest.block_word_fifo` |
 
 ## C-S3
 
@@ -287,7 +287,7 @@ Assumes a kept covered-fork history from CheckpointStart, HistoryClean exclusion
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Composition.ConsolidationRequestPublic.history_fifo` (`Blanc/Composition/ConsolidationRequestPublicHistory.lean:139`) | `thm:Blanc.Composition.ConsolidationRequestPublic.history_fifo` |
+| headline | `Blanc.Composition.ConsolidationRequestPublic.history_fifo` (`Blanc/Composition/ConsolidationRequestPublicHistory.lean:142`) | `thm:Blanc.Composition.ConsolidationRequestPublic.history_fifo` |
 
 ## B-S3
 
@@ -303,8 +303,8 @@ Requires SYSTEM_ADDRESS cleanliness to exclude user-triggered dequeues and nonze
 
 | Components | Theorem | Pin |
 |---|---|---|
-| deposit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_deposit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:174`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_deposit` |
-| exit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_exit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:189`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_exit` |
+| deposit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_deposit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:176`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_deposit` |
+| exit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_exit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:191`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s3_exit` |
 
 ## D-S4
 
@@ -320,7 +320,7 @@ Conditional modeled execution-history bridge: Lean does not authenticate externa
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Lift.BeaconDeposit.BeaconDeploymentTo.solInv` (`Blanc/Lift/BeaconDeposit/HistDeployment.lean:121`) | `thm:Blanc.Lift.BeaconDeposit.BeaconDeploymentTo.solInv` |
+| headline | `Blanc.Lift.BeaconDeposit.BeaconDeploymentTo.solInv` (`Blanc/Lift/BeaconDeposit/HistDeployment.lean:124`) | `thm:Blanc.Lift.BeaconDeposit.BeaconDeploymentTo.solInv` |
 
 ## R-S4
 
@@ -336,7 +336,7 @@ Observed-checkpoint route rather than a deployment-transaction trace; RPC header
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Corpus.Proofs.RingRoots.r_s4` (`Blanc/Composition/Corpus/Proofs/RingRoots.lean:10`) | `thm:Blanc.Corpus.Proofs.RingRoots.r_s4` |
+| headline | `Blanc.Corpus.Proofs.RingRoots.r_s4` (`Blanc/Composition/Corpus/Proofs/RingRoots.lean:11`) | `thm:Blanc.Corpus.Proofs.RingRoots.r_s4` |
 
 ## H-S4
 
@@ -352,7 +352,7 @@ Observed-checkpoint route rather than a deployment-transaction trace; RPC header
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Corpus.Proofs.RingRoots.h_s4` (`Blanc/Composition/Corpus/Proofs/RingRoots.lean:15`) | `thm:Blanc.Corpus.Proofs.RingRoots.h_s4` |
+| headline | `Blanc.Corpus.Proofs.RingRoots.h_s4` (`Blanc/Composition/Corpus/Proofs/RingRoots.lean:16`) | `thm:Blanc.Corpus.Proofs.RingRoots.h_s4` |
 
 ## W-S4
 
@@ -368,7 +368,7 @@ Conditional modeled bridge: external header hashes, state roots, and receipt fie
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Lift.WithdrawalRequest.deploy_mainnet` (`Blanc/Lift/WithdrawalRequest/HeadlineHistory.lean:208`) | `thm:Blanc.Lift.WithdrawalRequest.deploy_mainnet` |
+| headline | `Blanc.Lift.WithdrawalRequest.deploy_mainnet` (`Blanc/Lift/WithdrawalRequest/HeadlineHistory.lean:212`) | `thm:Blanc.Lift.WithdrawalRequest.deploy_mainnet` |
 
 ## C-S4
 
@@ -384,7 +384,7 @@ Observed-checkpoint route rather than a creation-transaction proof; RPC account 
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Composition.ConsolidationRequestPublic.history_fifo_mainnet` (`Blanc/Composition/ConsolidationRequestPublicHistory.lean:224`) | `thm:Blanc.Composition.ConsolidationRequestPublic.history_fifo_mainnet` |
+| headline | `Blanc.Composition.ConsolidationRequestPublic.history_fifo_mainnet` (`Blanc/Composition/ConsolidationRequestPublicHistory.lean:229`) | `thm:Blanc.Composition.ConsolidationRequestPublic.history_fifo_mainnet` |
 
 ## B-S4
 
@@ -416,8 +416,8 @@ For excess 2,893 and higher wrap points, 256-bit numerator multiplication wraps 
 
 | Components | Theorem | Pin |
 |---|---|---|
-| fee-domain | `Blanc.Lift.WithdrawalRequest.fee_eq_spec_iff` (`Blanc/Lift/WithdrawalRequest/HeadlineFee.lean:46`) | `thm:Blanc.Lift.WithdrawalRequest.fee_eq_spec_iff` |
-| first-divergence | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s5_first_divergence` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:45`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s5_first_divergence` |
+| fee-domain | `Blanc.Lift.WithdrawalRequest.fee_eq_spec_iff` (`Blanc/Lift/WithdrawalRequest/HeadlineFee.lean:48`) | `thm:Blanc.Lift.WithdrawalRequest.fee_eq_spec_iff` |
+| first-divergence | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s5_first_divergence` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:49`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s5_first_divergence` |
 
 ## C-S5
 
@@ -433,8 +433,8 @@ At excess 2,893 the word Taylor loop wraps modulo 2^256 and charges strictly les
 
 | Components | Theorem | Pin |
 |---|---|---|
-| fee-domain | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s5_fee_domain` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:77`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s5_fee_domain` |
-| first-divergence | `Blanc.Composition.ConsolidationRequestPublic.fee_lt_spec_2893` (`Blanc/Composition/ConsolidationRequestPublicHeadlines.lean:174`) | `thm:Blanc.Composition.ConsolidationRequestPublic.fee_lt_spec_2893` |
+| fee-domain | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s5_fee_domain` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:80`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s5_fee_domain` |
+| first-divergence | `Blanc.Composition.ConsolidationRequestPublic.fee_lt_spec_2893` (`Blanc/Composition/ConsolidationRequestPublicHeadlines.lean:177`) | `thm:Blanc.Composition.ConsolidationRequestPublic.fee_lt_spec_2893` |
 
 ## B-S5
 
@@ -450,9 +450,9 @@ Word-fee arithmetic wraps first at excess 2,893; contrary to permanent kill-swit
 
 | Components | Theorem | Pin |
 |---|---|---|
-| deposit-fee-domain | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_deposit_fee_domain` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:236`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_deposit_fee_domain` |
-| exit-fee-domain | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_exit_fee_domain` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:257`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_exit_fee_domain` |
-| reversible-latch | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_reversible_latch` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:278`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_reversible_latch` |
+| deposit-fee-domain | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_deposit_fee_domain` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:239`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_deposit_fee_domain` |
+| exit-fee-domain | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_exit_fee_domain` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:260`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_exit_fee_domain` |
+| reversible-latch | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_reversible_latch` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:281`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s5_reversible_latch` |
 
 ## D-S6
 
@@ -468,7 +468,7 @@ Bounds balance from below (unsolicited SELFDESTRUCT or coinbase credits may rais
 
 | Components | Theorem | Pin |
 |---|---|---|
-| balance, paid-amount | `Blanc.Composition.DepositValue.d_s6` (`Blanc/Composition/DepositValue.lean:133`) | `thm:Blanc.Composition.DepositValue.d_s6` |
+| balance, paid-amount | `Blanc.Composition.DepositValue.d_s6` (`Blanc/Composition/DepositValue.lean:134`) | `thm:Blanc.Composition.DepositValue.d_s6` |
 
 ## R-S6
 
@@ -484,7 +484,7 @@ The bytecode has no value-transferring opcode and accepts nonzero msg.value on u
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Corpus.Proofs.R.r_s6` (`Blanc/Composition/Corpus/Proofs/RingValue.lean:24`) | `thm:Blanc.Corpus.Proofs.R.r_s6` |
+| headline | `Blanc.Corpus.Proofs.R.r_s6` (`Blanc/Composition/Corpus/Proofs/RingValue.lean:25`) | `thm:Blanc.Corpus.Proofs.R.r_s6` |
 
 ## H-S6
 
@@ -500,7 +500,7 @@ The bytecode has no value-transferring opcode and accepts nonzero msg.value on u
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Corpus.Proofs.H.h_s6` (`Blanc/Composition/Corpus/Proofs/RingValue.lean:39`) | `thm:Blanc.Corpus.Proofs.H.h_s6` |
+| headline | `Blanc.Corpus.Proofs.H.h_s6` (`Blanc/Composition/Corpus/Proofs/RingValue.lean:40`) | `thm:Blanc.Corpus.Proofs.H.h_s6` |
 
 ## W-S6
 
@@ -516,7 +516,7 @@ Lower-bound inequality over settled submission frames (including nested committe
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Lift.WithdrawalRequest.history_payments_mainnet` (`Blanc/Lift/WithdrawalRequest/HeadlineHistory.lean:226`) | `thm:Blanc.Lift.WithdrawalRequest.history_payments_mainnet` |
+| headline | `Blanc.Lift.WithdrawalRequest.history_payments_mainnet` (`Blanc/Lift/WithdrawalRequest/HeadlineHistory.lean:228`) | `thm:Blanc.Lift.WithdrawalRequest.history_payments_mainnet` |
 
 ## C-S6
 
@@ -532,7 +532,7 @@ Lower-bound inequality excluding reverted or ancestor-reverted frames; arithmeti
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Corpus.Proofs.Consolidation.c_s6` (`Blanc/Composition/Corpus/Proofs/ConsolidationExecution.lean:54`) | `thm:Blanc.Corpus.Proofs.Consolidation.c_s6` |
+| headline | `Blanc.Corpus.Proofs.Consolidation.c_s6` (`Blanc/Composition/Corpus/Proofs/ConsolidationExecution.lean:56`) | `thm:Blanc.Corpus.Proofs.Consolidation.c_s6` |
 
 ## B-S6
 
@@ -548,8 +548,8 @@ Lower-bound inequality on contract ETH balances; consensus builder-balance credi
 
 | Components | Theorem | Pin |
 |---|---|---|
-| deposit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_deposit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:284`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_deposit` |
-| exit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_exit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:298`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_exit` |
+| deposit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_deposit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:286`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_deposit` |
+| exit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_exit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:299`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s6_exit` |
 
 ## D-S7
 
@@ -565,7 +565,7 @@ Stated at frame level over configured histories rather than outer transaction wr
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Lift.BeaconDeposit.configuredHistory_deposit_live` (`Blanc/Lift/BeaconDeposit/Liveness.lean:20`) | `thm:Blanc.Lift.BeaconDeposit.configuredHistory_deposit_live` |
+| headline | `Blanc.Lift.BeaconDeposit.configuredHistory_deposit_live` (`Blanc/Lift/BeaconDeposit/Liveness.lean:26`) | `thm:Blanc.Lift.BeaconDeposit.configuredHistory_deposit_live` |
 
 ## R-S7
 
@@ -581,7 +581,7 @@ Frame-level liveness for accepted reads only (whatever call value is supplied); 
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Corpus.Proofs.BeaconRoots.r_s7` (`Blanc/Corpus/Proofs/BeaconRootsFrames.lean:44`) | `thm:Blanc.Corpus.Proofs.BeaconRoots.r_s7` |
+| headline | `Blanc.Corpus.Proofs.BeaconRoots.r_s7` (`Blanc/Corpus/Proofs/BeaconRootsFrames.lean:45`) | `thm:Blanc.Corpus.Proofs.BeaconRoots.r_s7` |
 
 ## H-S7
 
@@ -613,7 +613,7 @@ Uses the bytecode's actual 256-bit word-fee threshold rather than natural-number
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s7_headline` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:382`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s7_headline` |
+| headline | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s7_headline` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:385`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s7_headline` |
 
 ## C-S7
 
@@ -629,7 +629,7 @@ Uses the bytecode's actual quoted word fee rather than natural-number SpecFee; f
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s7_headline` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:413`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s7_headline` |
+| headline | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s7_headline` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:416`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s7_headline` |
 
 ## B-S7
 
@@ -645,8 +645,8 @@ States frame-level regular gas and excludes outer transaction intrinsic/state ga
 
 | Components | Theorem | Pin |
 |---|---|---|
-| deposit-acceptance-gas | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_deposit_acceptance_gas` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:309`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_deposit_acceptance_gas` |
-| exit-acceptance-gas | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_exit_acceptance_gas` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:315`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_exit_acceptance_gas` |
+| deposit-acceptance-gas | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_deposit_acceptance_gas` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:311`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_deposit_acceptance_gas` |
+| exit-acceptance-gas | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_exit_acceptance_gas` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:317`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s7_exit_acceptance_gas` |
 
 ## D-S8
 
@@ -662,7 +662,7 @@ Covers the execution half only (same-block request extraction, record layout, or
 
 | Components | Theorem | Pin |
 |---|---|---|
-| record-shape, same-block-list, request-order, frame-phase | `Blanc.Composition.DepositRequests.d_s8` (`Blanc/Composition/DepositRequests.lean:72`) | `thm:Blanc.Composition.DepositRequests.d_s8` |
+| record-shape, same-block-list, request-order, frame-phase | `Blanc.Composition.DepositRequests.d_s8` (`Blanc/Composition/DepositRequests.lean:73`) | `thm:Blanc.Composition.DepositRequests.d_s8` |
 
 ## R-S8
 
@@ -678,7 +678,7 @@ Wall-clock or variable-interval schedules violate the slot bound if timestamps c
 
 | Components | Theorem | Pin |
 |---|---|---|
-| time | `Blanc.Composition.BeaconRootsRetention.r_s8_time` (`Blanc/Composition/BeaconRootsRetention.lean:7`) | `thm:Blanc.Composition.BeaconRootsRetention.r_s8_time` |
+| time | `Blanc.Composition.BeaconRootsRetention.r_s8_time` (`Blanc/Composition/BeaconRootsRetention.lean:8`) | `thm:Blanc.Composition.BeaconRootsRetention.r_s8_time` |
 | slot | `Blanc.Composition.Corpus.Proofs.RingJointRetention.r_s8_slot` (`Blanc/Composition/Corpus/Proofs/RingJointRetention.lean:935`) | `thm:Blanc.Composition.Corpus.Proofs.RingJointRetention.r_s8_slot` |
 
 ## H-S8
@@ -711,7 +711,7 @@ Conditional on the existence of the admitted extension of depth q / 16; does not
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Lift.WithdrawalRequest.history_delivery_mainnet` (`Blanc/Lift/WithdrawalRequest/HeadlineHistory.lean:242`) | `thm:Blanc.Lift.WithdrawalRequest.history_delivery_mainnet` |
+| headline | `Blanc.Lift.WithdrawalRequest.history_delivery_mainnet` (`Blanc/Lift/WithdrawalRequest/HeadlineHistory.lean:244`) | `thm:Blanc.Lift.WithdrawalRequest.history_delivery_mainnet` |
 
 ## C-S8
 
@@ -727,7 +727,7 @@ Conditional on block D existing in the history; proves no wall-clock latency or 
 
 | Components | Theorem | Pin |
 |---|---|---|
-| occurrence, delivery-block, record-position | `Blanc.Corpus.Proofs.Consolidation.c_s8` (`Blanc/Composition/Corpus/Proofs/ConsolidationLatency.lean:34`) | `thm:Blanc.Corpus.Proofs.Consolidation.c_s8` |
+| occurrence, delivery-block, record-position | `Blanc.Corpus.Proofs.Consolidation.c_s8` (`Blanc/Composition/Corpus/Proofs/ConsolidationLatency.lean:36`) | `thm:Blanc.Corpus.Proofs.Consolidation.c_s8` |
 
 ## B-S8
 
@@ -743,28 +743,30 @@ Mathematical fee-budget instances make no live ETH-supply claim; delivery is con
 
 | Components | Theorem | Pin |
 |---|---|---|
-| deposit-history-queue-budget | `Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_every_boundary` (`Blanc/Composition/BuilderRequestActualFeeBounds.lean:111`) | `thm:Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_every_boundary` |
-| exit-history-queue-budget | `Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_every_boundary` (`Blanc/Composition/BuilderRequestActualFeeBounds.lean:123`) | `thm:Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_every_boundary` |
-| deposit-conditional-delivery | `Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_delivery` (`Blanc/Composition/BuilderRequestActualFeeBounds.lean:189`) | `thm:Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_delivery` |
-| exit-conditional-delivery | `Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_delivery` (`Blanc/Composition/BuilderRequestActualFeeBounds.lean:239`) | `thm:Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_delivery` |
+| deposit-history-queue-budget | `Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_every_boundary` (`Blanc/Composition/BuilderRequestActualFeeBounds.lean:112`) | `thm:Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_every_boundary` |
+| exit-history-queue-budget | `Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_every_boundary` (`Blanc/Composition/BuilderRequestActualFeeBounds.lean:124`) | `thm:Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_every_boundary` |
+| deposit-conditional-delivery | `Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_delivery` (`Blanc/Composition/BuilderRequestActualFeeBounds.lean:192`) | `thm:Blanc.Lift.BuilderRequest.ActualFeeBounds.deposit_delivery` |
+| exit-conditional-delivery | `Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_delivery` (`Blanc/Composition/BuilderRequestActualFeeBounds.lean:242`) | `thm:Blanc.Lift.BuilderRequest.ActualFeeBounds.exit_delivery` |
 
 ## D-S9
 
 ### Premises
 
-Assumes ValidJointD over Electra/Prague or Fulu/Osaka/BPO with real BLS verification enabled (bls = true), canonical deposit and sibling system code, complete attributed receipts, and post-cutover AnchorLedgerD bounding legacy Eth1-bridge deposits without a 2020 bridge-finished premise.
+Uses the original deployment-rooted DepositJoint over Electra/Prague or Fulu/Osaka/BPO with real BLS verification enabled (bls = true), configured execution/consensus histories, canonical code, receipt and collision-exclusion premises. In the canonical legacy-prefix application, the execution cut is deployment.P at the last pre-Prague checkpoint 22,431,083 and the beacon anchor comes from a successful original Electra upgrade at the configured activation slot. The activation application has a reflexive execution prehistory and derives cutoverCount = E0 and the complete original AnchorLedgerD from the actual queued-deposit list, without assuming pre-anchor ApplyOutcome records. Its subsequent joint ingress may cross to Fulu. No 2020 bridge-finished premise is imposed.
+
+The application is given by `Blanc.Composition.DepositJoint.Activation.cut_is_canonical` (`Blanc/Composition/DepositJoint.lean:1044`) and `Blanc.Composition.DepositJoint.Activation.initial_ledger` (`Blanc/Composition/DepositJoint.lean:1049`). It retains the original deployment/history, successful-upgrade, real-BLS ingress, configuration/context and authority/frame premises; it does not construct an observed mainnet state.
 
 ### Non-claims
 
-`D9FateJoined` and `D9ConservationJoined` partition post-cutover request occurrences (`cutoverCount <= k < E_final`) and exclude the pre-cutover legacy Eth1 deposit prefix (`k < cutoverCount`) from request-occurrence fate tracking. A new pubkey with an invalid BLS proof of possession receives no validator credit while its paid ETH remains permanently in the deposit contract; positive new-validator registration witnesses are conditional on real-BLS signature acceptance, and consensus enforces request list equality independently of blockHash.
+`D9FateJoined` and `D9ConservationJoined` partition the specified post-cutover request interval (`cutoverCount <= k < E_final`). The canonical activation application fixes the excluded prefix (`k < cutoverCount`) at the pre-Prague boundary, so every later request occurrence remains in the joint ingress. A generic later cut does not by itself identify its excluded deposits as legacy Eth1 deposits. For a later anchor, complete supplied pre-anchor applied/queued attribution remains an explicit premise; a PreAnchorApplied record alone is not proof of prior consensus execution. A new pubkey with an invalid BLS proof of possession receives no validator credit while its paid ETH remains permanently in the deposit contract; positive new-validator registration witnesses are conditional on real-BLS signature acceptance, and consensus enforces request list equality independently of blockHash.
 
 ### Evidence
 
 | Components | Theorem | Pin |
 |---|---|---|
-| joined-delivery | `Blanc.Composition.DepositJoint.d9_delivery` (`Blanc/Composition/DepositJoint.lean:542`) | `thm:Blanc.Composition.DepositJoint.d9_delivery` |
-| joined-fate-credit | `Blanc.Composition.DepositJoint.d9_fate_joined` (`Blanc/Composition/DepositJoint.lean:763`) | `thm:Blanc.Composition.DepositJoint.d9_fate_joined` |
-| joined-conservation | `Blanc.Composition.DepositJoint.d9_conservation_joined` (`Blanc/Composition/DepositJoint.lean:609`) | `thm:Blanc.Composition.DepositJoint.d9_conservation_joined` |
+| joined-delivery | `Blanc.Composition.DepositJoint.d9_delivery` (`Blanc/Composition/DepositJoint.lean:544`) | `thm:Blanc.Composition.DepositJoint.d9_delivery` |
+| joined-fate-credit | `Blanc.Composition.DepositJoint.d9_fate_joined` (`Blanc/Composition/DepositJoint.lean:765`) | `thm:Blanc.Composition.DepositJoint.d9_fate_joined` |
+| joined-conservation | `Blanc.Composition.DepositJoint.d9_conservation_joined` (`Blanc/Composition/DepositJoint.lean:610`) | `thm:Blanc.Composition.DepositJoint.d9_conservation_joined` |
 
 ## R-S9
 
@@ -812,15 +814,15 @@ Covers Electra and Fulu (not Gloas); requests failing validator/credential/balan
 
 | Components | Theorem | Pin |
 |---|---|---|
-| authorization-position | `Blanc.Lift.WithdrawalRequest.ValidJoint.authorization` (`Blanc/Lift/WithdrawalRequest/JointAuthorization.lean:212`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.authorization` |
-| occurrence-fate | `Blanc.Lift.WithdrawalRequest.ValidJoint.fate` (`Blanc/Lift/WithdrawalRequest/JointFate.lean:78`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.fate` |
-| outcome | `Blanc.Lift.WithdrawalRequest.ValidJoint.fate_outcome` (`Blanc/Lift/WithdrawalRequest/JointFate.lean:159`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.fate_outcome` |
-| retained-budget | `Blanc.Lift.WithdrawalRequest.ValidJoint.fee_budget_retained_aggregate` (`Blanc/Lift/WithdrawalRequest/JointFate.lean:201`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.fee_budget_retained_aggregate` |
-| crediting-recipient | `Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_recipient` (`Blanc/Lift/WithdrawalRequest/JointCrediting.lean:58`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_recipient` |
-| crediting-loop1 | `Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1` (`Blanc/Lift/WithdrawalRequest/JointCrediting.lean:111`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1` |
-| crediting-floor | `Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_floor` (`Blanc/Lift/WithdrawalRequest/JointCrediting.lean:195`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_floor` |
-| crediting-compounding | `Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1_compounding` (`Blanc/Lift/WithdrawalRequest/JointCrediting.lean:177`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1_compounding` |
-| crediting-address | `Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_address` (`Blanc/Lift/WithdrawalRequest/JointCrediting.lean:376`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_address` |
+| authorization-position | `Blanc.Lift.WithdrawalRequest.ValidJoint.authorization` (`Blanc/Lift/WithdrawalRequest/JointAuthorization.lean:227`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.authorization` |
+| occurrence-fate | `Blanc.Lift.WithdrawalRequest.ValidJoint.fate` (`Blanc/Lift/WithdrawalRequest/JointFate.lean:89`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.fate` |
+| outcome | `Blanc.Lift.WithdrawalRequest.ValidJoint.fate_outcome` (`Blanc/Lift/WithdrawalRequest/JointFate.lean:166`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.fate_outcome` |
+| retained-budget | `Blanc.Lift.WithdrawalRequest.ValidJoint.fee_budget_retained_aggregate` (`Blanc/Lift/WithdrawalRequest/JointFate.lean:205`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.fee_budget_retained_aggregate` |
+| crediting-recipient | `Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_recipient` (`Blanc/Lift/WithdrawalRequest/JointCrediting.lean:69`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_recipient` |
+| crediting-loop1 | `Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1` (`Blanc/Lift/WithdrawalRequest/JointCrediting.lean:119`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1` |
+| crediting-floor | `Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_floor` (`Blanc/Lift/WithdrawalRequest/JointCrediting.lean:203`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_floor` |
+| crediting-compounding | `Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1_compounding` (`Blanc/Lift/WithdrawalRequest/JointCrediting.lean:181`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_loop1_compounding` |
+| crediting-address | `Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_address` (`Blanc/Lift/WithdrawalRequest/JointCrediting.lean:383`) | `thm:Blanc.Lift.WithdrawalRequest.ValidJoint.crediting_address` |
 
 ## C-S9
 
@@ -836,9 +838,9 @@ Acceptance checks target active/compounding/non-exiting status without target si
 
 | Components | Theorem | Pin |
 |---|---|---|
-| authorization | `Blanc.Composition.ConsolidationRequestJoint.c_s9_authorization` (`Blanc/Composition/ConsolidationRequestJoint.lean:326`) | `thm:Blanc.Composition.ConsolidationRequestJoint.c_s9_authorization` |
-| fate | `Blanc.Composition.ConsolidationRequestJoint.c_s9_fate` (`Blanc/Composition/ConsolidationRequestJoint.lean:339`) | `thm:Blanc.Composition.ConsolidationRequestJoint.c_s9_fate` |
-| balance | `Blanc.Composition.ConsolidationRequestBalance.c_s9_balance` (`Blanc/Composition/ConsolidationRequestBalance.lean:976`) | `thm:Blanc.Composition.ConsolidationRequestBalance.c_s9_balance` |
+| authorization | `Blanc.Composition.ConsolidationRequestJoint.c_s9_authorization` (`Blanc/Composition/ConsolidationRequestJoint.lean:327`) | `thm:Blanc.Composition.ConsolidationRequestJoint.c_s9_authorization` |
+| fate | `Blanc.Composition.ConsolidationRequestJoint.c_s9_fate` (`Blanc/Composition/ConsolidationRequestJoint.lean:340`) | `thm:Blanc.Composition.ConsolidationRequestJoint.c_s9_fate` |
+| balance | `Blanc.Composition.ConsolidationRequestBalance.c_s9_balance` (`Blanc/Composition/ConsolidationRequestBalance.lean:977`) | `thm:Blanc.Composition.ConsolidationRequestBalance.c_s9_balance` |
 
 ## B-S9
 
@@ -854,14 +856,14 @@ Preserves modulo-2^256 / saturation arithmetic domains unless bounded; payment-d
 
 | Components | Theorem | Pin |
 |---|---|---|
-| deposit-position-fate | `Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate` (`Blanc/Composition/BuilderRequestJointGFate.lean:309`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate` |
-| exit-position-fate | `Blanc.Lift.BuilderRequest.ValidJointG.exit_fate` (`Blanc/Composition/BuilderRequestJointGFate.lean:396`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.exit_fate` |
-| registration-authorization-credit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s9_registration_authorization_credit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:321`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s9_registration_authorization_credit` |
-| exit-authorization-caller | `Blanc.Lift.BuilderRequest.ValidJointG.exit_authorization_caller` (`Blanc/Composition/BuilderRequestJointGExitUnique.lean:84`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.exit_authorization_caller` |
-| exit-resolution | `Blanc.Lift.BuilderRequest.ValidJointG.exit_resolution_unique` (`Blanc/Composition/BuilderRequestJointGExitUnique.lean:62`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.exit_resolution_unique` |
-| payment-debit-at-most-once | `Blanc.Lift.BuilderRequest.ValidJointG.payment_debit_at_most_once` (`Blanc/Composition/BuilderRequestJointGDebitOnce.lean:1003`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.payment_debit_at_most_once` |
-| deposit-focused-fate-no-preanchor | `Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate_no_pre_anchor_emissions` (`Blanc/Composition/BuilderRequestJointGFateFocused.lean:29`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate_no_pre_anchor_emissions` |
-| exit-focused-fate-no-preanchor | `Blanc.Lift.BuilderRequest.ValidJointG.exit_fate_no_pre_anchor_emissions` (`Blanc/Composition/BuilderRequestJointGFateFocused.lean:59`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.exit_fate_no_pre_anchor_emissions` |
+| deposit-position-fate | `Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate` (`Blanc/Composition/BuilderRequestJointGFate.lean:314`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate` |
+| exit-position-fate | `Blanc.Lift.BuilderRequest.ValidJointG.exit_fate` (`Blanc/Composition/BuilderRequestJointGFate.lean:400`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.exit_fate` |
+| registration-authorization-credit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s9_registration_authorization_credit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:323`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s9_registration_authorization_credit` |
+| exit-authorization-caller | `Blanc.Lift.BuilderRequest.ValidJointG.exit_authorization_caller` (`Blanc/Composition/BuilderRequestJointGExitUnique.lean:87`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.exit_authorization_caller` |
+| exit-resolution | `Blanc.Lift.BuilderRequest.ValidJointG.exit_resolution_unique` (`Blanc/Composition/BuilderRequestJointGExitUnique.lean:65`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.exit_resolution_unique` |
+| payment-debit-at-most-once | `Blanc.Lift.BuilderRequest.ValidJointG.payment_debit_at_most_once` (`Blanc/Composition/BuilderRequestJointGDebitOnce.lean:1011`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.payment_debit_at_most_once` |
+| deposit-focused-fate-no-preanchor | `Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate_no_pre_anchor_emissions` (`Blanc/Composition/BuilderRequestJointGFateFocused.lean:31`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.deposit_fate_no_pre_anchor_emissions` |
+| exit-focused-fate-no-preanchor | `Blanc.Lift.BuilderRequest.ValidJointG.exit_fate_no_pre_anchor_emissions` (`Blanc/Composition/BuilderRequestJointGFateFocused.lean:61`) | `thm:Blanc.Lift.BuilderRequest.ValidJointG.exit_fate_no_pre_anchor_emissions` |
 
 ## D-S10
 
@@ -877,7 +879,7 @@ Safety-only statement for Amsterdam row S10 (no Amsterdam deposit gas bound or p
 
 | Components | Theorem | Pin |
 |---|---|---|
-| log-shape, parse | `Blanc.Composition.DepositParse.d_s10` (`Blanc/Composition/DepositParse.lean:119`) | `thm:Blanc.Composition.DepositParse.d_s10` |
+| log-shape, parse | `Blanc.Composition.DepositParse.d_s10` (`Blanc/Composition/DepositParse.lean:120`) | `thm:Blanc.Composition.DepositParse.d_s10` |
 
 ## R-S10
 
@@ -893,7 +895,7 @@ RegularGasWithin bounds regular execution gas only and excludes Amsterdam state 
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Corpus.Proofs.R.r_s10` (`Blanc/Composition/Corpus/Proofs/RingTotality.lean:60`) | `thm:Blanc.Corpus.Proofs.R.r_s10` |
+| headline | `Blanc.Corpus.Proofs.R.r_s10` (`Blanc/Composition/Corpus/Proofs/RingTotality.lean:61`) | `thm:Blanc.Corpus.Proofs.R.r_s10` |
 
 ## H-S10
 
@@ -909,7 +911,7 @@ RegularGasWithin bounds regular execution gas only and excludes Amsterdam state 
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Corpus.Proofs.H.h_s10` (`Blanc/Composition/Corpus/Proofs/RingTotality.lean:121`) | `thm:Blanc.Corpus.Proofs.H.h_s10` |
+| headline | `Blanc.Corpus.Proofs.H.h_s10` (`Blanc/Composition/Corpus/Proofs/RingTotality.lean:122`) | `thm:Blanc.Corpus.Proofs.H.h_s10` |
 
 ## W-S10
 
@@ -925,7 +927,7 @@ RegularGasWithin excludes Amsterdam state gas; Amsterdam coverage for EIP-7002 i
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s10_headline` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:443`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s10_headline` |
+| headline | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s10_headline` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:446`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.w_s10_headline` |
 
 ## C-S10
 
@@ -941,7 +943,7 @@ RegularGasWithin excludes Amsterdam state gas; Amsterdam coverage for EIP-7251 i
 
 | Components | Theorem | Pin |
 |---|---|---|
-| headline | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s10_headline` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:492`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s10_headline` |
+| headline | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s10_headline` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:495`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.c_s10_headline` |
 
 ## B-S10
 
@@ -957,8 +959,8 @@ Covers the Amsterdam request-phase system-call pass and regular-gas bounds; excl
 
 | Components | Theorem | Pin |
 |---|---|---|
-| deposit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_deposit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:358`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_deposit` |
-| exit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_exit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:370`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_exit` |
+| deposit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_deposit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:362`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_deposit` |
+| exit | `Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_exit` (`Blanc/Composition/Corpus/Proofs/MatrixComponentPins.lean:374`) | `thm:Blanc.Composition.Corpus.Proofs.MatrixComponentPins.b_s10_exit` |
 
 ## Implementation notes
 
@@ -967,6 +969,6 @@ Every applicable cell of the protocol-contract matrix (`D`, `R`, `H`, `W`, `C`, 
 Cross-family scope boundaries and byte-versus-prose disclosures:
 
 - **Bytecode departures from EIP prose:** EIP-7002 (`W-S5`), EIP-7251 (`C-S5`), and both EIP-8282 contracts (`B-S5`) wrap their 256-bit Taylor numerator multiplication first at stored excess `2,893`, strictly underquoting the natural-number `fake_exponential` specification. Both EIP-8282 contracts (`B-S2`, `B-S5`) clear a `B256.max` inhibitor word written to slot `0` by a nonzero-calldata `SYSTEM_ADDRESS` call on the next empty-calldata system call rather than latching permanently. EIP-4788 (`R-S2`, `R-S6`) and EIP-2935 (`H-S2`, `H-S6`) omit a zero-value check on user reads and retain any ETH sent on settled read frames.
-- **Ring and joint boundaries (`R`, `H`, `D`):** `R-S8` pairs unconditional timestamp congruence (`r_s8_time`) with affine slot retention (`r_s8_slot`) and an arithmetic `writeAll` slot-grid wrap control (`r_s8_slot_control`). `R-S9` proves unconditional `jointBlockInput` root equality and guards skipped-slot SSZ header relationships by `prev.slot + 1 = curr.slot ∨ hash_tree_root prev ≠ 0` (`r_s9_control`). `H-S9` establishes contiguous chain-hash provenance without skipped-slot ambiguity. `D-S9` runs with real BLS enabled (`bls = true`), bounds legacy Eth1-bridge deposits via post-cutover `AnchorLedgerD` without imposing a finished-bridge premise at block `11,052,984`, discloses that invalid-signature new-pubkey deposits leave paid ETH in the deposit contract without validator credit, and pairs conditional real-BLS registration witnesses with closed invalid-signature, top-up, list-versus-hash seam, and replay controls.
-- **Builder focused theorems and applicability (`B`):** `B-S2` uses unrestricted Form B without `HistoryClean` or `SystemCodeAbsent`. `B-S4` begins at observed checkpoint block `26,391,669` (whole-storage `storageHash` roots for empty deposit storage and `slot0 = max` exit storage, leaving creation block `26,211,406` and the intervening prefix outside checkpoint coverage). `B-S8` proves history-wide multi-user queue fee budgets at every request boundary composed with conditional `⌊q / 64⌋` (deposit, offset `q mod 64`) and `⌊q / 16⌋` (exit, offset `q mod 16`) delivery on built-upon Amsterdam payloads. `B-S9` provides focused premise-explicit headlines, explicit no-Amsterdam-prefix fate corollaries, payment-debit-at-most-once across quorum/settlement/old-parent paths with its exact anchor-crossing first-bid boundary, and computational checker/replay soundness tied to the exact `ValidJointG` premise bundle under real BLS without claiming an external multi-client trace.
+- **Ring and joint boundaries (`R`, `H`, `D`):** `R-S8` pairs unconditional timestamp congruence (`r_s8_time`) with affine slot retention (`r_s8_slot`) and an arithmetic `writeAll` slot-grid wrap control (`r_s8_slot_control`). `R-S9` proves unconditional `jointBlockInput` root equality and guards skipped-slot SSZ header relationships by `prev.slot + 1 = curr.slot ∨ hash_tree_root prev ≠ 0` (`r_s9_control`). `H-S9` establishes contiguous chain-hash provenance without skipped-slot ambiguity. `D-S9` runs with real BLS enabled (`bls = true`), uses the canonical Electra-activation application to fix the legacy Eth1-bridge prefix at pre-Prague P and derive the original `AnchorLedgerD`, without imposing a finished-bridge premise at block `11,052,984`; arbitrary later cuts retain only their explicitly supplied attribution scope, discloses that invalid-signature new-pubkey deposits leave paid ETH in the deposit contract without validator credit, and pairs conditional real-BLS registration witnesses with closed invalid-signature, top-up, list-versus-hash seam, and replay controls.
+- **Builder focused theorems and applicability (`B`):** `B-S2` uses unrestricted Form B without `HistoryClean` or `SystemCodeAbsent`. `B-S4` begins at observed checkpoint block `26,391,669` (whole-storage `storageHash` roots for empty deposit storage and `slot0 = max` exit storage, leaving creation block `26,211,406` and the intervening prefix outside checkpoint coverage). `B-S8` proves history-wide multi-user queue fee budgets at every request boundary composed with conditional `⌊q / 64⌋` (deposit, offset `q mod 64`) and `⌊q / 16⌋` (exit, offset `q mod 16`) delivery on built-upon Amsterdam payloads. `B-S9` provides focused premise-explicit headlines, explicit no-Amsterdam-prefix fate corollaries, payment-debit-at-most-once across quorum/settlement/old-parent paths with its exact anchor-crossing first-bid boundary, and a full computational replay checker with a proved bridge to every original field of `ValidJointG` under real BLS, preserving exact accepted inputs, states and retained execution blocks. Compiled execution retains compiler/native-cryptography trust and establishes no general client/model equivalence.
 - **Observation and fork boundaries:** Mainnet deployment and checkpoint records (`11,052,984`, `21,881,389`, `22,431,083`, `26,391,669`) are modeled provenance hypotheses whose external RPC header and trie responses are not authenticated inside Lean. Amsterdam execution for `D`, `R`, `H`, `W`, and `C` is confined to row `S10` (regular gas / settled deposit log safety), while `B` covers Amsterdam execution and Gloas joint transitions across `S1`–`S10`.
