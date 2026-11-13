@@ -150,4 +150,29 @@ theorem footprintSum_dup_ne_sum {keys : List Adr} {balances : Adr → B256} {key
   rw [List.map_cons, List.sum_cons, whole]
   omega
 
+/-- A concrete world state's stored keys cover every nonzero balance: an
+absent account reads the original zero-balance `Acct.nil`. -/
+theorem State.balanceKeys_cover (st : Jaune.State) : FootprintCovers st.keys st.bal := by
+  intro account nonzero
+  apply Std.TreeMap.mem_keys.mpr
+  by_cases member : account ∈ st
+  · exact member
+  · apply False.elim
+    apply nonzero
+    unfold Jaune.State.bal Jaune.State.get
+    rw [Std.TreeMap.getD_eq_getD_getElem?, Std.TreeMap.getElem?_eq_none member]
+    rfl
+
+/-- The original full-address balance sum is computable over precisely the
+world state's stored keys, with no caller-supplied support assumption. -/
+theorem State.footprintSum_eq_sum (st : Jaune.State) :
+    footprintSum st.keys st.bal = sum st.bal :=
+  Blanc.footprintSum_eq_sum Std.TreeMap.nodup_keys (State.balanceKeys_cover st)
+
+/-- Decide the original no-overflow premise by summing the finite stored
+accounts, rather than enumerating all `2 ^ 160` addresses. -/
+def State.sumNofDecidable (st : Jaune.State) : Decidable (SumNof st.bal) :=
+  decidable_of_iff (footprintSum st.keys st.bal < 2 ^ 256)
+    (by rw [State.footprintSum_eq_sum]; rfl)
+
 end Blanc

@@ -294,4 +294,40 @@ def replaySystem (exit : Bool) (depth : Nat) (benv : Benv) (data : Bytes) :
     else BuilderRequest.Deposit.Creation.address
   Blanc.ConcreteRun.deriveMessage depth (Blanc.ExecutionTrace.systemTransactionMessage benv target data)
 
+/-- The original per-block clean and value premises over the computed
+retained executions. Whole-history paid-value and record-count budgets are
+separate, as are joint-run/anchor/registry obligations. -/
+def KeptChecked (b : Blanc.KeptBlock) : Prop :=
+  Blanc.ConcreteRun.BodyExcludes systemAddress b.run ∧
+  Blanc.NoSenderAt BuilderRequest.Deposit.Creation.address b.run.senders ∧
+  Blanc.NoSenderAt BuilderRequest.Exit.Creation.address b.run.senders ∧
+  Blanc.RootsFit b.run.roots ∧
+  Blanc.ConcreteRun.BodyCreditsFit BuilderRequest.Deposit.Creation.address b.benv b.block.txs b.block.wds b.run ∧
+  Blanc.ConcreteRun.BodyCreditsFit BuilderRequest.Exit.Creation.address b.benv b.block.txs b.block.wds b.run
+
+/-- Replay the original configured block, checking original finite exclusions,
+root-balance sums and withdrawal credits. Tip checks are sufficient: this
+accepts only fee recipients away from both protected builder addresses.
+Every retained root is computed; no successful block or execution is an input. -/
+def replayKept (depth : Nat) (cfg : ChainConfig) (parent : BlockChain) (block : Block) :
+    Option (Σ post : BlockChain, {b : Blanc.KeptBlock // b.parent = parent ∧ b.block = block ∧
+      Blanc.KeptStep cfg b post ∧ KeptChecked b}) := do
+  let ⟨post, b, parentEq, blockEq, step⟩ ← Blanc.ConcreteRun.deriveKept depth cfg parent block
+  letI := Blanc.ConcreteRun.bodyExcludesDecidable systemAddress b.run
+  letI : Decidable (Blanc.NoSenderAt BuilderRequest.Deposit.Creation.address b.run.senders) := by
+    unfold Blanc.NoSenderAt; infer_instance
+  letI : Decidable (Blanc.NoSenderAt BuilderRequest.Exit.Creation.address b.run.senders) := by
+    unfold Blanc.NoSenderAt; infer_instance
+  letI := Blanc.ConcreteRun.rootsFitDecidable b.run.roots
+  if checked : Blanc.ConcreteRun.BodyExcludes systemAddress b.run ∧
+      Blanc.NoSenderAt BuilderRequest.Deposit.Creation.address b.run.senders ∧
+      Blanc.NoSenderAt BuilderRequest.Exit.Creation.address b.run.senders ∧ Blanc.RootsFit b.run.roots then do
+    let deposit ← Blanc.ConcreteRun.checkBodyCredits BuilderRequest.Deposit.Creation.address b.benv b.block.txs
+      b.block.wds b.run
+    let exit ← Blanc.ConcreteRun.checkBodyCredits BuilderRequest.Exit.Creation.address b.benv b.block.txs
+      b.block.wds b.run
+    pure ⟨post, b, parentEq, blockEq, step, checked.1, checked.2.1, checked.2.2.1, checked.2.2.2,
+      deposit.property, exit.property⟩
+  else none
+
 end Blanc.Composition.BuilderRequestApplicability.Checks

@@ -2931,7 +2931,11 @@ laws live in [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean):
   `SumBacked balances supply`) is read over any covering footprint.
   `FootprintCovers.extend` extends a footprint by the keys a step touches, and
   `footprintSum_dup_ne_sum` is the statement control: a repeated nonzero key
-  breaks the equation.
+  breaks the equation. For a concrete `Jaune.State`,
+  `State.balanceKeys_cover` proves its stored keys cover every nonzero balance,
+  `State.footprintSum_eq_sum` identifies that finite sum with the original full
+  address sum, and `State.sumNofDecidable` decides the original `SumNof` bound
+  without enumerating the address space or assuming a support certificate.
 - The hashed slot term itself, `mapSlot key base` (solc's mapping slot; Vyper's
   with the arguments swapped), is in
   [`Blanc/Lift/MapSlot.lean`](../Blanc/Lift/MapSlot.lean); write locality at
@@ -5551,6 +5555,19 @@ every shared module with its own summary and the branches that cite it.
   the computation. Replay repeats interpreter work, and any exhausted branch
   rejects the entire certificate. These APIs do not prove clean/value bounds
   or nontrivial joint-history applicability by themselves.
+  `deriveKept` executes the original configured block transition and selected
+  fork. To identify its complete output and roots with an existing history,
+  reuse `BodyRoots.unique`, `KeptStep.unique` and `KeptHistory.unique` from
+  `Blanc.ExecutionKeptConfigured`; no second uniqueness library is needed.
+  `rootsFitDecidable` uses the finite stored-account bridge;
+  `wdsFitDecidable` follows original withdrawal updates. `BodyExcludes` and
+  `bodyExcludesDecidable` decide the original sender/authority/retained-create
+  exclusions. `checkBodyCredits` proves the exact per-body credit predicate
+  when withdrawal bounds hold and the fee recipient differs from the protected
+  address; it is a sufficient checker and makes no claim about rejected
+  addresses. `Checks.replayKept` is the builder consumer of these checks.
+  Whole-history budgets, joint-run coupling and nontrivial activity remain
+  separate obligations.
 - A concrete frame run over a lifted certificate, as a gas-exact `SProg.RunExact`
   (an executable witness: liveness from one start state, by kernel evaluation): the
   interpreter `Witness.wrun` over the certificate's decoded tree, its single step

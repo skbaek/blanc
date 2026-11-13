@@ -1,5 +1,6 @@
 import Blanc.ConcreteRun
-import Blanc.ExecutionKeptChain
+import Blanc.ExecutionKeptValue
+import Blanc.Lift.LedgerFootprint
 
 /-!
 Continuing prefixes do not add retained frames. This relates the original
@@ -246,5 +247,95 @@ def deriveBody (depth : Nat) (benv : Benv) (txs : List (Bytes ⊕ Tx)) (ommers :
           pure ⟨state, output, run,
             applied, pre.sound, ⟨transactions, decoded, tx.sound⟩,
             ⟨requests.state, requests.output, requests.sound⟩⟩
+
+/-- Execute the original configured transition and compute the exact retained
+block certificate. Coverage is tested at its actual selected fork. -/
+def deriveKept (depth : Nat) (cfg : ChainConfig) (parent : BlockChain) (block : Block) :
+    Option (Σ post : BlockChain,
+      {b : KeptBlock // b.parent = parent ∧ b.block = block ∧ KeptStep cfg b post}) := do
+  match transitioned : stateTransitionUsing cfg parent block with
+  | .error _ => none
+  | .ok post =>
+      match selected : cfg.forkAt block.header.number block.header.timestamp with
+      | .error _ => none
+      | .ok fork =>
+          letI : Decidable (KeptFork fork) := by unfold KeptFork; infer_instance
+          if kept : KeptFork fork then do
+            let body ← deriveBody depth (initBenv fork parent block.header) block.txs block.ommers block.wds
+            have stateEq : body.state = post.state := by
+              obtain ⟨f, st, out, hf, -, hb, hp⟩ := exists_configuredBody_of_transition transitioned
+              have same := Except.ok.inj (hf.symm.trans selected)
+              subst f
+              have eq := Prod.mk.inj (Except.ok.inj (body.sound.applied.symm.trans hb))
+              rw [hp]
+              exact eq.1
+            pure ⟨post, ⟨⟨parent, block, fork, body.output, body.run⟩, rfl, rfl,
+              transitioned, selected, kept,
+              ⟨by rw [← stateEq]; exact body.sound.applied,
+                body.sound.pre, body.sound.transactions, body.sound.requests⟩⟩⟩
+          else none
+
+/-- Decide each root's original world-sum premise over stored account keys. -/
+def rootsFitDecidable (rs : List Root) : Decidable (RootsFit rs) := by
+  letI (root : Root) : Decidable (SumNof root.frame.outer.benv.state.bal) :=
+    State.sumNofDecidable root.frame.outer.benv.state
+  unfold RootsFit
+  infer_instance
+
+/-- Decide the original withdrawal-credit bounds along their actual state updates. -/
+def wdsFitDecidable (a : Adr) : (st : State) → (wds : List Withdrawal) → Decidable (WdsFit a st wds)
+  | _, [] => isTrue True.intro
+  | st, wd :: rest =>
+      letI := wdsFitDecidable a (st.addBal wd.recipient (wd.amount * (10 ^ 9).toB256)) rest
+      show Decidable ((_ → _) ∧ _) from inferInstance
+
+/-- A sufficient tip-credit check: transactions cannot credit their tip at an
+address different from their fee recipient. This does not assert the converse. -/
+theorem tipsFit_of_coinbase_ne (a : Adr) (txs : List (Nat × Tx)) (benv : Benv) (bout : BlockOutput)
+    (away : benv.stat.coinbase ≠ a) : TipsFit a txs benv bout := by
+  induction txs generalizing benv bout with
+  | nil => exact True.intro
+  | cons pair rest ih =>
+      obtain ⟨index, tx⟩ := pair
+      refine ⟨?_, fun st out _ => ih (benv.withState st) out away⟩
+      intro sender msg messageState messageOut refund tip state output _ _ _ _ same
+      exact (away same).elim
+
+/-- Retain actual body roots only when their original world-sum bound holds. -/
+def deriveBodyFit (depth : Nat) (benv : Benv) (txs : List (Bytes ⊕ Tx)) (ommers : List Header)
+    (wds : List Withdrawal) :
+    Option {result : BodyResult benv txs ommers wds // RootsFit result.run.roots} := do
+  let result ← deriveBody depth benv txs ommers wds
+  letI := rootsFitDecidable result.run.roots
+  if fits : RootsFit result.run.roots then pure ⟨result, fits⟩ else none
+
+/-- All finite exclusions over a body's computed roots and recovered senders. -/
+def BodyExcludes (a : Adr) (run : BodyRun) : Prop :=
+  NoSenderAt a run.senders ∧ NoAuthorityAt a run.senders ∧ NoCreateAt a run.roots
+
+/-- Decide the original sender, authorization and retained-create exclusions. -/
+def bodyExcludesDecidable (a : Adr) (run : BodyRun) : Decidable (BodyExcludes a run) := by
+  unfold BodyExcludes NoSenderAt NoAuthorityAt NoCreateAt
+  infer_instance
+
+/-- The exact per-body credit premise used by `HistoryCreditsFit`. -/
+def BodyCreditsFit (a : Adr) (benv : Benv) (txs : List (Bytes ⊕ Tx)) (wds : List Withdrawal)
+    (run : BodyRun) : Prop :=
+  (∀ decoded, txs.mapM (decodeTx benv.stat.rules) = .ok decoded →
+    TipsFit a decoded.putIndex (benv.withState run.preState) {BlockOutput.init with bal := run.preBal}) ∧
+  WdsFit a run.txEnv.state wds
+
+/-- Check original withdrawal credits and prove the tip premise when the fee
+recipient is elsewhere. A rejected address may still satisfy the premise:
+this is deliberately a sufficient checker rather than a complete decider. -/
+def checkBodyCredits (a : Adr) (benv : Benv) (txs : List (Bytes ⊕ Tx)) (wds : List Withdrawal)
+    (run : BodyRun) : Option {_u : Unit // BodyCreditsFit a benv txs wds run} :=
+  letI := wdsFitDecidable a run.txEnv.state wds
+  if away : benv.stat.coinbase ≠ a then
+    if fits : WdsFit a run.txEnv.state wds then
+      some ⟨(), fun decoded _ => tipsFit_of_coinbase_ne a decoded.putIndex
+        (benv.withState run.preState) {BlockOutput.init with bal := run.preBal} away, fits⟩
+    else none
+  else none
 
 end Blanc.ConcreteRun
