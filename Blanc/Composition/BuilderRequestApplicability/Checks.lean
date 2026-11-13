@@ -1,4 +1,4 @@
-import Blanc.ConcreteRun
+import Blanc.ConcreteRunKept
 import Blanc.JointGloasReplayStep
 import Blanc.Lift.BuilderRequest.Deposit.Latch
 import Blanc.Lift.BuilderRequest.Exit.Delivery
@@ -281,22 +281,17 @@ def replayFinite {P : Preset} (cfg : ChainConfig) (ccfg : Config) (state : Joint
     some ⟨cert.val, cert.property, checked⟩
   else none
 
-/-- Construct the complete original EVM derivation for an initialized builder
-system message, using the code actually installed in the supplied environment.
-`exit = false` selects the deposit contract and `exit = true` the exit contract.
-The original derivation includes child entry, settlement and parent resumption;
-no child trace, code-equality proof or successful execution is an input.
-
-This is a frame certificate producer. It does not prove block dispatch, complete
-`BodyRoots`, clean history, or nontrivial P5 activity. Depth exhaustion rejects. -/
+/-- Execute the original builder system message on its actual preparation lane,
+retaining complete interpreter roots for the dispatch's actual result.
+`exit = false` selects deposit and `exit = true` selects exit. Depth exhaustion
+rejects. This proves `MessageRoots`; full joint-history applicability and
+nontrivial P5 activity remain separate obligations. -/
 def replaySystem (exit : Bool) (depth : Nat) (benv : Benv) (data : Bytes) :
     let target := if exit then BuilderRequest.Exit.Creation.address
       else BuilderRequest.Deposit.Creation.address
-    let msg := systemCallMsg benv target (benv.state.getCode target) data
-    Option (Σ out : Execution, Exec 0 (initSevm msg) (systemCallBase msg) out) :=
+    Option (Blanc.ConcreteRun.MessageResult (Blanc.ExecutionTrace.systemTransactionMessage benv target data)) :=
   let target := if exit then BuilderRequest.Exit.Creation.address
     else BuilderRequest.Deposit.Creation.address
-  let msg := systemCallMsg benv target (benv.state.getCode target) data
-  Blanc.ConcreteRun.derive depth ⟨0, initSevm msg, systemCallBase msg⟩
+  Blanc.ConcreteRun.deriveMessage depth (Blanc.ExecutionTrace.systemTransactionMessage benv target data)
 
 end Blanc.Composition.BuilderRequestApplicability.Checks

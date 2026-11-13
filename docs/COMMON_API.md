@@ -5533,14 +5533,24 @@ every shared module with its own summary and the branches that cite it.
   exhaustion rather than accepting a prefix. The limit is a branch-depth
   bound, not a whole-tree instruction budget. Its returned derivation uses
   Jaune's existing `exec_iff_exec_eq` adequacy bridge. The builder applicability
-  consumer `Checks.replaySystem` specializes it to the actual installed code
-  of the two builder system messages; frame evidence alone is not block/body
-  dispatch or a full `ValidJointG` witness.
+  consumer `Checks.replaySystem` uses `ConcreteRun.deriveMessage` to certify
+  the actual system-message dispatch and its `MessageRoots`, on either lane
+  including Amsterdam's prepared meters. This is not a full `ValidJointG` witness.
 - For retained frames after a concrete continuing prefix, use
   [`Blanc/ConcreteRunKept.lean`](../Blanc/ConcreteRunKept.lean)'s
   `ConcreteRun.Exec.keptAt_ofStepN`. It relates the original gas-bearing
   `stepN`/`Exec.ofStepN` derivation to the same supplied actual tail,
   preserving `Exec.keptAt` at any observed address on any outcome.
+  The same module provides `deriveEntries`, `deriveMessage`, `derivePre`,
+  `deriveTransactions`, `deriveRequests`, `deriveRequestPass` and `deriveBody`.
+  They reconstruct actual original `Exec` data and return the corresponding
+  `MessageRoots`, `PreRoots`, `TransactionsRoots`, `RequestRoots`, `RequestPass`
+  and `BodyRoots` certificates. Original protocol calls determine acceptance;
+  proof-only existence lemmas identify their message results, while every
+  retained root is computed by `deriveEntries`. No classical choice enters
+  the computation. Replay repeats interpreter work, and any exhausted branch
+  rejects the entire certificate. These APIs do not prove clean/value bounds
+  or nontrivial joint-history applicability by themselves.
 - A concrete frame run over a lifted certificate, as a gas-exact `SProg.RunExact`
   (an executable witness: liveness from one start state, by kernel evaluation): the
   interpreter `Witness.wrun` over the certificate's decoded tree, its single step
