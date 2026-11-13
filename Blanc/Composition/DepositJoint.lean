@@ -987,4 +987,93 @@ theorem d9_fate_joined : D9FateJoined := by
       hpkEq.trans hpkFr.symm, hwcEq.trans hwcFr.symm, hsigEq.trans hsigFr.symm, hamtEq,
       v.stepsPostGenesis D hDmem⟩
 
+
+/-! ## Proposed canonical Electra-activation application
+
+The generic frozen statements remain unchanged. This application fixes the cut
+at the deployment record's last pre-Prague checkpoint and starts consensus at
+an actual successful Electra upgrade. Its external mainnet interpretation and
+wording remain an unadopted proposal; it constructs no observed mainnet state.
+-/
+namespace Activation
+
+/-- Select the canonical execution cut and an original activation-state producer,
+so a later arbitrary anchor cannot relabel request deposits as legacy. -/
+structure Boundary {P : Preset} (ccfg : Config) (beacon : BeaconState P .electra)
+    (exec : BlockChain) (deployment : BeaconDeploymentTo exec) : Prop where
+  canonicalCut : deployment.P = exec
+  upgraded : ∃ pre : BeaconState P .deneb,
+    pre.slot.toNat = ccfg.ELECTRA_FORK_EPOCH * P.SLOTS_PER_EPOCH ∧
+    upgradeToElectra ccfg pre = .ok beacon
+
+variable {P : Preset} {ccfg : Config} {beacon : BeaconState P .electra}
+  {exec : BlockChain} {final : JointState P}
+
+/-- The same original joint carrier, with a reflexive execution prehistory at
+the selected activation boundary. Existing authority/frame premises are kept. -/
+def joint (deployment : BeaconDeploymentTo exec)
+    (_boundary : Boundary ccfg beacon exec deployment)
+    (cfgValid : mainnetChainConfig.Valid) (context : exec.ValidContext)
+    (chainId : mainnetChainConfig.chainId = exec.chainId)
+    (ingress : JointRunIngress mainnetChainConfig ccfg true ⟨.electra, beacon, exec⟩ final)
+    (slots : ∀ D ∈ ingress.steps, D.block.2.message.slot ≠ GENESIS_SLOT)
+    (system : ∀ p ∈ systemContracts, (ingress.toExec deployment.modern).NoAuthorityAt p.1)
+    (authority : (ingress.toExec deployment.modern).NoAuthorityAt 2)
+    (frames : ∀ root ∈ (ingress.toExec deployment.modern).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ (2 : Adr)) :
+    DepositJoint ccfg true ⟨.electra, beacon, exec⟩ final :=
+  { cutover := exec, deployment, pre := .refl cfgValid context chainId,
+    ingress, stepsPostGenesis := slots, systemNoAuthority := system,
+    noAuthority := authority, noFrame := frames }
+
+variable (deployment : BeaconDeploymentTo exec)
+  (boundary : Boundary ccfg beacon exec deployment)
+  (cfgValid : mainnetChainConfig.Valid) (context : exec.ValidContext)
+  (chainId : mainnetChainConfig.chainId = exec.chainId)
+  (ingress : JointRunIngress mainnetChainConfig ccfg true ⟨.electra, beacon, exec⟩ final)
+  (slots : ∀ D ∈ ingress.steps, D.block.2.message.slot ≠ GENESIS_SLOT)
+  (system : ∀ p ∈ systemContracts, (ingress.toExec deployment.modern).NoAuthorityAt p.1)
+  (authority : (ingress.toExec deployment.modern).NoAuthorityAt 2)
+  (frames : ∀ root ∈ (ingress.toExec deployment.modern).rawFrames,
+    root.sevm.codeAddress = none → root.sevm.currentTarget ≠ (2 : Adr))
+
+local notation "v" => joint deployment boundary cfgValid context chainId ingress slots system authority frames
+
+/-- The excluded prefix stops at the canonical pre-Prague checkpoint, and
+there are no intervening post-cutover execution deposits before this anchor. -/
+theorem cut_is_canonical : (v).cutover = deployment.P ∧ (v).cutoverCount = (v).E₀ := by
+  exact ⟨boundary.canonicalCut.symm, rfl⟩
+
+/-- Derive the complete original anchor ledger, with no assumed pre-anchor
+application outcomes. Only the actual initial pending list is supplied. -/
+theorem initial_ledger (queue : List PendingDeposit)
+    (pending : pendingList (⟨.electra, beacon, exec⟩ : JointState P) = .ok queue) :
+    AnchorLedgerD v (queue.map fun d => ((none : Option Nat), d)) [] := by
+  have aligned : (queue.map fun d => ((none : Option Nat), d)).map Prod.snd = queue := by
+    clear pending
+    induction queue with
+    | nil => rfl
+    | cons d rest ih => exact congrArg (List.cons d) ih
+  have noTags : (queue.map fun d => ((none : Option Nat), d)).filterMap Prod.fst = [] := by
+    clear pending aligned
+    induction queue with
+    | nil => rfl
+    | cons d rest ih => exact ih
+  have counts : (v).cutoverCount = (v).E₀ := rfl
+  refine ⟨⟨?_, ?_, ?_⟩, ?_, ?_, ?_, ?_⟩
+  · rw [aligned]; exact pending
+  · intro e member tagged
+    obtain ⟨d, _, rfl⟩ := List.mem_map.mp member
+    cases tagged
+  · rw [noTags]; exact List.nodup_nil
+  · exact List.nodup_nil
+  · intro rec member; cases member
+  · intro n d member
+    obtain ⟨q, _, impossible⟩ := List.mem_map.mp member
+    cases impossible
+  · intro k lower upper
+    omega
+
+end Activation
+
 end Blanc.Composition.DepositJoint
