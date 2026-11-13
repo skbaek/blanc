@@ -3779,7 +3779,7 @@ example :
             Blanc.Lift.RequestSystem.RegularGasWithin out.gasLeft 163000) ∧
         (∀ {benv0 final benv : Benv} {txs : List Tx} {bal0 : BalBuilder}
           {out0 : BlockOutput} {senders : List (Adr × Tx)} {roots : List Blanc.Root}
-          (wds : List Withdrawal),
+          (wds : List Jaune.Withdrawal),
           benv0.stat.fork = .amsterdam →
           benv0.state.getCode depositContractAddress = BeaconDeposit.code →
           Blanc.TransactionsRoots txs.putIndex benv0 { BlockOutput.init with bal := bal0 }
@@ -3826,7 +3826,7 @@ example :
             Blanc.Lift.RequestSystem.RegularGasWithin out.gasLeft 75000) ∧
         (∀ {benv0 final benv : Benv} {txs : List Tx} {bal0 : BalBuilder}
           {out0 : BlockOutput} {senders : List (Adr × Tx)} {roots : List Blanc.Root}
-          (wds : List Withdrawal),
+          (wds : List Jaune.Withdrawal),
           benv0.stat.fork = .amsterdam →
           benv0.state.getCode depositContractAddress = BeaconDeposit.code →
           Blanc.TransactionsRoots txs.putIndex benv0 { BlockOutput.init with bal := bal0 }
@@ -4366,7 +4366,7 @@ example {P : Preset} {cfg : ChainConfig} {ccfg : Config} {bls : Bool} {checkpoin
           v.run.steps[j]? = some (.gloas D) → U64.zero < D.bid.value →
           (origin, e) ∈ v.run.debitSpent → v.run.lookupPush origin = some p → p.slot = D.paySlot →
           e = D.payW ∧ p.w = D.payW ∧
-            ∃ j_app k_app D_app (f : PaymentFate v.run j),
+            ∃ j_app k_app D_app, ∃ f : PaymentFate v.run j,
               origin = Sum.inr (j_app, k_app) ∧
               v.run.steps[j_app]? = some (.gloas D_app) ∧
               D_app.pushes[k_app]? = some p ∧
