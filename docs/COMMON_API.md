@@ -1386,8 +1386,14 @@ state `GJointState`, of three kinds: `.pre` (`PreStepData`, a `jointStep` with i
 `JointGloasReplayStep.replay` in
 [`Blanc/JointGloasReplayStep.lean`](../Blanc/JointGloasReplayStep.lean) returns
 an optional post-state with the original `jointStepG` success equation.
-`sound` constructs the matching `GJointRunStep` from that certificate,
-`PreBound` and `ParentCoherent`.
+`sound` proves existence of the matching `GJointRunStep` from that certificate,
+`PreBound` and `ParentCoherent`. For a finite block/envelope sequence,
+`JointGloasReplayStep.replayMany` returns the final state and computed intermediate
+states, with `Admits` proving that one original `GJointRun` has exactly those inputs
+and states. It computes each pre-Gloas `PreBound` check and propagates coherence;
+`replayFromPre` supplies initial coherence and fixes real BLS to `true`. These
+certificates establish no additional anchor, history-cleanliness, value-accounting
+or nontrivial-activity conditions.
 
 For the beacon side of a step, `JointRun.steps_jointStep` recovers the successful
 `jointStep` of any indexed step; `jointBlockInput ccfg bls s b` is the beacon state the

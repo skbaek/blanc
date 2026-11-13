@@ -262,4 +262,22 @@ theorem checkpoint_iff_bls_and_fullCheckpoint {bls : Bool}
   · rintro ⟨hbls, -, hd, hds, he, hes⟩
     exact ⟨hbls, hd, he, hds, hes⟩
 
+/-- Replay the original joint interpreter with real BLS, then check the twelve finite
+checkpoint/configuration/registry obligations on that same replay. The checkpoint is the
+pre-Gloas anchor's own execution state, and the checked registry list is proved to be the
+resulting `GJointRun.states`, rather than a separately supplied list.
+
+This remains a partial applicability checker: it does not establish the remaining anchor,
+history-cleanliness, value-accounting or activity obligations of `ValidJointG`. A successful
+empty replay alone is not P5 applicability evidence. -/
+def replayFinite {P : Preset} (cfg : ChainConfig) (ccfg : Config) (state : JointState P)
+    (inputs : List (Blanc.JointGloasReplayStep.Input P)) :
+    Option {out : GJointState P × List (GJointState P) //
+      Blanc.JointGloasReplayStep.Admits cfg ccfg true (.pre state) out.1 inputs out.2 ∧
+        FiniteApplicability ccfg state.exec out.2} := do
+  let cert ← Blanc.JointGloasReplayStep.replayFromPre cfg ccfg state inputs
+  if checked : FiniteApplicability ccfg state.exec cert.val.2 then
+    some ⟨cert.val, cert.property, checked⟩
+  else none
+
 end Blanc.Composition.BuilderRequestApplicability.Checks
