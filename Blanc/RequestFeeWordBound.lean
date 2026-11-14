@@ -17,30 +17,12 @@ namespace Blanc.RequestFeeWord
 
 open Jaune
 
-/-- A passing check at fuel `fuel` is a Nat trace of at most `fuel` iterations. -/
-theorem noWrap_of_check_le {numerator fuel counter accumulator sum : Nat}
-    (h : noWrapCheck numerator fuel counter accumulator sum = true) :
-    ∃ iterations output, iterations ≤ fuel ∧
-      ∃ run : FakeExponential.Run numerator 17 counter accumulator iterations output,
-        FakeExponentialWordCorrespondence.NoWrap run sum := by
-  induction fuel generalizing counter accumulator sum with
-  | zero =>
-    simp only [noWrapCheck, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
-    obtain ⟨rfl, hs⟩ := h
-    exact ⟨0, 0, Nat.le_refl _, .stop counter, .stop counter sum hs⟩
-  | succ fuel ih =>
-    by_cases ha : accumulator = 0
-    · subst ha
-      simp only [noWrapCheck, ite_true, decide_eq_true_eq] at h
-      exact ⟨0, 0, Nat.zero_le _, .stop counter, .stop counter sum h⟩
-    · simp only [noWrapCheck, ha, ite_false, Bool.and_eq_true, decide_eq_true_eq] at h
-      obtain ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩ := h
-      obtain ⟨iterations, output, hle, run, safe⟩ := ih h4
-      exact ⟨_, _, Nat.succ_le_succ hle, .step ha run, .step (active := ha) h1 h2 h3 safe⟩
-
 /-- Every excess through 2892 passes the no-wrap check within 462 iterations. -/
 theorem noWrapCheck_462 : (List.range 2893).all (fun e => noWrapCheck e 462 1 17 0) = true := by
-  decide +kernel
+  apply List.all_eq_true.mpr
+  intro e he
+  exact noWrapCheck_mono (Nat.le_of_lt_succ (List.mem_range.mp he))
+    (Nat.le_refl _) (Nat.le_refl _) noWrapCheck_2892
 
 /-- **The fee loop on the domain.** On an excess at most 2892, the word recurrence runs, in at most 462 iterations, and
 quotes `fake_exponential(1, excess, 17)`. -/

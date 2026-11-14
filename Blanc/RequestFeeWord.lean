@@ -132,25 +132,86 @@ def noWrapCheck (numerator : Nat) : Nat → Nat → Nat → Nat → Bool
         noWrapCheck numerator fuel (counter + 1) (accumulator * numerator / (17 * counter))
           (sum + accumulator)
 
+/-- At fixed counter and fuel, a passing check remains valid when its numerator,
+accumulator, and sum prefix decrease. -/
+theorem noWrapCheck_mono
+    {numerator numerator' fuel counter accumulator accumulator' sum sum' : Nat}
+    (hn : numerator ≤ numerator') (ha : accumulator ≤ accumulator') (hs : sum ≤ sum')
+    (h : noWrapCheck numerator' fuel counter accumulator' sum' = true) :
+    noWrapCheck numerator fuel counter accumulator sum = true := by
+  induction fuel generalizing counter accumulator accumulator' sum sum' with
+  | zero =>
+    simp only [noWrapCheck, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h ⊢
+    obtain ⟨ha', hsum⟩ := h
+    exact ⟨by omega, hs.trans_lt hsum⟩
+  | succ fuel ih =>
+    by_cases ha' : accumulator' = 0
+    · have ha0 : accumulator = 0 := by omega
+      simp only [noWrapCheck, ha0, ha', ite_true, decide_eq_true_eq] at h ⊢
+      exact hs.trans_lt h
+    · simp only [noWrapCheck, ha', ite_false, Bool.and_eq_true, decide_eq_true_eq] at h
+      obtain ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩ := h
+      by_cases ha0 : accumulator = 0
+      · simp only [noWrapCheck, ha0, ite_true, decide_eq_true_eq]
+        exact (hs.trans (Nat.le_add_right _ _)).trans_lt h1
+      · simp only [noWrapCheck, ha0, ite_false, Bool.and_eq_true, decide_eq_true_eq]
+        refine ⟨⟨⟨(Nat.add_le_add hs ha).trans_lt h1,
+          (Nat.mul_le_mul ha hn).trans_lt h2⟩, h3⟩, ?_⟩
+        exact ih (Nat.div_le_div_right (Nat.mul_le_mul ha hn)) (Nat.add_le_add hs ha) h4
+
+/-- A passing no-wrap check remains valid with more fuel. -/
+theorem noWrapCheck_fuel_mono {numerator fuel fuel' counter accumulator sum : Nat}
+    (hf : fuel ≤ fuel') (h : noWrapCheck numerator fuel counter accumulator sum = true) :
+    noWrapCheck numerator fuel' counter accumulator sum = true := by
+  induction fuel generalizing fuel' counter accumulator sum with
+  | zero =>
+    simp only [noWrapCheck, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
+    obtain ⟨rfl, hs⟩ := h
+    cases fuel' with
+    | zero =>
+      simp only [noWrapCheck, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq]
+      exact ⟨True.intro, hs⟩
+    | succ fuel' =>
+      simpa only [noWrapCheck, ite_true, decide_eq_true_eq] using hs
+  | succ fuel ih =>
+    cases fuel' with
+    | zero => omega
+    | succ fuel' =>
+      by_cases ha : accumulator = 0
+      · simp only [noWrapCheck, ha, ite_true] at h ⊢
+        exact h
+      · simp only [noWrapCheck, ha, ite_false, Bool.and_eq_true, decide_eq_true_eq] at h ⊢
+        obtain ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩ := h
+        exact ⟨⟨⟨h1, h2⟩, h3⟩, ih (Nat.le_of_succ_le_succ hf) h4⟩
+
+/-- A passing check at fuel `fuel` is a Nat trace of at most `fuel` iterations. -/
+theorem noWrap_of_check_le {numerator fuel counter accumulator sum : Nat}
+    (h : noWrapCheck numerator fuel counter accumulator sum = true) :
+    ∃ iterations output, iterations ≤ fuel ∧
+      ∃ run : FakeExponential.Run numerator 17 counter accumulator iterations output,
+        FakeExponentialWordCorrespondence.NoWrap run sum := by
+  induction fuel generalizing counter accumulator sum with
+  | zero =>
+    simp only [noWrapCheck, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
+    obtain ⟨rfl, hs⟩ := h
+    exact ⟨0, 0, Nat.le_refl _, .stop counter, .stop counter sum hs⟩
+  | succ fuel ih =>
+    by_cases ha : accumulator = 0
+    · subst ha
+      simp only [noWrapCheck, ite_true, decide_eq_true_eq] at h
+      exact ⟨0, 0, Nat.zero_le _, .stop counter, .stop counter sum h⟩
+    · simp only [noWrapCheck, ha, ite_false, Bool.and_eq_true, decide_eq_true_eq] at h
+      obtain ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩ := h
+      obtain ⟨iterations, output, hle, run, safe⟩ := ih h4
+      exact ⟨_, _, Nat.succ_le_succ hle, .step ha run, .step (active := ha) h1 h2 h3 safe⟩
+
 /-- A passing check is a Nat trace with the no-wrap bounds. -/
 theorem noWrap_of_check {numerator fuel counter accumulator sum : Nat}
     (h : noWrapCheck numerator fuel counter accumulator sum = true) :
     ∃ iterations output, ∃ run : FakeExponential.Run numerator 17 counter accumulator iterations output,
       FakeExponentialWordCorrespondence.NoWrap run sum := by
-  induction fuel generalizing counter accumulator sum with
-  | zero =>
-    simp only [noWrapCheck, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
-    obtain ⟨rfl, hs⟩ := h
-    exact ⟨0, 0, .stop counter, .stop counter sum hs⟩
-  | succ fuel ih =>
-    by_cases ha : accumulator = 0
-    · subst ha
-      simp only [noWrapCheck, ite_true, decide_eq_true_eq] at h
-      exact ⟨0, 0, .stop counter, .stop counter sum h⟩
-    · simp only [noWrapCheck, ha, ite_false, Bool.and_eq_true, decide_eq_true_eq] at h
-      obtain ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩ := h
-      obtain ⟨iterations, output, run, safe⟩ := ih h4
-      exact ⟨_, _, .step ha run, .step (active := ha) h1 h2 h3 safe⟩
+  obtain ⟨iterations, output, -, run, safe⟩ := noWrap_of_check_le h
+  exact ⟨iterations, output, run, safe⟩
 
 /-- The natural EIP fee at excess `excess`: `fake_exponential(1, excess, 17)`. -/
 def specFee (excess : B256) : Nat := fakeExp 1 excess.toNat 17

@@ -14,9 +14,17 @@ namespace Blanc.RequestFeeWord
 
 open Jaune
 
+/-- The upper endpoint passes the no-wrap check within 462 iterations. -/
+theorem noWrapCheck_2892 : noWrapCheck 2892 462 1 17 0 = true := by
+  decide +kernel
+
 /-- Every excess through 2892 passes the no-wrap check. -/
 theorem noWrapCheck_through : (List.range 2893).all (fun e => noWrapCheck e 512 1 17 0) = true := by
-  decide +kernel
+  apply List.all_eq_true.mpr
+  intro e he
+  exact noWrapCheck_fuel_mono (by decide : 462 ≤ 512)
+    (noWrapCheck_mono (Nat.le_of_lt_succ (List.mem_range.mp he))
+      (Nat.le_refl _) (Nat.le_refl _) noWrapCheck_2892)
 
 /-- **The no-wrap domain holds** at every excess through 2892. -/
 theorem noWrapDomain_of_le {e : Nat} (he : e ≤ 2892) : ∃ iterations, NoWrapDomain e.toB256 iterations := by
