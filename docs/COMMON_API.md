@@ -3339,6 +3339,17 @@ windows' results over the excess word alone, with no queue model.
 `natFeeExcessCeiling`, `NoWrapDomain.excess_lt`, `excess_lt_of_paid` and
 `word_fee_lt_of_large_excess` separate the two fees above the growth ceiling.
 
+For a successful natural recurrence check, use
+`RequestFeeWord.noWrap_of_check_le` to retain the iteration bound; the
+older `noWrap_of_check` interface follows by forgetting that bound.
+`noWrapCheck_mono` transfers a passing check to a smaller numerator,
+accumulator and sum at fixed counter/fuel, and `noWrapCheck_fuel_mono`
+allows more fuel. For example, the Domain/Bound consumers derive the full
+range from `RequestFeeWord.noWrapCheck_2892` (the checked endpoint in
+`RequestFeeWordDomain.lean`), rather than enumerating every excess again.
+Keep the counter fixed in the monotonicity argument; changing the denominator
+is a different obligation.
+
 ## M — bytes and memory
 
 For concrete RLP encoding and parsing, use
@@ -6548,6 +6559,13 @@ frame with its queue law, `Chain`, `Chain.delivered`, `Chain.drain_delivers`).
 For batches of pushes and cap-one drains in that same model, use
 [`Blanc/Lift/RequestQueue/Batch.lean`](../Blanc/Lift/RequestQueue/Batch.lean):
 `run_pushes_queue`, `run_unit_drains_queue` and `deliveries_unit_drains`.
+Use `pushed_map_push` and `pushed_replicate_drain` for event projections;
+`deliveries_map_push` and `deliveries_batch` handle capacity-1 push/drain
+batches, and `deliveredCount_append` splits their delivery count at a trace
+boundary. For example, `deliveries_batch st rs d` identifies the delivered
+rows of pushes followed by `d` unit drains with `(st.queue ++ rs).take d`;
+the builder debit occurrence proof uses this without re-proving the batch
+algebra, and `deliveries_unit_drains` reuses the pushed-drain projection.
 For the actual guarded Gloas withdrawal prefix and its physical application positions, use
 [`Blanc/GloasWithdrawalPrefix.lean`](../Blanc/GloasWithdrawalPrefix.lean):
 `processWithdrawals_prefix` retains the early/full branch; `applyWithdrawals_at`
