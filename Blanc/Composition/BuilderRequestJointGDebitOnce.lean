@@ -115,47 +115,6 @@ theorem _root_.Blanc.CrossingData.withdrawal_prefix_zero
     rw [e8, o7.2.1, e6, b4.2.2.2.2.2.2.2.2.2.1, hp.2.1, hw2, List.drop_nil]
   exact ⟨s1, s2, s3, ws, h1, h2, h3, hw2, hp, hwpost⟩
 
-/-! ## Cap-one batch projections -/
-
-section BatchHelpers
-
-private theorem pushed_map_push {Record : Type} (rs : List Record) :
-    RequestQueue.pushed (rs.map RequestQueue.Effect.push) = rs := by
-  induction rs with
-  | nil => rfl
-  | cons r rs ih => simp only [List.map_cons, RequestQueue.pushed, ih]
-
-private theorem pushed_replicate_drain {Record : Type} (d : Nat) :
-    RequestQueue.pushed (List.replicate d (RequestQueue.Effect.drain (Record := Record) (fun _ _ => 0))) = [] := by
-  induction d with
-  | zero => rfl
-  | succ d ih => simp only [List.replicate_succ, RequestQueue.pushed, ih]
-
-private theorem deliveries_map_push {Record : Type} (st : QueueState Record) (rs : List Record) :
-    (RequestQueue.deliveries 1 st (rs.map RequestQueue.Effect.push)).flatten = [] := by
-  induction rs generalizing st with
-  | nil => rfl
-  | cons r rs ih =>
-    simp only [List.map_cons, RequestQueue.deliveries, RequestQueue.taken, RequestQueue.apply,
-      List.flatten_cons, List.nil_append, ih]
-
-private theorem deliveries_batch {Record : Type} (st : QueueState Record) (rs : List Record) (d : Nat) :
-    (RequestQueue.deliveries 1 st
-      (rs.map RequestQueue.Effect.push ++ List.replicate d (.drain (fun _ _ => 0)))).flatten =
-      (st.queue ++ rs).take d := by
-  rw [RequestQueue.deliveries_append, List.flatten_append, deliveries_map_push, List.nil_append,
-    RequestQueue.deliveries_unit_drains, RequestQueue.run_pushes_queue]
-
-private theorem deliveredCount_append {Record : Type} (st : QueueState Record)
-    (xs ys : List (RequestQueue.Effect Record)) :
-    RequestQueue.deliveredCount 1 st (xs ++ ys) =
-      RequestQueue.deliveredCount 1 st xs +
-        RequestQueue.deliveredCount 1 (RequestQueue.run 1 st xs) ys := by
-  simp only [RequestQueue.deliveredCount, RequestQueue.deliveries_append, List.flatten_append,
-    List.length_append]
-
-end BatchHelpers
-
 /-! ## Occurrence-tagged run observers -/
 
 /-- Occurrence origin of a pending builder withdrawal: `Sum.inl k` for initial anchor queue slot `k`,
@@ -262,7 +221,7 @@ theorem anchorDebitRows_map_snd (s₀ : GJointState P) :
 private theorem pushed_stepDebitBatch (j : Nat) (S : GJointRunStep (P := P) cfg ccfg bls) :
     RequestQueue.pushed (stepDebitBatch j S) = stepDebitTags j S := by
   unfold stepDebitBatch
-  rw [RequestQueue.pushed_append, pushed_map_push, pushed_replicate_drain, List.append_nil]
+  rw [RequestQueue.pushed_append, RequestQueue.pushed_map_push, RequestQueue.pushed_replicate_drain, List.append_nil]
 
 private theorem pushed_batches_flatten :
     ∀ (l : List (GJointRunStep (P := P) cfg ccfg bls × Nat)),
@@ -482,7 +441,7 @@ private theorem step_deliveries_eq
     (RequestQueue.deliveries 1 (run.debitBefore i) (stepDebitBatch i S)).flatten =
       ((run.debitBefore i).queue ++ stepDebitTags i S).take S.drops ∧
     S.drops ≤ ((run.debitBefore i).queue ++ stepDebitTags i S).length := by
-  refine ⟨deliveries_batch (run.debitBefore i) (stepDebitTags i S) S.drops, ?_⟩
+  refine ⟨RequestQueue.deliveries_batch (run.debitBefore i) (stepDebitTags i S) S.drops, ?_⟩
   cases S with
   | pre _ => exact Nat.zero_le _
   | crossing _ => exact Nat.zero_le _
@@ -517,7 +476,7 @@ theorem _root_.Blanc.GJointRun.debitCursor_succ
     (hS : run.steps[i]? = some S) :
     run.debitCursor (i + 1) = run.debitCursor i + S.drops := by
   unfold GJointRun.debitCursor
-  rw [take_succ_flatten run.debitBatches (debitBatches_getElem? run hS), deliveredCount_append]
+  rw [take_succ_flatten run.debitBatches (debitBatches_getElem? run hS), RequestQueue.deliveredCount_append]
   change run.debitCursor i +
     (RequestQueue.deliveries 1 (run.debitBefore i) (stepDebitBatch i S)).flatten.length = _
   obtain ⟨hdel, hle⟩ := step_deliveries_eq hq hspe run hS
@@ -533,7 +492,7 @@ theorem _root_.Blanc.GJointRun.debitCursor_mono {s₀ s : GJointState P}
         run.debitBatches.take i ++ (run.debitBatches.drop i).take (j - i) := List.take_add
     rwa [Nat.add_sub_of_le hij] at h
   unfold GJointRun.debitCursor
-  rw [htake, List.flatten_append, deliveredCount_append]
+  rw [htake, List.flatten_append, RequestQueue.deliveredCount_append]
   omega
 
 private theorem debitSpent_split {s₀ s : GJointState P} (run : GJointRun cfg ccfg bls s₀ s)

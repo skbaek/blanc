@@ -265,24 +265,7 @@ theorem count_frame_effectH {sevm : Sevm} {pre post : Devm} {history : List B256
   have hcov5 : (M5.read (Bytes.toB256 [0x80]).toNat 32).2 = M5 := by
     rw [p80]; exact read_covered hs5 (by decide) (by decide)
   rw [hlen5, hcov5] at runC
-  obtain ⟨d1, s1, runC⟩ := ric_next runC
-  obtain ⟨_, rfl⟩ := ri_swap (n := 1)
-    (S' := [q, Bytes.toB256 [0x20], 8, Bytes.toB256 [0x40], Bytes.toB256 [0x80],
-      Sevm.selector sevm]) rfl s1
-  obtain ⟨d1, s1, runC⟩ := ric_next runC
-  obtain ⟨_, rfl⟩ := ri_swap (n := 2)
-    (S' := [Bytes.toB256 [0x40], Bytes.toB256 [0x20], 8, q, Bytes.toB256 [0x80],
-      Sevm.selector sevm]) rfl s1
-  obtain ⟨d1, s1, runC⟩ := ric_next runC; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, runC⟩ := ric_next runC
-  obtain ⟨_, rfl⟩ := ri_swap (n := 2)
-    (S' := [8, Bytes.toB256 [0x40], Bytes.toB256 [0x20], q, q, Bytes.toB256 [0x80],
-      Sevm.selector sevm]) rfl s1
-  obtain ⟨d1, s1, runC⟩ := ric_next runC
-  obtain ⟨_, rfl⟩ := ri_swap (n := 0)
-    (S' := [Bytes.toB256 [0x40], 8, Bytes.toB256 [0x20], q, q, Bytes.toB256 [0x80],
-      Sevm.selector sevm]) rfl s1
-  obtain ⟨d1, s1, runC⟩ := ric_next runC; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 6 at runC
   obtain ⟨d1, s1, runC⟩ := ric_next runC
   obtain ⟨_, rfl⟩ := ri_val (w := 256) (by decide) (ri_add s1)
   obtain ⟨d1, s1, runC⟩ := ric_next runC
@@ -480,14 +463,7 @@ theorem interface_frame_effectH {sevm : Sevm} {pre post : Devm}
     rw [h40, hr1.read, Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega), img0_fp]
   rw [hfp1, show (M1.read (Bytes.toB256 [0x40]).toNat 32).2 = M1 from by
     rw [h40]; exact read_covered hs1 (by decide) (by decide)] at runC
-  obtain ⟨d1, s1, runC⟩ := ric_next runC
-  obtain ⟨_, rfl⟩ := ri_swap (n := 0)
-    (S' := [Bytes.toB256 [0x80], Bytes.toB256 [0x80], Sevm.selector sevm]) rfl s1
-  obtain ⟨d1, s1, runC⟩ := ric_next runC; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, runC⟩ := ric_next runC
-  obtain ⟨_, rfl⟩ := ri_swap (n := 0)
-    (S' := [Bytes.toB256 [0x80], Bytes.toB256 [0x80], Bytes.toB256 [0x80], Sevm.selector sevm])
-    rfl s1
+  winv 3 at runC
   obtain ⟨d1, s1, runC⟩ := ric_next runC
   obtain ⟨_, rfl⟩ := ri_val (w := 0) (by decide) (ri_sub s1)
   obtain ⟨d1, s1, runC⟩ := ric_next runC; obtain ⟨_, rfl⟩ := ri_push s1
