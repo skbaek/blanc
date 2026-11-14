@@ -5,7 +5,7 @@ Loaded by the checker while `beacon-deposit` is live; it leaves with the family'
 
 # Its Section 5 subsections, then its parts of the shared sections, in this order.
 SECTIONS = ['5.2 Beacon deposit']
-PARTS = ['Artifacts']
+PARTS = ['Artifacts', 'Uses of the shared API']
 
 # The headline results the file exists to carry.  A row deleted from the document fails here.
 REQUIRED_HEADLINES = ['Blanc.Lift.BeaconDeposit.configuredHistory_solInv_sys',
