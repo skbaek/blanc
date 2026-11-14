@@ -44,6 +44,179 @@ private theorem Exec.logAt_filter_of_foreign
   simp only [Option.toList_some, List.filter_cons, skipped, Bool.false_eq_true,
     ↓reduceIte, List.filter_nil]
 
+private theorem Exec.committed_logs_prefix {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true) :
+    ∃ added, (Execution.committedPost out committed).logs = pre.logs ++ added := by
+  refine Exec.retained_induction (run := run) (committed := committed)
+    (P := fun _ _ pre out _ =>
+      ∀ (c : Execution.commits out = true), ∃ added, (Execution.committedPost out c).logs = pre.logs ++ added)
+    (halt := by
+      intro pc sevm pre out step c
+      cases out with
+      | error e => simp only [Execution.commits, Bool.false_eq_true] at c
+      | ok post =>
+          obtain ⟨xs, hxs, -⟩ := Evm_halt_ok_logs_any step
+          exact ⟨xs, hxs⟩)
+    (cont := by
+      intro pc sevm pre pc' post out step next ih c
+      obtain ⟨tail, htail⟩ := ih c
+      refine ⟨(Exec.logAt? pc sevm pre).toList ++ tail, ?_⟩
+      rw [htail, Exec.cont_logs_any step, List.append_assoc])
+    (doneOk := by
+      intro pc sevm pre frame resume pc' result post out step enter resumed next ih c
+      obtain ⟨xs, hxs, -⟩ := Evm_childless_logs_any step enter resumed
+      obtain ⟨tail, htail⟩ := ih c
+      refine ⟨xs ++ tail, ?_⟩
+      rw [htail, hxs, List.append_assoc])
+    (settled := by
+      intro pc sevm pre frame resume pc' childEvm raw post out step enter child resumed next settles _ ih c
+      obtain ⟨tail, htail⟩ := ih c
+      refine ⟨(Execution.committedPost raw (Frame.raw_commits_of_settlementCommits settles)).logs ++ tail, ?_⟩
+      rw [htail, Evm_resumed_committed_logs_any step resumed settles, List.append_assoc])
+    (rolled := by
+      intro pc sevm pre frame resume pc' childEvm raw post out step enter child resumed next notSettles ih c
+      obtain ⟨tail, htail⟩ := ih c
+      refine ⟨tail, ?_⟩
+      rw [htail, Evm_resumed_rollback_logs_any step resumed notSettles])
+    committed
+
+private theorem Exec.addedLogs_eq_ownLogs_filtered {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {out : Execution} (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    {keep : Log → Bool} (noTransfer : ∀ s r v, keep (transferLog s r v) = false)
+    (path : List Nat) (counter : Nat) :
+    List.filter keep (List.drop pre.logs.length (Execution.committedPost out committed).logs) =
+      List.filter keep (List.flatMap Exec.boundaryOwnLogs
+        (Exec.stateBoundariesOfCommits path counter run committed)) := by
+  obtain ⟨added, hadded⟩ := Exec.committed_logs_prefix run committed
+  have hfilt := Exec.committed_logs_at_filtered (framePath := path) (nextChild := counter)
+    run committed noTransfer
+  rw [hadded, List.filter_append] at hfilt
+  rw [hadded, List.drop_left]
+  exact List.append_cancel_left hfilt
+
+-- The two existing log laws are alternatives: no filter restriction is added to the
+-- no-state-gas interface, and no fork restriction is added to the filtered interface.
+private def LogFilterLane (keep : Log → Bool) (sevm : Sevm) : Prop :=
+  sevm.benvStat.rules.stateGas = none ∨
+    ∀ sender recipient value, keep (transferLog sender recipient value) = false
+
+private theorem Exec.addedLogs_eq_ownLogs_of_lane
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    {keep : Log → Bool} (lane : LogFilterLane keep sevm) (path : List Nat) (counter : Nat) :
+    ((Execution.committedPost out committed).logs.drop pre.logs.length).filter keep =
+      ((Exec.stateBoundariesOfCommits path counter run committed).flatMap
+        Exec.boundaryOwnLogs).filter keep := by
+  rcases lane with hsg | noTransfer
+  · exact congrArg (List.filter keep) (Exec.addedLogs_eq_ownLogs run committed hsg path counter)
+  · exact Exec.addedLogs_eq_ownLogs_filtered run committed noTransfer path counter
+
+private theorem Exec.keptAt_ownLogs_of_lane {a : Adr} {keep : Log → Bool}
+    (address : ∀ log : Log, keep log = true → log.address = a)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    (lane : LogFilterLane keep sevm) (foreign : sevm.currentTarget ≠ a) (path : List Nat) (counter : Nat) :
+    List.filter keep (List.flatMap Exec.boundaryOwnLogs
+      (Exec.stateBoundariesOfCommits path counter run committed)) =
+      List.flatMap (fun frame => List.filter keep (List.drop frame.pre.logs.length frame.post.logs))
+        (Exec.keptAt a run) := by
+  refine Exec.retained_induction (run := run) (committed := committed)
+    (P := fun _ sevm _ out run =>
+      LogFilterLane keep sevm → sevm.currentTarget ≠ a → ∀ (c : Execution.commits out = true) path counter,
+        List.filter keep (List.flatMap Exec.boundaryOwnLogs
+          (Exec.stateBoundariesOfCommits path counter run c)) =
+          List.flatMap (fun frame => List.filter keep (List.drop frame.pre.logs.length frame.post.logs))
+            (Exec.keptAt a run))
+    (halt := by
+      intro pc sevm pre out step _ _ c path counter
+      simp only [Exec.stateBoundariesOfCommits, Exec.keptAt, List.flatMap_cons, List.flatMap_nil,
+        List.append_nil, Exec.boundaryOwnLogs, Exec.stateBoundary, List.filter_nil])
+    (cont := by
+      intro pc sevm pre pc' post out step next ih lane hforeign c path counter
+      simp only [Exec.stateBoundariesOfCommits, Exec.keptAt, List.flatMap_cons, List.filter_append]
+      have hlog : List.filter keep (Exec.boundaryOwnLogs
+          (Exec.stateBoundary path (Exec.Frame.ofRun (.cont step next) c) .instruction pre.state
+            (Exec.startState next))) = [] := by
+        simpa only [Exec.boundaryOwnLogs, Exec.stateBoundary, Exec.Frame.rootDeriv,
+          Exec.Frame.ofRun, Exec.Deriv.successfulLog?] using Exec.logAt_filter_of_foreign address hforeign
+      rw [hlog, List.nil_append]
+      exact ih lane hforeign c path counter)
+    (doneOk := by
+      intro pc sevm pre frame resume pc' result post out step enter resumed next ih lane hforeign c path counter
+      simp only [Exec.stateBoundariesOfCommits, Exec.keptAt, List.flatMap_cons,
+        Exec.boundaryOwnLogs, Exec.stateBoundary, List.nil_append]
+      exact ih lane hforeign c path (counter + 1))
+    (settled := by
+      intro pc sevm pre frame resume pc' childEvm raw post out step enter child resumed next
+        settles childIH nextIH lane hforeign c path counter
+      have childLane : LogFilterLane keep childEvm.sta := by
+        rcases lane with hsg | noTransfer
+        · left
+          rw [Evm.step_spawn_child_benvStat step enter]
+          exact hsg
+        · exact Or.inr noTransfer
+      have childC := Frame.raw_commits_of_settlementCommits settles
+      have hsb : Exec.stateBoundariesOfCommits path counter
+          (.runOk step enter child resumed next) c =
+          Exec.stateBoundary path (Exec.Frame.ofRun (.runOk step enter child resumed next) c)
+              .childEntry pre.state (Exec.startState child) ::
+            (Exec.stateBoundariesOfCommits (path ++ [counter]) 0 child childC ++
+              Exec.stateBoundary path (Exec.Frame.ofRun (.runOk step enter child resumed next) c)
+                  .childSettlement (Execution.committedPost raw childC).state (Exec.startState next) ::
+                Exec.stateBoundariesOfCommits path (counter + 1) next c) := by
+        simp only [Exec.stateBoundariesOfCommits, settles, ↓reduceDIte]
+      have hka : Exec.keptAt a (.runOk step enter child resumed next) =
+          (if childEvm.sta.currentTarget = a then [Exec.Frame.ofRun child childC]
+            else Exec.keptAt a child) ++ Exec.keptAt a next := by
+        simp only [Exec.keptAt, settles, ↓reduceDIte]
+      rw [hsb, hka, List.flatMap_cons, List.flatMap_append, List.flatMap_cons, List.flatMap_append,
+        List.filter_append, List.filter_append, List.filter_append]
+      simp only [Exec.boundaryOwnLogs, Exec.stateBoundary, List.filter_nil, List.nil_append]
+      rw [nextIH lane hforeign c path (counter + 1)]
+      congr 1
+      by_cases here : childEvm.sta.currentTarget = a
+      · rw [ite_eq_left here, List.flatMap_cons, List.flatMap_nil, List.append_nil]
+        exact (Exec.addedLogs_eq_ownLogs_of_lane child childC childLane (path ++ [counter]) 0).symm
+      · rw [ite_eq_right here]
+        exact childIH childLane here childC (path ++ [counter]) 0)
+    (rolled := by
+      intro pc sevm pre frame resume pc' childEvm raw post out step enter child resumed next
+        notSettles ih lane hforeign c path counter
+      have hsb : Exec.stateBoundariesOfCommits path counter
+          (.runOk step enter child resumed next) c =
+          Exec.stateBoundary path (Exec.Frame.ofRun (.runOk step enter child resumed next) c)
+              .childRollback pre.state (Exec.startState next) ::
+            Exec.stateBoundariesOfCommits path (counter + 1) next c := by
+        simp only [Exec.stateBoundariesOfCommits, dite_eq_right notSettles]
+      have hka : Exec.keptAt a (.runOk step enter child resumed next) = Exec.keptAt a next := by
+        simp only [Exec.keptAt, dite_eq_right notSettles, List.nil_append]
+      rw [hsb, hka, List.flatMap_cons, List.filter_append]
+      simp only [Exec.boundaryOwnLogs, Exec.stateBoundary, List.filter_nil, List.nil_append]
+      exact ih lane hforeign c path (counter + 1))
+    lane foreign committed path counter
+
+private theorem Root.keptAt_logs_of_lane {a : Adr} {keep : Log → Bool}
+    (address : ∀ log : Log, keep log = true → log.address = a)
+    (root : Root) (lane : LogFilterLane keep root.evm.sta) :
+    List.flatMap (fun frame => List.filter keep (List.drop frame.pre.logs.length frame.post.logs))
+        (root.keptAt a) =
+      if committed : Frame.settlementCommits root.frame root.raw = true then
+        List.filter keep (List.drop root.evm.dyna.logs.length
+          (Execution.committedPost root.raw (Frame.raw_commits_of_settlementCommits committed)).logs)
+      else [] := by
+  by_cases committed : Frame.settlementCommits root.frame root.raw = true
+  · rw [dite_eq_left committed, Root.keptAt, dite_eq_left committed]
+    by_cases here : root.evm.sta.currentTarget = a
+    · rw [ite_eq_left here, List.flatMap_cons, List.flatMap_nil, List.append_nil]
+      rfl
+    · rw [ite_eq_right here,
+        ← Exec.keptAt_ownLogs_of_lane address root.run
+          (Frame.raw_commits_of_settlementCommits committed) lane here [] 0,
+        ← Exec.addedLogs_eq_ownLogs_of_lane root.run
+          (Frame.raw_commits_of_settlementCommits committed) lane [] 0]
+  · rw [dite_eq_right committed, Root.keptAt, dite_eq_right committed]
+    rfl
+
 /-- Filtering the original committed ledger by an address selects precisely the added
 logs of the existing kept traversal, in order. Foreign LOGs disappear by their actual
 emitter address; discarded settlements disappear in the existing ledger. -/
@@ -58,49 +231,7 @@ theorem Exec.keptAt_ownLogs
       Exec.boundaryOwnLogs).filter keep =
       (Exec.keptAt a run).flatMap
         (fun frame => (frame.post.logs.drop frame.pre.logs.length).filter keep) := by
-  induction run generalizing path counter with
-  | halt step =>
-      simp only [Exec.stateBoundariesOfCommits, List.flatMap_cons, List.flatMap_nil,
-        Exec.boundaryOwnLogs, Exec.stateBoundary, List.nil_append, List.filter_nil,
-        Exec.keptAt]
-  | cont step next ih =>
-      simp only [Exec.stateBoundariesOfCommits, List.flatMap_cons,
-        Exec.boundaryOwnLogs, Exec.stateBoundary, Exec.Frame.rootDeriv, Exec.Frame.ofRun,
-        Exec.Deriv.successfulLog?, List.filter_append, Exec.keptAt]
-      rw [Exec.logAt_filter_of_foreign address foreign, List.nil_append]
-      exact ih committed hsg foreign path counter
-  | doneErr step enter resumed =>
-      simp only [Execution.commits, Bool.false_eq_true] at committed
-  | doneOk step enter resumed next ih =>
-      simp only [Exec.stateBoundariesOfCommits, List.flatMap_cons, Exec.boundaryOwnLogs,
-        Exec.stateBoundary, List.nil_append, Exec.keptAt]
-      exact ih committed hsg foreign path (counter + 1)
-  | runErr step enter child resumed ih =>
-      simp only [Execution.commits, Bool.false_eq_true] at committed
-  | @runOk pc sevm pre callee resume pc' childEvm raw inter out step enter child resumed next
-      childIH nextIH =>
-      simp only [Exec.stateBoundariesOfCommits, Exec.keptAt]
-      by_cases settles : Frame.settlementCommits callee raw = true
-      · rw [dite_eq_left settles, dite_eq_left settles]
-        simp only [List.flatMap_cons, List.flatMap_append, Exec.boundaryOwnLogs,
-          Exec.stateBoundary, List.nil_append, List.filter_append]
-        rw [nextIH committed hsg foreign path (counter + 1)]
-        have childSg : childEvm.sta.benvStat.rules.stateGas = none := by
-          rw [Evm.step_spawn_child_benvStat step enter]
-          exact hsg
-        by_cases target : childEvm.sta.currentTarget = a
-        · rw [ite_eq_left target]
-          simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil,
-            Exec.Frame.post, Exec.Frame.ofRun]
-          rw [Exec.addedLogs_eq_ownLogs child
-            (Frame.raw_commits_of_settlementCommits settles) childSg (path ++ [counter]) 0]
-        · rw [ite_eq_right target,
-            childIH (Frame.raw_commits_of_settlementCommits settles) childSg target
-              (path ++ [counter]) 0]
-      · rw [dite_eq_right settles, dite_eq_right settles]
-        simp only [List.flatMap_cons, Exec.boundaryOwnLogs, Exec.stateBoundary,
-          List.nil_append]
-        exact nextIH committed hsg foreign path (counter + 1)
+  exact Exec.keptAt_ownLogs_of_lane address run committed (Or.inl hsg) foreign path counter
 
 /-- Root selection folds precisely that root's committed added logs. -/
 theorem Root.keptAt_logs {a : Adr} {keep : Log → Bool}
@@ -113,18 +244,7 @@ theorem Root.keptAt_logs {a : Adr} {keep : Log → Bool}
           (Frame.raw_commits_of_settlementCommits committed)).logs.drop
             root.evm.dyna.logs.length).filter keep
       else [] := by
-  unfold Root.keptAt
-  split
-  next committed =>
-    by_cases target : root.evm.sta.currentTarget = a
-    · rw [ite_eq_left target]
-      simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil,
-        Exec.Frame.post, Exec.Frame.ofRun]
-    · rw [ite_eq_right target, Exec.addedLogs_eq_ownLogs root.run
-        (Frame.raw_commits_of_settlementCommits committed) hsg [] 0]
-      exact (Exec.keptAt_ownLogs address root.run
-        (Frame.raw_commits_of_settlementCommits committed) hsg target [] 0).symm
-  next rolled => rfl
+  exact Root.keptAt_logs_of_lane address root (Or.inl hsg)
 
 private theorem Exec.keptAt_filter_descendantFrames_of_leaves
     {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
@@ -708,56 +828,6 @@ theorem putIndex_pairwise {α : Type} (xs : List α) :
       have bound := putIndex_aux_lower xs (offset + 1) item member
       omega
 
-private theorem Exec.committed_logs_prefix {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) (committed : Execution.commits out = true) :
-    ∃ added, (Execution.committedPost out committed).logs = pre.logs ++ added := by
-  refine Exec.retained_induction (run := run) (committed := committed)
-    (P := fun _ _ pre out _ =>
-      ∀ (c : Execution.commits out = true), ∃ added, (Execution.committedPost out c).logs = pre.logs ++ added)
-    (halt := by
-      intro pc sevm pre out step c
-      cases out with
-      | error e => simp only [Execution.commits, Bool.false_eq_true] at c
-      | ok post =>
-          obtain ⟨xs, hxs, -⟩ := Evm_halt_ok_logs_any step
-          exact ⟨xs, hxs⟩)
-    (cont := by
-      intro pc sevm pre pc' post out step next ih c
-      obtain ⟨tail, htail⟩ := ih c
-      refine ⟨(Exec.logAt? pc sevm pre).toList ++ tail, ?_⟩
-      rw [htail, Exec.cont_logs_any step, List.append_assoc])
-    (doneOk := by
-      intro pc sevm pre frame resume pc' result post out step enter resumed next ih c
-      obtain ⟨xs, hxs, -⟩ := Evm_childless_logs_any step enter resumed
-      obtain ⟨tail, htail⟩ := ih c
-      refine ⟨xs ++ tail, ?_⟩
-      rw [htail, hxs, List.append_assoc])
-    (settled := by
-      intro pc sevm pre frame resume pc' childEvm raw post out step enter child resumed next settles _ ih c
-      obtain ⟨tail, htail⟩ := ih c
-      refine ⟨(Execution.committedPost raw (Frame.raw_commits_of_settlementCommits settles)).logs ++ tail, ?_⟩
-      rw [htail, Evm_resumed_committed_logs_any step resumed settles, List.append_assoc])
-    (rolled := by
-      intro pc sevm pre frame resume pc' childEvm raw post out step enter child resumed next notSettles ih c
-      obtain ⟨tail, htail⟩ := ih c
-      refine ⟨tail, ?_⟩
-      rw [htail, Evm_resumed_rollback_logs_any step resumed notSettles])
-    committed
-
-private theorem Exec.addedLogs_eq_ownLogs_filtered {pc : Nat} {sevm : Sevm} {pre : Devm}
-    {out : Execution} (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
-    {keep : Log → Bool} (noTransfer : ∀ s r v, keep (transferLog s r v) = false)
-    (path : List Nat) (counter : Nat) :
-    List.filter keep (List.drop pre.logs.length (Execution.committedPost out committed).logs) =
-      List.filter keep (List.flatMap Exec.boundaryOwnLogs
-        (Exec.stateBoundariesOfCommits path counter run committed)) := by
-  obtain ⟨added, hadded⟩ := Exec.committed_logs_prefix run committed
-  have hfilt := Exec.committed_logs_at_filtered (framePath := path) (nextChild := counter)
-    run committed noTransfer
-  rw [hadded, List.filter_append] at hfilt
-  rw [hadded, List.drop_left]
-  exact List.append_cancel_left hfilt
-
 /-- All-fork counterpart of `Exec.keptAt_ownLogs`: for any filter predicate excluding EIP-7708
 transfer logs, a foreign run's filtered boundary own-logs equal its kept frames' filtered added
 logs, with no `stateGas = none` assumption. -/
@@ -771,74 +841,7 @@ theorem Exec.keptAt_ownLogs_filtered {a : Adr} {keep : Log → Bool}
       (Exec.stateBoundariesOfCommits path counter run committed)) =
       List.flatMap (fun frame => List.filter keep (List.drop frame.pre.logs.length frame.post.logs))
         (Exec.keptAt a run) := by
-  refine Exec.retained_induction (run := run) (committed := committed)
-    (P := fun _ sevm _ out run =>
-      sevm.currentTarget ≠ a → ∀ (c : Execution.commits out = true) path counter,
-        List.filter keep (List.flatMap Exec.boundaryOwnLogs
-          (Exec.stateBoundariesOfCommits path counter run c)) =
-          List.flatMap (fun frame => List.filter keep (List.drop frame.pre.logs.length frame.post.logs))
-            (Exec.keptAt a run))
-    (halt := by
-      intro pc sevm pre out step _ c path counter
-      simp only [Exec.stateBoundariesOfCommits, Exec.keptAt, List.flatMap_cons, List.flatMap_nil,
-        List.append_nil, Exec.boundaryOwnLogs, Exec.stateBoundary, List.filter_nil])
-    (cont := by
-      intro pc sevm pre pc' post out step next ih hforeign c path counter
-      simp only [Exec.stateBoundariesOfCommits, Exec.keptAt, List.flatMap_cons, List.filter_append]
-      have hlog : List.filter keep (Exec.boundaryOwnLogs
-          (Exec.stateBoundary path (Exec.Frame.ofRun (.cont step next) c) .instruction pre.state
-            (Exec.startState next))) = [] := by
-        simpa only [Exec.boundaryOwnLogs, Exec.stateBoundary, Exec.Frame.rootDeriv,
-          Exec.Frame.ofRun, Exec.Deriv.successfulLog?] using Exec.logAt_filter_of_foreign address hforeign
-      rw [hlog, List.nil_append]
-      exact ih hforeign c path counter)
-    (doneOk := by
-      intro pc sevm pre frame resume pc' result post out step enter resumed next ih hforeign c path counter
-      simp only [Exec.stateBoundariesOfCommits, Exec.keptAt, List.flatMap_cons,
-        Exec.boundaryOwnLogs, Exec.stateBoundary, List.nil_append]
-      exact ih hforeign c path (counter + 1))
-    (settled := by
-      intro pc sevm pre frame resume pc' childEvm raw post out step enter child resumed next
-        settles childIH nextIH hforeign c path counter
-      have childC := Frame.raw_commits_of_settlementCommits settles
-      have hsb : Exec.stateBoundariesOfCommits path counter
-          (.runOk step enter child resumed next) c =
-          Exec.stateBoundary path (Exec.Frame.ofRun (.runOk step enter child resumed next) c)
-              .childEntry pre.state (Exec.startState child) ::
-            (Exec.stateBoundariesOfCommits (path ++ [counter]) 0 child childC ++
-              Exec.stateBoundary path (Exec.Frame.ofRun (.runOk step enter child resumed next) c)
-                  .childSettlement (Execution.committedPost raw childC).state (Exec.startState next) ::
-                Exec.stateBoundariesOfCommits path (counter + 1) next c) := by
-        simp only [Exec.stateBoundariesOfCommits, settles, ↓reduceDIte]
-      have hka : Exec.keptAt a (.runOk step enter child resumed next) =
-          (if childEvm.sta.currentTarget = a then [Exec.Frame.ofRun child childC]
-            else Exec.keptAt a child) ++ Exec.keptAt a next := by
-        simp only [Exec.keptAt, settles, ↓reduceDIte]
-      rw [hsb, hka, List.flatMap_cons, List.flatMap_append, List.flatMap_cons, List.flatMap_append,
-        List.filter_append, List.filter_append, List.filter_append]
-      simp only [Exec.boundaryOwnLogs, Exec.stateBoundary, List.filter_nil, List.nil_append]
-      rw [nextIH hforeign c path (counter + 1)]
-      congr 1
-      by_cases here : childEvm.sta.currentTarget = a
-      · rw [ite_eq_left here, List.flatMap_cons, List.flatMap_nil, List.append_nil]
-        exact (Exec.addedLogs_eq_ownLogs_filtered child childC noTransfer (path ++ [counter]) 0).symm
-      · rw [ite_eq_right here]
-        exact childIH here childC (path ++ [counter]) 0)
-    (rolled := by
-      intro pc sevm pre frame resume pc' childEvm raw post out step enter child resumed next
-        notSettles ih hforeign c path counter
-      have hsb : Exec.stateBoundariesOfCommits path counter
-          (.runOk step enter child resumed next) c =
-          Exec.stateBoundary path (Exec.Frame.ofRun (.runOk step enter child resumed next) c)
-              .childRollback pre.state (Exec.startState next) ::
-            Exec.stateBoundariesOfCommits path (counter + 1) next c := by
-        simp only [Exec.stateBoundariesOfCommits, dite_eq_right notSettles]
-      have hka : Exec.keptAt a (.runOk step enter child resumed next) = Exec.keptAt a next := by
-        simp only [Exec.keptAt, dite_eq_right notSettles, List.nil_append]
-      rw [hsb, hka, List.flatMap_cons, List.filter_append]
-      simp only [Exec.boundaryOwnLogs, Exec.stateBoundary, List.filter_nil, List.nil_append]
-      exact ih hforeign c path (counter + 1))
-    foreign committed path counter
+  exact Exec.keptAt_ownLogs_of_lane address run committed (Or.inr noTransfer) foreign path counter
 
 /-- All-fork counterpart of `Root.keptAt_logs`. -/
 theorem Root.keptAt_logs_filtered {a : Adr} {keep : Log → Bool}
@@ -851,18 +854,7 @@ theorem Root.keptAt_logs_filtered {a : Adr} {keep : Log → Bool}
         List.filter keep (List.drop root.evm.dyna.logs.length
           (Execution.committedPost root.raw (Frame.raw_commits_of_settlementCommits committed)).logs)
       else [] := by
-  by_cases committed : Frame.settlementCommits root.frame root.raw = true
-  · rw [dite_eq_left committed, Root.keptAt, dite_eq_left committed]
-    by_cases here : root.evm.sta.currentTarget = a
-    · rw [ite_eq_left here, List.flatMap_cons, List.flatMap_nil, List.append_nil]
-      rfl
-    · rw [ite_eq_right here,
-        ← Exec.keptAt_ownLogs_filtered address noTransfer root.run
-          (Frame.raw_commits_of_settlementCommits committed) here [] 0,
-        ← Exec.addedLogs_eq_ownLogs_filtered root.run
-          (Frame.raw_commits_of_settlementCommits committed) noTransfer [] 0]
-  · rw [dite_eq_right committed, Root.keptAt, dite_eq_right committed]
-    rfl
+  exact Root.keptAt_logs_of_lane address root (Or.inr noTransfer)
 
 /-- All-fork counterpart of `_root_.Blanc.MessageRoots.keptAt_logs`: actual message logs
 filtered by a transfer-excluding target predicate match the kept frames' added logs. -/
