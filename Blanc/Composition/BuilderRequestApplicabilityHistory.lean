@@ -36,10 +36,10 @@ open private sevm base firstMsg first_facts first_data
   first_spawn first_enter first_resume firstRun first_commits first_prefix
   secondMsg second_facts second_world second_spawn second_enter
   second_resume secondRun second_commits second_prefix
-  pairCall pairMiddle pairTail pairRun pair_kept original_empty
+  pairRun pair_kept pair_kept_at original_empty
   message_code after_transfer prepared recovered debit_eq
   from Blanc.Composition.BuilderRequestApplicabilityCalls
-open private exitResetInit frame_settle_ok writer_sta getStorVal_eq_getStor getCode_eq_state
+open private exitResetInit frame_settle_ok writer_sta getStorVal_eq_getStor
   callSpawnMsg_init_state callSpawnParent_state
   from Blanc.Composition.BuilderRequestApplicabilityTail
 
@@ -113,7 +113,7 @@ private theorem ordBase_state (h : B256) : (ordBase h).state = (afterExitReset h
   rw [callSpawnParent_state, Devm.setMach_state]
 
 private theorem writerCallBare_code (h : B256) : ((afterExitReset h).setMach ⟨[], (afterExitReset h).memory, writerCallGas h, (afterExitReset h).stateGas⟩).getCode ordinaryAddr = ordinaryCode := by
-  rw [getCode_eq_state, Devm.setMach_state]
+  rw [Jaune.Devm.getCode_state, Devm.setMach_state]
   exact (afterExitReset_code_bal h).1
 
 private theorem ord_sta (h : B256) :
@@ -199,7 +199,7 @@ private def afterDFee (h : B256) : Devm := callChildPost (ord1Parent h) (dFeePos
 private def mem1 : Mem := (Mem.empty.extends [⟨0, 0⟩, ⟨0, 32⟩]).write 0 (1 : B256).toBytes
 
 private theorem ord1Bare_code (h : B256) : ((ordBase h).setMach ⟨[], .empty, ord1Gas h, (ordBase h).stateGas⟩).getCode depositAddr = Deposit.code := by
-  rw [getCode_eq_state, Devm.setMach_state, ordBase_state]
+  rw [Jaune.Devm.getCode_state, Devm.setMach_state, ordBase_state]
   exact (afterExitReset_code_bal h).2.2.1
 
 private theorem ord_p1_core (s : Sevm) (d : Devm) (g : Nat) :
@@ -430,14 +430,14 @@ private theorem afterDFee_code_bal (h : B256) :
   have df := dFee_step h
   have cb := afterExitReset_code_bal h
   refine ⟨?_,?_,?_⟩
-  · rw [getCode_eq_state, df.2.2.2.2.2.2.2.1]; exact cb.2.2.1
+  · rw [Jaune.Devm.getCode_state, df.2.2.2.2.2.2.2.1]; exact cb.2.2.1
   · change ((afterDFee h).state.get ordinaryAddr).bal = _
     rw [df.2.2.2.2.2.2.2.1]; exact cb.2.1
-  · rw [getCode_eq_state, df.2.2.2.2.2.2.2.1]; exact cb.2.2.2.1
+  · rw [Jaune.Devm.getCode_state, df.2.2.2.2.2.2.2.1]; exact cb.2.2.2.1
 
 private theorem ord2_precode (h : B256) :
     ((afterDFee h).setMach ⟨[],mem2Pre,ord2Gas h,(afterDFee h).stateGas⟩).getCode depositAddr = Deposit.code := by
-  rw [getCode_eq_state, Devm.setMach_state]
+  rw [Jaune.Devm.getCode_state, Devm.setMach_state]
   exact (afterDFee_code_bal h).1
 
 private theorem dSubMsg_state (h : B256) : (dSubMsg h).benv.state = (afterDFee h).state := by
@@ -716,7 +716,7 @@ private theorem dSub_step (h : B256) :
   have sp := dSub_xstep h
   have depStor : (dSubInit h).state.getStor depositAddr = (afterExitReset h).state.getStor depositAddr := by
     rw [dSubInit_state]
-    rw [trStor depositAddr (by rw [← getCode_eq_state, codeDep]; decide +kernel)]
+    rw [trStor depositAddr (by rw [← Jaune.Devm.getCode_state, codeDep]; decide +kernel)]
     exact congrArg (fun s => s.getStor depositAddr) df.2.2.2.2.2.2.2.1
   have exitStorInit : (dSubInit h).state.getStor exitAddr = (afterExitReset h).state.getStor exitAddr := by
     rw [dSubInit_state]
@@ -894,7 +894,7 @@ private theorem eFeeInit_state (h : B256) : (eFeeInit h).state = (paidState h).s
 
 private theorem ord3_precode (h : B256) :
     ((paidState h).setMach ⟨[],mem2,ord3Gas h,(paidState h).stateGas⟩).getCode exitAddr = Exit.code := by
-  rw [getCode_eq_state, Devm.setMach_state]
+  rw [Jaune.Devm.getCode_state, Devm.setMach_state]
   have ds := dSub_step h
   rw [← paidState_eq] at ds
   exact ds.2.2.2.2.2.2.2.1
@@ -926,9 +926,9 @@ private theorem ord3_ext (h : B256) :
 
 private theorem ord3_popped_code (h : B256) :
     (St (ord3State h) [] (ord3State h).memory (ord3State h).gasLeft).getCode exitAddr = Exit.code := by
-  rw [getCode_eq_state,St_state]
+  rw [Jaune.Devm.getCode_state,St_state]
   unfold ord3State
-  rw [St_state,← getCode_eq_state]
+  rw [St_state,← Jaune.Devm.getCode_state]
   have ds := dSub_step h
   rw [← paidState_eq] at ds
   exact ds.2.2.2.2.2.2.2.1
@@ -1180,13 +1180,13 @@ private theorem afterEFee_code_bal (h : B256) :
   have ds := dSub_step h
   rw [← paidState_eq] at ds
   refine ⟨?_,?_⟩
-  · rw [getCode_eq_state, ef.2.2.2.2.2.2.2.1]; exact ds.2.2.2.2.2.2.2.1
+  · rw [Jaune.Devm.getCode_state, ef.2.2.2.2.2.2.2.1]; exact ds.2.2.2.2.2.2.2.1
   · change ((afterEFee h).state.get ordinaryAddr).bal = _
     rw [ef.2.2.2.2.2.2.2.1]; exact ds.2.2.2.2.2.2.2.2.1
 
 private theorem ord4_precode (h : B256) :
     ((afterEFee h).setMach ⟨[],mem3,ord4Gas h,(afterEFee h).stateGas⟩).getCode exitAddr = Exit.code := by
-  rw [getCode_eq_state, Devm.setMach_state]
+  rw [Jaune.Devm.getCode_state, Devm.setMach_state]
   exact (afterEFee_code_bal h).1
 
 private theorem eSubMsg_state (h : B256) : (eSubMsg h).benv.state = (afterEFee h).state := by
@@ -1446,7 +1446,7 @@ private theorem eSub_step (h : B256) :
   obtain ⟨htr,trCode,trStor,trBal,calleeFork,calleeOrig,initLogs⟩ := eSub_transfer h
   have codeExit := (afterEFee_code_bal h).1
   have exitStor : (eSubInit h).state.getStor exitAddr = (paidState h).state.getStor exitAddr := by
-    rw [eSubInit_state,trStor exitAddr (by rw [← getCode_eq_state,codeExit]; decide +kernel)]
+    rw [eSubInit_state,trStor exitAddr (by rw [← Jaune.Devm.getCode_state,codeExit]; decide +kernel)]
     exact congrArg (fun w => w.getStor exitAddr) ef.2.2.2.2.2.2.2.1
   have s0 : (eSubInit h).getStorVal exitAddr 0 = 0 := by
     change ((eSubInit h).state.getStor exitAddr).get 0 = 0
@@ -1846,34 +1846,34 @@ private theorem writerRestRun_kept (h : B256) : ∀ a : Adr, ordinaryAddr ≠ a 
 private theorem fullTxRun_kept (h : B256) :
     Exec.keptAt depositAddr (fullTxRun h) = [dLatchFrame h, dResetFrame h, dFeeFrame h, dSubFrame h] ∧
     Exec.keptAt exitAddr (fullTxRun h) = [eLatchFrame h, eResetFrame h, eFeeFrame h, eSubFrame h] := by
-  have elS : Frame.settlementCommits (Frame.ofCall (exitLatchMsg h)) _ = true :=
-    Frame.settlementCommits_ofCall_of_raw_commits (exit_latch_commits h)
-  have erS : Frame.settlementCommits (Frame.ofCall (exitResetMsg h)) _ = true :=
-    Frame.settlementCommits_ofCall_of_raw_commits (exit_reset_commits h)
-  have ordDep := ordRun_deposit_kept h
-  have ordExit := ordRun_exit_kept h
-  have restAt := writerRestRun_kept h
-  constructor
-  · unfold fullTxRun prefixFourRun
-    erw [pair_kept true (some h)]; unfold exitSuffixRun
-    erw [ConcreteRun.Exec.keptAt_ofStepN, Exec.keptAt_settled_away _ _ _ _ _ elS (by change exitAddr ≠ depositAddr; decide),
-      exit_keptAt_nil depositAddr rfl rfl (exitLatchRun h), List.nil_append,
-      ConcreteRun.Exec.keptAt_ofStepN, Exec.keptAt_settled_away _ _ _ _ _ erS (by change exitAddr ≠ depositAddr; decide),
-      exit_keptAt_nil depositAddr rfl rfl (exitResetRun h), List.nil_append,
-      restAt depositAddr (by decide), ordDep]; rfl
-  · unfold fullTxRun prefixFourRun pairRun pairCall pairMiddle pairTail
-    have d1S : Frame.settlementCommits (Frame.ofCall (firstMsg true (some h))) _ = true :=
-      Frame.settlementCommits_ofCall_of_raw_commits (first_commits true (some h))
-    have d2S : Frame.settlementCommits (Frame.ofCall (secondMsg true (some h))) _ = true :=
-      Frame.settlementCommits_ofCall_of_raw_commits (second_commits true (some h))
-    erw [ConcreteRun.Exec.keptAt_ofStepN, Exec.keptAt_settled_away _ _ _ _ _ d1S (by change depositAddr ≠ exitAddr; decide),
-      deposit_keptAt_nil exitAddr rfl rfl (firstRun true (some h)), List.nil_append,
-      ConcreteRun.Exec.keptAt_ofStepN, Exec.keptAt_settled_away _ _ _ _ _ d2S (by change depositAddr ≠ exitAddr; decide),
-      deposit_keptAt_nil exitAddr rfl rfl (secondRun true (some h)), List.nil_append]
-    unfold exitSuffixRun
-    erw [ConcreteRun.Exec.keptAt_ofStepN, Exec.keptAt_settled_here (a := exitAddr) _ _ _ _ _ elS rfl,
-      ConcreteRun.Exec.keptAt_ofStepN, Exec.keptAt_settled_here (a := exitAddr) _ _ _ _ _ erS rfl,
-      restAt exitAddr (by decide), ordExit]; rfl
+  have restDeposit : Exec.keptAt depositAddr (writerRestRun h) = [dFeeFrame h, dSubFrame h] :=
+    (writerRestRun_kept h depositAddr (by decide)).trans (ordRun_deposit_kept h)
+  have restExit : Exec.keptAt exitAddr (writerRestRun h) = [eFeeFrame h, eSubFrame h] :=
+    (writerRestRun_kept h exitAddr (by decide)).trans (ordRun_exit_kept h)
+  have emptyExitAtDeposit :
+      (if exitAddr = depositAddr then [eLatchFrame h, eResetFrame h]
+       else Exec.keptAt depositAddr (exitLatchRun h) ++ Exec.keptAt depositAddr (exitResetRun h)) = [] :=
+    (ite_eq_right (show exitAddr ≠ depositAddr from by decide)).trans
+      (congrArg₂ List.append (exit_keptAt_nil depositAddr rfl rfl (exitLatchRun h))
+        (exit_keptAt_nil depositAddr rfl rfl (exitResetRun h)))
+  have suffixDeposit : Exec.keptAt depositAddr (exitSuffixRun h (writerRestRun h)) =
+      [dFeeFrame h, dSubFrame h] :=
+    (exitSuffix_kept_at h depositAddr (writerRestRun h)).trans
+      (congrArg₂ List.append emptyExitAtDeposit restDeposit)
+  have emptyDepositAtExit :
+      (if depositAddr = exitAddr then [dLatchFrame h, dResetFrame h]
+       else Exec.keptAt exitAddr (firstRun true (some h)) ++ Exec.keptAt exitAddr (secondRun true (some h))) = [] :=
+    (ite_eq_right (show depositAddr ≠ exitAddr from by decide)).trans
+      (congrArg₂ List.append (deposit_keptAt_nil exitAddr rfl rfl (firstRun true (some h)))
+        (deposit_keptAt_nil exitAddr rfl rfl (secondRun true (some h))))
+  have suffixExit : Exec.keptAt exitAddr (exitSuffixRun h (writerRestRun h)) =
+      [eLatchFrame h, eResetFrame h, eFeeFrame h, eSubFrame h] :=
+    (exitSuffix_kept_at h exitAddr (writerRestRun h)).trans
+      (congrArg₂ List.append (ite_eq_left rfl) restExit)
+  exact ⟨(pair_kept true (some h) (exitSuffixRun h (writerRestRun h))).trans
+      (congrArg (fun frames => dLatchFrame h :: dResetFrame h :: frames) suffixDeposit),
+    (pair_kept_at true (some h) exitAddr (exitSuffixRun h (writerRestRun h))).trans
+      (congrArg₂ List.append emptyDepositAtExit suffixExit)⟩
 
 
 

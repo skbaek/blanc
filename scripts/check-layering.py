@@ -179,7 +179,8 @@ SHARED += ["MessageExecution", "MessageExecutionInversion",
 # (solc-bytecode-v1): contract-neutral, no WETH9 name in any of them.
 SHARED += ["LadderBase", "LadderReached", "MessageDelegationGas", "LadderSem", "ContractAdmissionSem", "ExecutionAdmissionSem",
            "Lift.Basic", "Lift.Check", "Lift.CallEffects", "Lift.Transfer", "Lift.Sound", "Lift.Exact",
-           "Lift.ExactWalk", "Lift.Silent", "Lift.BalSilent"]
+           "Lift.ExactWalk", "Lift.Silent", "Lift.TreePredicate", "Lift.BalSilent"]
+SHARED += ["Lift.CertifiedOperands", "Lift.CallCodeResolution", "Lift.StaticPrecompileCall"]
 # Loops, kernel-economical checking, walk kits and solc idioms (beacon-deposit-bytecode-v1):
 # contract-neutral, no contract name in any of them.
 SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.ExactWalkOps",
@@ -210,7 +211,7 @@ SHARED += ["Lift.MemPotential", "Lift.FreePtr", "Lift.SymTransfer", "Lift.FreePt
 # nothing but core Lean, so it is contract-neutral.
 SHARED += ["Lift.BndInterval", "Lift.ReturnDataKeep"]
 # Generic list positions in a flatMap (EIP-7002 cross-layer P2); imports nothing.
-SHARED += ["ListFlatMapPosition"]
+SHARED += ["ListFlatMapPosition", "ListOccurrence"]
 # Fixed-width list chunks, a list's one marked element, and the element at a flatMap position
 # (eip8282-gloas-cross-layer-v1 R1); imports nothing.
 SHARED += ["ListChunks"]
@@ -810,7 +811,7 @@ COMPOSITION.update({
     "Composition.BuilderRequestActualFeeBounds": ("builder-request", "withdrawal-request"),
 })
 
-SHARED += ["ConcreteRunKept"]
+SHARED += ["ConcreteRunKept", "ConcreteRunSegments", "Lift.WitnessCallBoundary"]
 COMPOSITION.update({
     "Composition.BuilderRequestApplicabilityCalls": ("builder-request", "withdrawal-request"),
 })

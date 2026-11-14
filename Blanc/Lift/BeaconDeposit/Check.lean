@@ -137,12 +137,12 @@ theorem entry_11 :
   exact entry_jumps_11.1
 
 theorem entry_jumps_12 :
-    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 0 0x7bf [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_07bf_c12 = true ∧
-      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_07bf_c12 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 0 0x7bf [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_07bf_c12 = true ∧
+      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_07bf_c12 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
   kernel_rfl_and
 
 theorem entry_12 :
-    checkNode code (Cert.entries cert) 0 0x7bf [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_07bf_c12 = true := by
+    checkNode code (Cert.entries cert) 0 0x7bf [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_07bf_c12 = true := by
   rw [← checkNodeT_eq codeTries]
   exact entry_jumps_12.1
 
@@ -157,72 +157,72 @@ theorem entry_13 :
   exact entry_jumps_13.1
 
 theorem entry_jumps_14 :
-    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 0 0x8bb [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_08bb_c14 = true ∧
-      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_08bb_c14 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 0 0x8bb [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_08bb_c14 = true ∧
+      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_08bb_c14 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
   kernel_rfl_and
 
 theorem entry_14 :
-    checkNode code (Cert.entries cert) 0 0x8bb [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_08bb_c14 = true := by
+    checkNode code (Cert.entries cert) 0 0x8bb [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_08bb_c14 = true := by
   rw [← checkNodeT_eq codeTries]
   exact entry_jumps_14.1
 
 theorem entry_jumps_15 :
-    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 0 0x9b7 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_09b7_c15 = true ∧
-      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_09b7_c15 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 0 0x9b7 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_09b7_c15 = true ∧
+      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_09b7_c15 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
   kernel_rfl_and
 
 theorem entry_15 :
-    checkNode code (Cert.entries cert) 0 0x9b7 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_09b7_c15 = true := by
+    checkNode code (Cert.entries cert) 0 0x9b7 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_09b7_c15 = true := by
   rw [← checkNodeT_eq codeTries]
   exact entry_jumps_15.1
 
 theorem entry_jumps_16 :
-    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 0 0xa9d [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0a9d_c16 = true ∧
-      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_0a9d_c16 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 0 0xa9d [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0a9d_c16 = true ∧
+      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_0a9d_c16 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
   kernel_rfl_and
 
 theorem entry_16 :
-    checkNode code (Cert.entries cert) 0 0xa9d [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0a9d_c16 = true := by
+    checkNode code (Cert.entries cert) 0 0xa9d [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0a9d_c16 = true := by
   rw [← checkNodeT_eq codeTries]
   exact entry_jumps_16.1
 
 theorem entry_jumps_17 :
-    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 0 0xb9c [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0b9c_c17 = true ∧
-      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_0b9c_c17 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 0 0xb9c [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0b9c_c17 = true ∧
+      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_0b9c_c17 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
   kernel_rfl_and
 
 theorem entry_17 :
-    checkNode code (Cert.entries cert) 0 0xb9c [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0b9c_c17 = true := by
+    checkNode code (Cert.entries cert) 0 0xb9c [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0b9c_c17 = true := by
   rw [← checkNodeT_eq codeTries]
   exact entry_jumps_17.1
 
 theorem entry_jumps_18 :
-    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 0 0xc6c [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0c6c_c18 = true ∧
-      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_0c6c_c18 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 0 0xc6c [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0c6c_c18 = true ∧
+      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_0c6c_c18 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
   kernel_rfl_and
 
 theorem entry_18 :
-    checkNode code (Cert.entries cert) 0 0xc6c [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0c6c_c18 = true := by
+    checkNode code (Cert.entries cert) 0 0xc6c [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0c6c_c18 = true := by
   rw [← checkNodeT_eq codeTries]
   exact entry_jumps_18.1
 
 theorem entry_jumps_19 :
-    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 0 0xd11 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0d11_c19 = true ∧
-      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_0d11_c19 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 0 0xd11 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0d11_c19 = true ∧
+      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_0d11_c19 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
   kernel_rfl_and
 
 theorem entry_19 :
-    checkNode code (Cert.entries cert) 0 0xd11 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0d11_c19 = true := by
+    checkNode code (Cert.entries cert) 0 0xd11 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0d11_c19 = true := by
   rw [← checkNodeT_eq codeTries]
   exact entry_jumps_19.1
 
 theorem entry_jumps_20 :
-    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 0 0xdf7 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0df7_c20 = true ∧
-      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_0df7_c20 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 0 0xdf7 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0df7_c20 = true ∧
+      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_0df7_c20 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
   kernel_rfl_and
 
 theorem entry_20 :
-    checkNode code (Cert.entries cert) 0 0xdf7 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0df7_c20 = true := by
+    checkNode code (Cert.entries cert) 0 0xdf7 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0df7_c20 = true := by
   rw [← checkNodeT_eq codeTries]
   exact entry_jumps_20.1
 
@@ -237,12 +237,12 @@ theorem entry_21 :
   exact entry_jumps_21.1
 
 theorem entry_jumps_22 :
-    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 0 0xfe8 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0fe8_c22 = true ∧
-      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_0fe8_c22 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 0 0xfe8 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0fe8_c22 = true ∧
+      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_0fe8_c22 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
   kernel_rfl_and
 
 theorem entry_22 :
-    checkNode code (Cert.entries cert) 0 0xfe8 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0fe8_c22 = true := by
+    checkNode code (Cert.entries cert) 0 0xfe8 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0fe8_c22 = true := by
   rw [← checkNodeT_eq codeTries]
   exact entry_jumps_22.1
 
@@ -287,42 +287,42 @@ theorem entry_26 :
   exact entry_jumps_26.1
 
 theorem entry_jumps_27 :
-    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 1 0x112e [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_112e_c27 = true ∧
-      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_112e_c27 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 1 0x112e [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .ret] t_112e_c27 = true ∧
+      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_112e_c27 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .ret] = true := by
   kernel_rfl_and
 
 theorem entry_27 :
-    checkNode code (Cert.entries cert) 1 0x112e [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_112e_c27 = true := by
+    checkNode code (Cert.entries cert) 1 0x112e [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .ret] t_112e_c27 = true := by
   rw [← checkNodeT_eq codeTries]
   exact entry_jumps_27.1
 
 theorem entry_jumps_28 :
-    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 1 0x122e [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_122e_c28 = true ∧
-      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_122e_c28 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 1 0x122e [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .ret] t_122e_c28 = true ∧
+      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_122e_c28 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .ret] = true := by
   kernel_rfl_and
 
 theorem entry_28 :
-    checkNode code (Cert.entries cert) 1 0x122e [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_122e_c28 = true := by
+    checkNode code (Cert.entries cert) 1 0x122e [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .ret] t_122e_c28 = true := by
   rw [← checkNodeT_eq codeTries]
   exact entry_jumps_28.1
 
 theorem entry_jumps_29 :
-    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 1 0x131d [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_131d_c29 = true ∧
-      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_131d_c29 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 1 0x131d [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .ret] t_131d_c29 = true ∧
+      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_131d_c29 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .ret] = true := by
   kernel_rfl_and
 
 theorem entry_29 :
-    checkNode code (Cert.entries cert) 1 0x131d [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_131d_c29 = true := by
+    checkNode code (Cert.entries cert) 1 0x131d [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .ret] t_131d_c29 = true := by
   rw [← checkNodeT_eq codeTries]
   exact entry_jumps_29.1
 
 theorem entry_jumps_30 :
-    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 1 0x1402 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_1402_c30 = true ∧
-      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_1402_c30 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    checkNodeT code 13 codeTries.bytes (Cert.entries cert) 1 0x1402 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .ret] t_1402_c30 = true ∧
+      jumpsOkNodeT code 13 codeTries (Cert.entries cert) t_1402_c30 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .ret] = true := by
   kernel_rfl_and
 
 theorem entry_30 :
-    checkNode code (Cert.entries cert) 1 0x1402 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] t_1402_c30 = true := by
+    checkNode code (Cert.entries cert) 1 0x1402 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .ret] t_1402_c30 = true := by
   rw [← checkNodeT_eq codeTries]
   exact entry_jumps_30.1
 

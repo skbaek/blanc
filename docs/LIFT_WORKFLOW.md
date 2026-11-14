@@ -82,6 +82,44 @@ All are off by default, so every row that omits them regenerates byte-identicall
   with the reference pair) moves the literal into a generated data module. A single byte literal is emitted up to 6358 bytes
   (`CODE_LITERAL_MAX`, the largest that elaborates); larger runtimes become `++`-joined list chunks of 4096 bytes.
 
+### Selective constant retention in regular certificates
+
+The direct CLI flag --retain-constant UINT256 is repeatable. Decimal 7 and
+hexadecimal 0x7 request the same value; duplicate requests are coalesced.
+Add, for example, --retain-constant 7 to the direct lift-mode command above.
+Values must be integers in [0, 2^256); negative, too-wide and malformed words
+are rejected.
+
+The corresponding registry schema is a JSON integer list under options:
+
+~~~json
+"options": {
+  "retain_constants": [7]
+}
+~~~
+
+Use the row's options.retain_constants in registry mode; a global
+--retain-constant supplied with --registry is rejected. JSON null, a scalar,
+strings, booleans, negative integers and integers at least 2^256 are rejected
+before registered outputs can be replaced.
+
+Omitting the key or setting it to [] preserves the existing default output
+route. A nonempty policy is supported only in regular mode (--memret off);
+it is rejected with --memret callnext or inline. An empty policy leaves
+existing memory-mode behavior unchanged.
+
+The regular producer retains requested known values at entry generalization
+and unanimous joins alongside its existing control constants. It does not
+make unknown callee arguments known or add another certificate/refinement
+layer. The generated certificate still needs ordinary Cert.check and jump
+checks in Lean. An opt-in report records producer_options.retain_constants and
+pre_incoming_frames for inspection; the Python report is not proof evidence.
+
+The registry and symcore annotation loader forward the same per-row policy.
+Use the registered writer to regenerate outputs; do not edit the resulting
+certificate by hand. This option changes neither input hashes nor the trust
+boundary and carries no general performance guarantee.
+
 ### 4. The `check` key: how `cert_check` is assembled
 
 `check.path`/`check.header` name the generated `Check.lean`. Options of the generated checker:
@@ -157,3 +195,9 @@ or a `Code.lean`; change the row or the producer and regenerate.
 
 `python3 scripts/lift/test-code-reference.py` runs the source-emission and malformed-option controls for `code_import`/
 `code_ref` (no Lean). The registry run is the real regression test for every other option.
+
+python3 -B scripts/lift/test-retain-constants.py exercises real regular-mode
+output, omitted/empty default identity, numeric/schema and mode refusals,
+registry forwarding, and annotation alignment. It invokes no Lean and asserts
+no contract-specific external-call property. Full registered regeneration
+remains the population-wide default-output check.

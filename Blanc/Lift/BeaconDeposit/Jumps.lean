@@ -70,7 +70,7 @@ theorem jumps_11 :
   exact entry_jumps_11.2
 
 theorem jumps_12 :
-    jumpsOkNode code (Cert.entries cert) t_07bf_c12 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    jumpsOkNode code (Cert.entries cert) t_07bf_c12 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
   rw [← jumpsOkNodeT_eq codeTries]
   exact entry_jumps_12.2
 
@@ -80,37 +80,37 @@ theorem jumps_13 :
   exact entry_jumps_13.2
 
 theorem jumps_14 :
-    jumpsOkNode code (Cert.entries cert) t_08bb_c14 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    jumpsOkNode code (Cert.entries cert) t_08bb_c14 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
   rw [← jumpsOkNodeT_eq codeTries]
   exact entry_jumps_14.2
 
 theorem jumps_15 :
-    jumpsOkNode code (Cert.entries cert) t_09b7_c15 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    jumpsOkNode code (Cert.entries cert) t_09b7_c15 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
   rw [← jumpsOkNodeT_eq codeTries]
   exact entry_jumps_15.2
 
 theorem jumps_16 :
-    jumpsOkNode code (Cert.entries cert) t_0a9d_c16 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    jumpsOkNode code (Cert.entries cert) t_0a9d_c16 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
   rw [← jumpsOkNodeT_eq codeTries]
   exact entry_jumps_16.2
 
 theorem jumps_17 :
-    jumpsOkNode code (Cert.entries cert) t_0b9c_c17 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    jumpsOkNode code (Cert.entries cert) t_0b9c_c17 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
   rw [← jumpsOkNodeT_eq codeTries]
   exact entry_jumps_17.2
 
 theorem jumps_18 :
-    jumpsOkNode code (Cert.entries cert) t_0c6c_c18 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    jumpsOkNode code (Cert.entries cert) t_0c6c_c18 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
   rw [← jumpsOkNodeT_eq codeTries]
   exact entry_jumps_18.2
 
 theorem jumps_19 :
-    jumpsOkNode code (Cert.entries cert) t_0d11_c19 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    jumpsOkNode code (Cert.entries cert) t_0d11_c19 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
   rw [← jumpsOkNodeT_eq codeTries]
   exact entry_jumps_19.2
 
 theorem jumps_20 :
-    jumpsOkNode code (Cert.entries cert) t_0df7_c20 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    jumpsOkNode code (Cert.entries cert) t_0df7_c20 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
   rw [← jumpsOkNodeT_eq codeTries]
   exact entry_jumps_20.2
 
@@ -120,7 +120,7 @@ theorem jumps_21 :
   exact entry_jumps_21.2
 
 theorem jumps_22 :
-    jumpsOkNode code (Cert.entries cert) t_0fe8_c22 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    jumpsOkNode code (Cert.entries cert) t_0fe8_c22 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
   rw [← jumpsOkNodeT_eq codeTries]
   exact entry_jumps_22.2
 
@@ -145,22 +145,22 @@ theorem jumps_26 :
   exact entry_jumps_26.2
 
 theorem jumps_27 :
-    jumpsOkNode code (Cert.entries cert) t_112e_c27 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    jumpsOkNode code (Cert.entries cert) t_112e_c27 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .ret] = true := by
   rw [← jumpsOkNodeT_eq codeTries]
   exact entry_jumps_27.2
 
 theorem jumps_28 :
-    jumpsOkNode code (Cert.entries cert) t_122e_c28 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    jumpsOkNode code (Cert.entries cert) t_122e_c28 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .unk, .ret] = true := by
   rw [← jumpsOkNodeT_eq codeTries]
   exact entry_jumps_28.2
 
 theorem jumps_29 :
-    jumpsOkNode code (Cert.entries cert) t_131d_c29 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    jumpsOkNode code (Cert.entries cert) t_131d_c29 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .ret] = true := by
   rw [← jumpsOkNodeT_eq codeTries]
   exact entry_jumps_29.2
 
 theorem jumps_30 :
-    jumpsOkNode code (Cert.entries cert) t_1402_c30 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .ret] = true := by
+    jumpsOkNode code (Cert.entries cert) t_1402_c30 [.unk, .unk, .unk, .unk, .unk, .unk, .unk, .unk, .const 2, .unk, .unk, .unk, .ret] = true := by
   rw [← jumpsOkNodeT_eq codeTries]
   exact entry_jumps_30.2
 

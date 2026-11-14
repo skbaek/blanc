@@ -3,6 +3,9 @@ import Blanc.Lift.BeaconDeposit.HistDeployment
 import Blanc.ExecutionInOwnCode
 import Blanc.ExecutionAccountingPositionalHistory
 import Blanc.Lift.Quiet
+import Blanc.Lift.CertifiedOperands
+import Blanc.Lift.CursorCuts
+import Blanc.Lift.StaticPrecompileCall
 
 namespace Blanc.Lift.BeaconDeposit
 
@@ -63,148 +66,28 @@ private theorem classification_frame_facts {B : BlockChain} (d : BeaconDeploymen
   exact ⟨fun _ => ready.2.1, ready.2.2, isPrecomp_two_hist own.2.2.1,
     own.2.2.2.1, own.2.2.1.bal_none⟩
 
-/-! ## Refined certificate pinning address `2` at every `STATICCALL` -/
+/-! ## Checked certificate pinning address `2` at every `STATICCALL` -/
 
-private def staticTwoNode (es : List Entry) : List AVal → SFunc → Bool
-  | a, .next (.exec .staticcall) f =>
-    (match a with
-     | _ :: .const c :: _ :: _ :: _ :: _ :: _ => c == 2
-     | _ => false) &&
-    match absNinst (.exec .staticcall) a with
-    | some a' => staticTwoNode es a' f
-    | none => false
-  | a, .next n f =>
-    match absNinst n a with
-    | some a' => staticTwoNode es a' f
-    | none => true
-  | a, .dest f => staticTwoNode es a f
-  | _ :: _ :: a', .branchTo f _ => staticTwoNode es a' f
-  | _ :: _ :: a', .branch f g => staticTwoNode es a' f && staticTwoNode es a' g
-  | _ :: a', .callNext k f =>
-    match es[k]? with
-    | some e => staticTwoNode es (List.replicate e.rets .unk ++ a'.drop e.frame.length) f
-    | none => true
-  | a, .pcAt p f => staticTwoNode es (.const (Nat.toB256 p) :: a) f
+private def observeStaticTwo : Xinst → List AVal → Bool
+  | .staticcall, _ :: .const c :: _ :: _ :: _ :: _ :: _ => c == 2
+  | .staticcall, _ => false
   | _, _ => true
 
-private def cert2Slots : Nat → List Nat
-  | 12 | 16 | 20 | 22 | 27 | 28 | 30 => [8]
-  | 14 | 17 => [8, 9]
-  | 15 | 19 => [8, 10]
-  | 18 => [10, 12]
-  | 29 => [10]
-  | _ => []
-
-private def cert2 : Cert :=
-  cert.zipIdx.map fun ((e, f), i) =>
-    ({ e with frame := e.frame.zipIdx.map fun (v, j) =>
-        if j ∈ cert2Slots i then .const 2 else v }, f)
-
-private theorem cert2_fast_left :
-    ((cert2.take 18).all fun (e, f) =>
-      checkNodeT code 13 codeTries.bytes cert2.entries e.rets e.pc e.frame f &&
-      staticTwoNode cert2.entries e.frame f) = true := by
+private theorem cert_operands_left :
+    ((cert.take 18).all fun (e, f) =>
+      f.execOperandsSatisfy cert.entries observeStaticTwo e.frame) = true := by
   decide +kernel
 
-private theorem cert2_fast_right :
-    ((cert2.drop 18).all fun (e, f) =>
-      checkNodeT code 13 codeTries.bytes cert2.entries e.rets e.pc e.frame f &&
-      staticTwoNode cert2.entries e.frame f) = true := by
+private theorem cert_operands_right :
+    ((cert.drop 18).all fun (e, f) =>
+      f.execOperandsSatisfy cert.entries observeStaticTwo e.frame) = true := by
   decide +kernel
 
-private theorem cert2_all_fast :
-    (cert2.all fun (e, f) =>
-      checkNodeT code 13 codeTries.bytes cert2.entries e.rets e.pc e.frame f &&
-      staticTwoNode cert2.entries e.frame f) = true := by
-  rw [← List.take_append_drop 18 cert2, List.all_append, Bool.and_eq_true]
-  exact ⟨cert2_fast_left, cert2_fast_right⟩
+private theorem cert_operands : cert.execOperandsSatisfy observeStaticTwo = true := by
+  unfold Cert.execOperandsSatisfy
+  rw [← List.take_append_drop 18 cert, List.all_append, Bool.and_eq_true]
+  exact ⟨cert_operands_left, cert_operands_right⟩
 
-private theorem cert2_check : Cert.check code cert2 = true := by
-  unfold Cert.check
-  rw [Bool.and_eq_true]
-  refine ⟨by decide +kernel, List.all_eq_true.mpr ?_⟩
-  intro ⟨e, f⟩ hp
-  have hfast := (Bool.and_eq_true _ _).mp (List.all_eq_true.mp cert2_all_fast (e, f) hp)
-  dsimp only
-  rw [← checkNodeT_eq codeTries]
-  exact hfast.1
-
-private theorem cert2_entry_staticTwo {k : Nat} {e : Entry} {g : SFunc}
-    (he : cert2.entries[k]? = some e) (hg : cert2.prog[k]? = some g) :
-    staticTwoNode cert2.entries e.frame g = true := by
-  have hk : k < cert2.length := by
-    have hlt := (List.getElem?_eq_some_iff.mp he).1
-    simpa only [Cert.entries, List.length_map] using hlt
-  have he' : cert2.entries[k]? = some (cert2[k]).1 := by
-    simp only [Cert.entries, List.getElem?_map, List.getElem?_eq_getElem hk, Option.map_some]
-  have hg' : cert2.prog[k]? = some (cert2[k]).2 := by
-    simp only [Cert.prog, List.getElem?_map, List.getElem?_eq_getElem hk, Option.map_some]
-  have ee := Option.some.inj (he.symm.trans he')
-  have eg := Option.some.inj (hg.symm.trans hg')
-  have hmem : cert2[k] ∈ cert2 := List.getElem_mem hk
-  have hfast := (Bool.and_eq_true _ _).mp (List.all_eq_true.mp cert2_all_fast cert2[k] hmem)
-  rw [ee, eg]
-  exact hfast.2
-
-private def CursorStaticTwo (κ : Cursor) : Prop :=
-  staticTwoNode cert2.entries κ.a κ.f = true ∧
-    ∀ k ∈ κ.K, staticTwoNode cert2.entries (List.replicate k.rets .unk ++ k.a) k.f = true
-
-private theorem CursorStaticTwo.step {before after : Cursor}
-    (step : SStep cert2 before after) (holds : CursorStaticTwo before) :
-    CursorStaticTwo after := by
-  obtain ⟨hf, hK⟩ := holds
-  cases step with
-  | @next n f pc a a' m K hn =>
-      refine ⟨?_, hK⟩
-      cases n with
-      | exec x =>
-          cases x with
-          | staticcall =>
-              simp only [staticTwoNode, hn, Bool.and_eq_true] at hf
-              exact hf.2
-          | _ =>
-              simp only [staticTwoNode, hn] at hf
-              exact hf
-      | _ =>
-          simp only [staticTwoNode, hn] at hf
-          exact hf
-  | dest | pcAt =>
-      exact ⟨hf, hK⟩
-  | toZero =>
-      simp only [staticTwoNode] at hf
-      exact ⟨hf, hK⟩
-  | zero =>
-      simp only [staticTwoNode, Bool.and_eq_true] at hf
-      exact ⟨hf.1, hK⟩
-  | succ =>
-      simp only [staticTwoNode, Bool.and_eq_true] at hf
-      exact ⟨hf.2, hK⟩
-  | toSucc he hg | jump he hg =>
-      exact ⟨cert2_entry_staticTwo he hg, hK⟩
-  | call κc he hg hcf hca _ hcr =>
-      refine ⟨cert2_entry_staticTwo he hg, fun k hk => ?_⟩
-      rcases List.mem_cons.mp hk with rfl | hk
-      · rw [hcr, hca, hcf]
-        simp only [staticTwoNode, he] at hf
-        exact hf
-      · exact hK k hk
-  | ret =>
-      exact ⟨hK _ List.mem_cons_self, fun k hk => hK k (List.mem_cons_of_mem _ hk)⟩
-
-private theorem CursorStaticTwo.of_reach {κ : Cursor}
-    (reach : Relation.ReflTransGen (SStep cert2) (Cursor.start cert2) κ) :
-    CursorStaticTwo κ := by
-  induction reach with
-  | refl =>
-      refine ⟨?_, fun _ h => ?_⟩
-      · have hmem : cert2[0]'(by decide) ∈ cert2 := List.getElem_mem (by decide)
-        exact ((Bool.and_eq_true _ _).mp
-          (List.all_eq_true.mp cert2_all_fast (cert2[0]'(by decide)) hmem)).2
-      · have hstart : (Cursor.start cert2).K = [] := rfl
-        rw [hstart] at h
-        cases h
-  | tail _ step ih => exact ih.step step
 
 private theorem parentPrefix_staticcall_target_two_any {root node : Exec.Deriv}
     (hpc : root.pc = 0) (image : root.sevm.code = code)
@@ -213,30 +96,27 @@ private theorem parentPrefix_staticcall_target_two_any {root node : Exec.Deriv}
     (hat : Ninst.At node.sevm.code node.pc (.exec .staticcall)) :
     ∃ g ii size oi outSize rest,
       node.devm.stack = g :: (2 : B256) :: ii :: size :: oi :: outSize :: rest := by
-  obtain ⟨κ, reach, ok⟩ := cursor_of_parentPrefix_noStateGas cert2_check hpc image hsg chain
-  have holds := (CursorStaticTwo.of_reach reach).1
-  obtain ⟨gTree, htree, -⟩ := ok.tree_of_exec hat
-  rw [htree] at holds
-  simp only [staticTwoNode, Bool.and_eq_true] at holds
-  have hhead := holds.1
-  rcases ha : κ.a with _ | ⟨v0, _ | ⟨v1, _ | ⟨v2, _ | ⟨v3, _ | ⟨v4, _ | ⟨v5, arest⟩⟩⟩⟩⟩⟩ <;>
-    rw [ha] at hhead
-  any_goals simp only [Bool.false_eq_true] at hhead
-  cases v1 with
-  | unk => simp only [Bool.false_eq_true] at hhead
-  | ret => simp only [Bool.false_eq_true] at hhead
-  | const c =>
-      have hc : c = 2 := beq_iff_eq.mp hhead
-      subst hc
-      obtain ⟨S, rest, hstack, hfm, -⟩ := ok.stack
-      rw [ha] at hfm
-      rcases hfm with _ | @⟨_, b0, _, _, _, _ | @⟨_, b1, _, _, hm1,
-        _ | @⟨_, b2, _, _, _, _ | @⟨_, b3, _, _, _, _ | @⟨_, b4, _, _, _,
-        _ | @⟨_, b5, _, l2, _, _⟩⟩⟩⟩⟩⟩
-      change b1 = 2 at hm1
-      subst hm1
-      refine ⟨b0, b2, b3, b4, b5, l2 ++ rest, ?_⟩
-      simpa only [List.cons_append] using hstack
+  obtain ⟨κ, reach, ok⟩ := cursor_of_parentPrefix_noStateGas cert_check hpc image hsg chain
+  have holds := Cursor.execOperandsSatisfy_of_reachable cert_check cert_operands reach
+  have observed := ok.execOperandsSatisfy holds hat
+  have known : κ.a[1]? = some (.const (2 : B256)) := by
+    rcases ha : κ.a with _ | ⟨v0, _ | ⟨v1, _ | ⟨v2, _ | ⟨v3, _ | ⟨v4, _ | ⟨v5, arest⟩⟩⟩⟩⟩⟩ <;>
+      rw [ha] at observed
+    any_goals simp only [observeStaticTwo, Bool.false_eq_true] at observed
+    cases v1 with
+    | unk => simp only [Bool.false_eq_true] at observed
+    | ret => simp only [Bool.false_eq_true] at observed
+    | const c =>
+        have same : c = 2 := beq_iff_eq.mp observed
+        subst c
+        simp only [List.getElem?_cons_succ, List.getElem?_cons_zero]
+  have actual := ok.stack_getElem?_const known
+  obtain ⟨tail, tree, -⟩ := ok.tree_of_exec hat
+  obtain ⟨g, target, ii, size, oi, outSize, rest, stack⟩ := cursor_staticcall_operands ok tree
+  rw [stack] at actual
+  have same : target = 2 := Option.some.inj actual
+  subst target
+  exact ⟨g, ii, size, oi, outSize, rest, stack⟩
 
 /-- Every same-frame `STATICCALL` of a historical Beacon frame targets precompile `2`. -/
 theorem parentPrefix_staticcall_target_twoH
@@ -262,29 +142,11 @@ private theorem staticcall_none_getCode_two {pc : Nat} {sevm : Sevm} {pre post :
       getDelegatedCodeAddress (pre.getCode 2) = none)
     (hrun : Ninst.StepRun pc sevm pre (.exec .staticcall) .none (.ok post)) :
     post.getCode 2 = pre.getCode 2 := by
-  have hp : (g :: (2 : B256) :: ii :: size :: oi :: outSize :: rest) <<+ pre.stack := by
-    rw [hstack]
-    simpa only [List.append_nil] using
-      (pref_append (g :: (2 : B256) :: ii :: size :: oi :: outSize :: rest) [])
-  have hfill : Xlot.Filled .none := trivial
-  have toAdrTwo : ((2 : B256).toAdr) = (2 : Adr) := by decide
-  rcases of_step_staticcall_val_with_depth_frame_causeH hp hfill hrun hsg with
-    ⟨_, hworld, _⟩ |
-    ⟨parent, child, dp, na, code0, avail, _, _, hst, _, _, _, hdel, _, hpm, _, _, hsf, _⟩
-  · exact (hworld.getCode 2).symm
-  · rw [toAdrTwo] at hdel hpm
-    have hna : na = 2 ∧ dp = false := by
-      unfold CallCodeH at hdel
-      split at hdel
-      · rename_i hd
-        rcases hdel with ⟨_, hna, _, hdp⟩ | ⟨d, hsome, _⟩
-        · exact ⟨hna, hdp⟩
-        · rw [hnodeleg hd] at hsome
-          cases hsome
-      · exact ⟨hdel.1, hdel.2.2⟩
-    rcases hna with ⟨rfl, rfl⟩
-    exact (getCode_eq_of_state_eq hsf 2).trans
-      ((code_of_processMessage_staticPrecomp hpre hpm 2).trans (getCode_eq_of_state_eq hst 2))
+  have target : (2 : B256).toAdr = (2 : Adr) := by decide
+  apply staticcall_none_getCode_of_precompile hstack hsg
+  · simpa only [target] using hpre
+  · simpa only [target] using hnodeleg
+  · exact hrun
 
 private theorem step_cont_getCode_two {root : Exec.Deriv} {pc pc' : Nat}
     {sevm : Sevm} {pre post : Devm} {next : Exec pc' sevm post root.exn}
@@ -363,34 +225,6 @@ private theorem step_cont_getCode_two {root : Exec.Deriv} {pc pc' : Nat}
                 hnodeleg (by rw [← hsevm]; exact hd)
               exact staticcall_none_getCode_two hstack hsg' hpre' hnd' nrun
 
-private theorem genericCall_staticPrecomp_not_run
-    {sevm : Sevm} {devm : Devm} {gas ii isz oi osz : Nat} {code0 : ByteArray}
-    {frame : Jaune.Frame} {rsm : Resume} {cevm : Evm}
-    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hspawn : genericCall.step sevm devm gas 0 sevm.currentTarget 2 2 true true
-      ii isz oi osz code0 false = .spawn frame rsm)
-    (henter : frame.enter = .run cevm) : False := by
-  unfold genericCall.step at hspawn
-  split at hspawn
-  · simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at hspawn
-    repeat' split at hspawn
-    all_goals simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-  · simp only [XStep.spawn.injEq] at hspawn
-    obtain ⟨rfl, -⟩ := hspawn
-    let cmsg := callMsg sevm (devm.withReturnData []) gas 0 sevm.currentTarget 2 2 true true
-      (Array.sliceD devm.memory.data ii isz 0) code0 false
-    change (Frame.ofCall cmsg).enter = .run cevm at henter
-    unfold Frame.enter at henter
-    dsimp only [Frame.ofCall] at henter
-    rcases hbt : cmsg.benvAfterTransfer with e | benv <;> rw [hbt] at henter
-    · cases henter
-    · have hval : cmsg.value = 0 := rfl
-      have hbenv := benvAfterTransfer_eq_of_not_transfer (fun h => h.2 hval) hbt
-      subst hbenv
-      unfold executeCode.enter at henter
-      simp only [cmsg, Msg.withBenv, callMsg, Bool.not_false, Bool.true_and, hpre, ↓reduceIte] at henter
-      cases henter
-
 private theorem spawn_staticcall_not_run {sevm : Sevm} {pre : Devm} {frame : Jaune.Frame}
     {rsm : Resume} {cevm : Evm} {g ii size oi outSize : B256} {rest : Stack}
     (hstack : pre.stack = g :: (2 : B256) :: ii :: size :: oi :: outSize :: rest)
@@ -400,82 +234,12 @@ private theorem spawn_staticcall_not_run {sevm : Sevm} {pre : Devm} {frame : Jau
       getDelegatedCodeAddress (pre.getCode 2) = none)
     (hspawn : Xinst.step sevm pre .staticcall = .spawn frame rsm)
     (henter : frame.enter = .run cevm) : False := by
-  have hp : (g :: (2 : B256) :: ii :: size :: oi :: outSize :: rest) <<+ pre.stack := by
-    rw [hstack]
-    simpa only [List.append_nil] using
-      (pref_append (g :: (2 : B256) :: ii :: size :: oi :: outSize :: rest) [])
-  simp only [Xinst.step, Bind.bind, Except.bind] at hspawn
-  rw [hsg] at hspawn
-  rcases eq1 : Devm.pop pre with _ | ⟨gas1, devm1⟩ <;> simp only [eq1] at hspawn
-  · simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-  have f1 := Devm.pop_of_pop eq1
-  have e1 := f1.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e1
-  rw [e1] at hp
-  have hv1 : g = gas1 := pref_head_unique hp (pref_append [gas1] devm1.stack)
-  subst hv1
-  replace hp := cons_pref_cons_inv hp
-  rcases eq2 : Devm.popToAdr devm1 with _ | ⟨target, devm2⟩ <;> simp only [eq2] at hspawn
-  · simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-  rcases Devm.pop_of_popToAdr eq2 with ⟨x2, hx2, h_pop2⟩
-  have f2 := Devm.pop_of_pop h_pop2
-  have e2 := f2.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e2
-  rw [e2] at hp
-  have hv2 : (2 : B256) = x2 := pref_head_unique hp (pref_append [x2] devm2.stack)
-  subst hv2
-  have ht2 : target = (2 : Adr) := by
-    rw [← hx2]
-    decide
-  subst ht2
-  rcases eq3 : Devm.popToNat devm2 with _ | ⟨inputIndex, devm3⟩ <;> simp only [eq3] at hspawn
-  · simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-  have f3 := (Devm.pop_of_popToNat_val eq3).choose_spec.1
-  rcases eq4 : Devm.popToNat devm3 with _ | ⟨inputSize, devm4⟩ <;> simp only [eq4] at hspawn
-  · simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-  have f4 := (Devm.pop_of_popToNat_val eq4).choose_spec.1
-  rcases eq5 : Devm.popToNat devm4 with _ | ⟨outputIndex, devm5⟩ <;> simp only [eq5] at hspawn
-  · simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-  have f5 := (Devm.pop_of_popToNat_val eq5).choose_spec.1
-  rcases eq6 : Devm.popToNat devm5 with _ | ⟨outputSize, devm6⟩ <;> simp only [eq6] at hspawn
-  · simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-  have f6 := (Devm.pop_of_popToNat_val eq6).choose_spec.1
-  have h_st6 : pre.state = devm6.state :=
-    (f1.state).trans ((f2.state).trans ((f3.state).trans
-      ((f4.state).trans ((f5.state).trans f6.state))))
-  have hdel_solve : ∀ {D D' : Devm} {dp : Bool} {na : Adr} {code0 : ByteArray} {dagc : Nat},
-      sevm.benvStat.rules.accessDelegation D 2 = (dp, na, code0, dagc, D') →
-      D.state = devm6.state →
-      na = 2 ∧ dp = false := by
-    intro D D' dp na code0 dagc hp10 hD
-    have hdel := callCodeH_of_accessDelegation (hD.trans h_st6.symm) hp10
-    unfold CallCodeH at hdel
-    split at hdel
-    · rename_i hd
-      rcases hdel with ⟨_, hna, _, hdp⟩ | ⟨d, hsome, _⟩
-      · exact ⟨hna, hdp⟩
-      · rw [hnodeleg hd] at hsome
-        cases hsome
-    · exact ⟨hdel.1, hdel.2.2⟩
-  rcases hac : sevm.benvStat.rules.access with gflat | _
-  swap
-  · simp only [hac] at hspawn
-    rcases hp10 : sevm.benvStat.rules.accessDelegation (addAccessedAddress devm6 2) 2 with
-      ⟨dp, na, code0, dagc, devm8⟩
-    simp only [hp10] at hspawn
-    obtain ⟨rfl, rfl⟩ := hdel_solve hp10 rfl
-    split at hspawn
-    · simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-    simp only [Pure.pure, Except.pure, XStep.ofExcept] at hspawn
-    exact genericCall_staticPrecomp_not_run hpre hspawn henter
-  · simp only [hac] at hspawn
-    rcases hp10 : sevm.benvStat.rules.accessDelegation devm6 2 with ⟨dp, na, code0, dagc, devm8⟩
-    simp only [hp10] at hspawn
-    obtain ⟨rfl, rfl⟩ := hdel_solve hp10 rfl
-    split at hspawn
-    · simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-    simp only [Pure.pure, Except.pure, XStep.ofExcept] at hspawn
-    exact genericCall_staticPrecomp_not_run hpre hspawn henter
+  have target : (2 : B256).toAdr = (2 : Adr) := by decide
+  apply staticcall_spawn_not_run_of_precompile hstack hsg
+  · simpa only [target] using hpre
+  · simpa only [target] using hnodeleg
+  · exact hspawn
+  · exact henter
 
 /-- Every historical Beacon frame executes all external calls synchronously at precompile `2`,
 so its retained descendant frame list is empty. -/

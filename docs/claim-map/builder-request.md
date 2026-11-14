@@ -135,3 +135,12 @@ The rows range over a **valid Gloas joint chain**, `Blanc.Lift.BuilderRequest.Va
 
 The EIP-8282 builder contracts
   are the worked consumers (`Blanc/Lift/BuilderRequest/{Deposit,Exit}/Creation/Deploy.lean`).
+
+### Original occurrence indices
+
+The complete `debit_origin_unique` proof uses
+`Blanc.List.index_eq_of_nodup_filter_map` from
+[`Blanc/ListOccurrence.lean`](../../Blanc/ListOccurrence.lean), selecting every
+row. Distinct occurrence keys recover original indices while retaining the
+existing origin representation. Builder FIFO and chronology remain separate
+obligations.

@@ -310,6 +310,25 @@ def code_reference_error(code_import: Any, code_ref: Any) -> Optional[str]:
     return None
 
 
+def uint256_argument(text: str) -> int:
+    """One literal EVM word, decimal or hexadecimal, for selective retention."""
+    try:
+        value = int(text, 16 if text.lower().startswith("0x") else 10)
+    except ValueError:
+        raise argparse.ArgumentTypeError("retained constant must be a decimal or hexadecimal uint256")
+    if not 0 <= value < 2 ** 256:
+        raise argparse.ArgumentTypeError("retained constant must be a decimal or hexadecimal uint256")
+    return value
+
+
+def retain_constants_error(values: Any) -> Optional[str]:
+    """Reject malformed registry policy before any output can be replaced."""
+    if (not isinstance(values, list)
+            or any(type(v) is not int or not 0 <= v < 2 ** 256 for v in values)):
+        return "retain_constants registry option must be a list of uint256 integers"
+    return None
+
+
 # Report-only generation safeguards (register S2, blanc-jaune-consolidation-v1): a row whose
 # generated Check is split into many shards that each hold at most one kernel decision, and a
 # `const_mem` row whose `entry_cap` (the multiplicity of full-constant entries per pc, the
@@ -361,6 +380,14 @@ def run_registry(args: argparse.Namespace) -> int:
                 print(f"FAIL {ident}: fold_div_or needs options.fold=true")
                 failures += 1
                 continue
+            retained = opts.get("retain_constants", [])
+            error = retain_constants_error(retained)
+            if error is None and retained and opts.get("memret", "off") != "off":
+                error = "retain_constants is supported only in regular mode (memret off)"
+            if error is not None:
+                print(f"FAIL {ident}: {error}")
+                failures += 1
+                continue
             supplied = [option for option in ("code_import", "code_ref") if option in opts]
             error = ("code_import/code_ref registry options must be strings"
                      if any(not isinstance(opts[option], str) for option in supplied)
@@ -402,6 +429,8 @@ def run_registry(args: argparse.Namespace) -> int:
                 argv.append("--fold")
             if opts.get("fold_div_or") is True:
                 argv.append("--fold-div-or")
+            for value in retained:
+                argv += ["--retain-constant", str(value)]
             if "max_run" in opts:
                 argv += ["--max-run", str(opts["max_run"])]
             if opts.get("pc") is True:
@@ -606,6 +635,8 @@ parser.add_argument("--fold", action="store_true",
                     help="fold ADD/MUL/SUB/LT/GT/EQ/AND/ISZERO over constant operands (mirror of foldConst)")
 parser.add_argument("--fold-div-or", action="store_true",
                     help="also fold unsigned DIV and bitwise OR over constants (requires --fold)")
+parser.add_argument("--retain-constant", type=uint256_argument, action="append", default=[],
+                    help="regular mode: retain this uint256 at entry generalization and unanimous joins alongside control constants (repeatable; registry options.retain_constants)")
 parser.add_argument("--max-run", type=int, default=None,
                     help="name the rest of a straight-line .next run after this many nodes (a long "
                          "run of unoptimized code exceeds the elaborator's recursion depth); off by default")
@@ -638,7 +669,12 @@ if args.omit_code_def and args.code_import is None:
     parser.error("--omit-code-def needs --code-import and --code-ref")
 if args.code_out is not None and (args.code_header is None or not args.omit_code_def):
     parser.error("--code-out needs --code-header and --omit-code-def")
+if args.registry is not None and args.retain_constant:
+    parser.error("registry mode uses options.retain_constants, not --retain-constant")
 MEMRET = args.memret != "off"
+if args.retain_constant and MEMRET:
+    parser.error("--retain-constant is supported only in regular mode (--memret off)")
+RETAIN_CONSTANTS = frozenset(args.retain_constant)
 FOLD_ADD = MEMRET and not args.no_fold_add
 CONST_MEM = MEMRET and args.const_mem
 if MEMRET:
@@ -1152,7 +1188,7 @@ deferred_wrappers: List[Tuple[int, Tuple[Tuple[Any, ...], ...], int, Any]] = []
 def generalize_frame(frame: List[Tuple[Any, ...]]) -> Tuple[Tuple[Any, ...], ...]:
     gen = []
     for v in frame:
-        if v[0] == 'const' and v[1] in jumpdests:
+        if v[0] == 'const' and (v[1] in jumpdests or v[1] in RETAIN_CONSTANTS):
             gen.append(v)
         elif v[0] == 'ret':
             gen.append(v)
@@ -1177,7 +1213,8 @@ def pointwise_generalization(frames: List[List[Tuple[Any, ...]]]) -> Tuple[Optio
                 return None, f"Return positions disagree at index {i}"
             gen.append(('ret',))
         elif all(v == vals[0] for v in vals):
-            if vals[0][0] == 'const' and vals[0][1] not in jumpdests and not CONST_MEM:
+            if (vals[0][0] == 'const' and vals[0][1] not in jumpdests
+                    and vals[0][1] not in RETAIN_CONSTANTS and not CONST_MEM):
                 gen.append(('unk',))
             else:
                 gen.append(vals[0])
@@ -1729,6 +1766,8 @@ def write_probe(status):
         "entries_by_pc": {hex(k): v for k, v in sorted(entries_at_pc.items())},
         "unmerged_joins": [{"pc": hex(u["pc"]), "reason": u["reason"]} for u in unmerged_joins],
     }
+    if RETAIN_CONSTANTS:
+        data["retain_constants"] = sorted(RETAIN_CONSTANTS)
     data.update(probe_extra)
     args.probe_json.write_text(json.dumps(data, indent=1))
 
@@ -2268,6 +2307,17 @@ json_data = {
     "external_calls": [{"pc": hex(c["pc"]), "type": c["type"], "target": c["target"], "entry": c["entry_idx"]} for c in distinct_calls.values()],
     "rejections": rejections
 }
+
+if RETAIN_CONSTANTS and out_dir is not None:
+    json_data["producer_options"] = {"retain_constants": sorted(RETAIN_CONSTANTS)}
+    # Diagnostic provenance only: preserve every abstract incoming stack from
+    # the existing pre-pass, including unknown/conflicting incoming cells.
+    json_data["pre_incoming_frames"] = {
+        hex(pc): [{"source_pc": hex(src), "kind": kind,
+                   "frame": [v[0] if v[0] != 'const' else f"const(0x{v[1]:x})" for v in frame]}
+                  for src, kind, (frame, _mem) in edges]
+        for pc, edges in sorted(pre_incoming_edges.items())
+    }
 
 if out_dir is not None:
     # Compact JSON keeps the diagnostic within git/tool limits.

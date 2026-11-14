@@ -11,6 +11,7 @@ import Blanc.CompiledWalkInversion
 import Blanc.Lift.InvWalk
 import Blanc.Lift.CopyLoop
 import Blanc.Lift.Silent
+import Blanc.Lift.TreePredicate
 import Blanc.Lift.WalkInvKit
 import Blanc.Lift.InvWalkOps
 import Blanc.Lift.InvWalkWorld
@@ -332,6 +333,10 @@ def SFunc.quiet : SFunc → Bool
   | .pcAt _ f => f.quiet
   | .undefined => true
 
+theorem SFunc.quiet_eq_stepsLastsSatisfy (f : SFunc) :
+    f.quiet = f.stepsLastsSatisfy Ninst.quiet (· != .selfdestruct) := by
+  induction f <;> simp_all only [SFunc.quiet, SFunc.stepsLastsSatisfy]
+
 /-- `S` is closed under the entries referenced by its members, and all of them are quiet. -/
 def QuietSet (fs : List SFunc) (S : List Nat) : Bool :=
   S.all fun k => match fs[k]? with
@@ -488,58 +493,30 @@ theorem SFunc.Run.world_of_quietH {fs : List SFunc} {S : List Nat}
     (hf : f.quiet = true) (hrefs : f.refs.all (· ∈ S) = true)
     (run : SFunc.Run fs sevm devm f o) :
     Devm.getStor (Outcome.devm o) = Devm.getStor devm ∧ (Outcome.devm o).logs = devm.logs := by
-  have closed : ∀ {k g}, k ∈ S → fs[k]? = some g →
-      g.quiet = true ∧ g.refs.all (· ∈ S) = true := by
-    intro k g hk hget
-    have h := (List.all_eq_true.mp hS) k hk
-    rw [hget] at h
-    simpa only [List.all_eq_true, decide_eq_true_eq, Bool.and_eq_true] using h
-  have tr : ∀ {a b c : Devm}, (Devm.getStor c = Devm.getStor b ∧ c.logs = b.logs) →
-      (Devm.getStor b = Devm.getStor a ∧ b.logs = a.logs) →
-      Devm.getStor c = Devm.getStor a ∧ c.logs = a.logs :=
-    fun h1 h2 => ⟨h1.1.trans h2.1, h1.2.trans h2.2⟩
-  induction run with
-  | zero d pop run ih =>
-      simp only [SFunc.quiet, Bool.and_eq_true] at hf
-      simp only [SFunc.refs, List.all_append, Bool.and_eq_true] at hrefs
-      exact tr (ih hf.1 hrefs.1) (PopBurn.world pop)
-  | succ d w hnz pop run ih =>
-      simp only [SFunc.quiet, Bool.and_eq_true] at hf
-      simp only [SFunc.refs, List.all_append, Bool.and_eq_true] at hrefs
-      exact tr (ih hf.2 hrefs.2) (PopBurn.world pop)
-  | toZero d pop run ih =>
-      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hrefs
-      exact tr (ih hf hrefs.2) (PopBurn.world pop)
-  | toSucc d w hnz lookup pop run ih =>
-      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hrefs
-      have ht := closed (of_decide_eq_true hrefs.1) lookup
-      exact tr (ih ht.1 ht.2) (PopBurn.world pop)
-  | last hrun =>
-      exact Linst.world_of_ok (by simpa only [ne_eq, quiet, bne_iff_ne] using hf) hrun
-  | next hrun run ih =>
-      simp only [SFunc.quiet, Bool.and_eq_true] at hf
-      exact tr (ih hf.2 hrefs) (Ninst.world_of_quietH hsg hf.1 hrun)
-  | dest burn run ih =>
-      exact tr (ih hf hrefs) (Burn.world burn)
-  | jump d lookup pop run ih =>
-      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hrefs
-      have ht := closed (of_decide_eq_true hrefs.1) lookup
-      exact tr (ih ht.1 ht.2) (PopBurn.world pop)
-  | ret d pop =>
-      exact PopBurn.world pop
-  | callHalt d lookup pop run ih =>
-      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hrefs
-      have ht := closed (of_decide_eq_true hrefs.1) lookup
-      exact tr (ih ht.1 ht.2) (PopBurn.world pop)
-  | callRet d lookup pop run tail ihRun ihTail =>
-      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hrefs
-      have ht := closed (of_decide_eq_true hrefs.1) lookup
-      simp only [SFunc.quiet] at hf
-      exact tr (ihTail hf hrefs.2) (tr (ihRun ht.1 ht.2) (PopBurn.world pop))
-  | pcAt hrun _ run ih =>
-      simp only [SFunc.quiet] at hf
-      simp only [SFunc.refs] at hrefs
-      exact tr (ih hf hrefs) (Ninst.world_of_quietH hsg rfl hrun)
+  have observed := SFunc.Run.observation_eq
+    (observe := fun d => (Devm.getStor d, d.logs))
+    (next := Ninst.quiet) (last := (· != .selfdestruct))
+    (pop := fun h => Prod.ext (PopBurn.world h).1 (PopBurn.world h).2)
+    (burn := fun h => Prod.ext (Burn.world h).1 (Burn.world h).2)
+    (step := fun hn hrun =>
+      Prod.ext (Ninst.world_of_quietH hsg hn hrun).1 (Ninst.world_of_quietH hsg hn hrun).2)
+    (terminal := fun hl hrun => by
+      have h := Linst.world_of_ok (by simpa only [bne_iff_ne] using hl) hrun
+      exact Prod.ext h.1 h.2)
+    (pc := rfl)
+    (closed := by
+      unfold ClosedEntrySet
+      apply List.all_eq_true.mpr
+      intro k member
+      have admitted := (List.all_eq_true.mp hS) k member
+      cases found : fs[k]? with
+      | none => simp only [found, Bool.false_eq_true] at admitted
+      | some g =>
+        simp only [found, Bool.and_eq_true] at admitted ⊢
+        exact ⟨(SFunc.quiet_eq_stepsLastsSatisfy g).symm.trans admitted.1, admitted.2⟩)
+    (checked := by simpa only [← SFunc.quiet_eq_stepsLastsSatisfy] using hf)
+    (refs := hrefs) run
+  exact Prod.mk.inj observed
 
 end Blanc.Lift
 

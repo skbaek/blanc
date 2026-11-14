@@ -10,6 +10,25 @@ open Blanc.Corpus.Freeze.Deposit
 
 variable {P : Preset} {f : CFork}
 
+/-- An ordered prefix partition preserves every row after the pass writes the suffix
+before its postponed entries. This is a permutation law, with no FIFO assertion. -/
+theorem _root_.Blanc.Corpus.Freeze.Deposit.PassPartition.perm_remainder
+    {tq applied postponed : TQueue} {k : Nat}
+    (h : PassPartition (tq.take k) applied postponed) :
+    (applied ++ (tq.drop k ++ postponed)).Perm tq := by
+  have hp : (applied ++ postponed).Perm (tq.take k) := by
+    generalize heq : tq.take k = consumed at h ⊢
+    clear heq
+    induction h with
+    | nil => exact .refl []
+    | apply e _ ih => exact ih.cons e
+    | postpone e _ ih => exact List.perm_middle.trans (ih.cons e)
+  have reorder : (applied ++ (tq.drop k ++ postponed)).Perm
+      ((applied ++ postponed) ++ tq.drop k) := by
+    simpa only [List.append_assoc] using
+      (List.perm_append_comm (l₁ := tq.drop k) (l₂ := postponed)).append_left applied
+  simpa only [List.take_append_drop] using reorder.trans (hp.append_right (tq.drop k))
+
 /-- Forget ghost metadata, retaining the existing G1 loop accumulator. -/
 private def erasePass (r : PassResult P f) : PendingDepositsAcc P f :=
   (r.processed, r.next, (r.postponed.map Prod.snd).toArray,
@@ -298,26 +317,7 @@ private theorem partition_tags_nodup {tq applied postponed : TQueue} {k : Nat}
     (h : PassPartition (tq.take k) applied postponed)
     (hn : (tq.filterMap Prod.fst).Nodup) :
     (applied.filterMap Prod.fst ++ (tq.drop k ++ postponed).filterMap Prod.fst).Nodup := by
-  have hm : IsMerge applied postponed (tq.take k) := by
-    generalize heq : tq.take k = consumed at h ⊢
-    clear heq
-    induction h with
-    | nil => exact .nil
-    | apply e _ ih => exact .left e ih
-    | postpone e _ ih => exact .right e ih
-  have hp : (applied ++ postponed).Perm (tq.take k) := by
-    generalize heq : tq.take k = consumed at hm ⊢
-    clear h heq
-    induction hm with
-    | nil => exact .refl []
-    | left e _ ih => exact ih.cons e
-    | right e _ ih => exact List.perm_middle.trans (ih.cons e)
-  have hs : (applied ++ (tq.drop k ++ postponed)).Perm ((applied ++ postponed) ++ tq.drop k) := by
-    simpa only [List.append_assoc] using
-      (List.perm_append_comm (l₁ := tq.drop k) (l₂ := postponed)).append_left applied
-  have hp' := hs.trans (hp.append_right (tq.drop k))
-  rw [List.take_append_drop] at hp'
-  have ht := (hp'.filterMap Prod.fst).nodup_iff.mpr hn
+  have ht := (h.perm_remainder.filterMap Prod.fst).nodup_iff.mpr hn
   simpa only [List.filterMap_append] using ht
 
 /-- The exact ordered, occurrence-preserving safety statement for the same frozen pass. -/

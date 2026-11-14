@@ -17,7 +17,7 @@ open Blanc.Lift.WithdrawalRequest.FloodTx (senderE)
 open private sevm base firstGas firstMsg firstCfg firstPost firstFinal firstResult
   first_forwarded first_cost firstAddresses secondAddresses secondGas secondForwarded
   secondParent secondBare secondMsg secondCfg secondResult secondPost secondFinal
-  second_result second_agree second_facts second_exec second_settle first_facts
+  second_result second_boundary second_agree second_facts second_exec second_settle first_facts
   afterFirst afterSecond pairRun latchFrame resetFrame original_empty first_output
   message_code second_gas_range from Blanc.Composition.BuilderRequestApplicabilityCalls
 
@@ -28,7 +28,6 @@ private theorem writer_sta (h : B256) :
     ({ writer h with code := writerCode true, benvStat := { (writer h).benvStat with fork := .prague } } : Sevm) =
       writer h := by rw [← message_code true (some h)]; rfl
 private theorem lookupA_accounts_some (h : B256) : accounts true (some h) = accounts true (some 0) := rfl
-private theorem getCode_eq_state (d : Devm) (a : Adr) : d.getCode a = d.state.getCode a := rfl
 private theorem state_getCode_of_acctView (s : State) (a : Adr) : s.getCode a = (Witness.acctView (s.get a)).code := rfl
 private theorem getCode_of_acctView (d : Devm) (a : Adr) : d.getCode a = (Witness.acctView (d.state.get a)).code := rfl
 private theorem getBal_of_acctView (d : Devm) (a : Adr) : d.getBal a = (Witness.acctView (d.state.get a)).bal := rfl
@@ -38,10 +37,6 @@ private theorem acctView_of_state {d : Devm} {s : State} (hs : d.state = s) (x :
     Witness.acctView (d.state.get x) = Witness.acctView (s.get x) := by rw [hs]
 private theorem sysState_get_ne (p : SysShape) (s : State) (a x : Adr) (hne : a ≠ x) : (sysState p s a).get x = s.get x := by
   rw [State.get_eq_getD, State.get_eq_getD, sysState_getElem_ne p s hne]
-private theorem hashSet_mem_union {α : Type} [BEq α] [Hashable α] [LawfulBEq α] [LawfulHashable α]
-    (m₁ m₂ : Std.HashSet α) (x : α) : x ∈ m₁.union m₂ ↔ x ∈ m₁ ∨ x ∈ m₂ := by
-  simpa only [Std.HashSet.mem_iff_contains, Union.union, Std.HashSet.instUnion] using
-    (Std.HashSet.mem_union_iff (m₁ := m₁) (m₂ := m₂) (k := x))
 private theorem setMach_mem (d : Devm) (m : Mach) : (d.setMach m).memory = m.memory := rfl
 private theorem setMach_state (d : Devm) (m : Mach) : (d.setMach m).state = d.state := rfl
 private theorem setMach_logs (d : Devm) (m : Mach) : (d.setMach m).logs = d.logs := rfl
@@ -94,11 +89,8 @@ private theorem deposit_views (h : B256) :
     (firstPost true (some h)).logs = [] ∧ (secondPost true (some h)).logs = [] ∧
     Witness.lookupS (secondFinal true (some h)).stor exitAddr 0 = 0 ∧
     decide (900000 ≤ (secondPost true (some h)).gasLeft) = true := by
-  unfold depositAddresses secondPost secondFinal secondResult secondCfg secondAddresses
-    firstAddresses secondMsg secondParent secondBare secondForwarded secondGas afterFirst
-    SystemWordWriter.post SystemWordWriter.parent firstPost firstFinal firstResult firstCfg
-    firstMsg SystemWordWriter.childMsg
-  rewrite [first_forwarded, first_cost]; dsimp only; revert h; kernel_forall_rfl_and
+  have keep := Witness.wrun_halted_accKeep (second_result true (some h))
+  exact ⟨keep.2.1, keep.1, second_boundary h⟩
 
 private theorem after_deposit_gas (h : B256) : 900000 ≤ (afterDeposit h).gasLeft ∧ (afterDeposit h).gasLeft < 2 ^ 256 := by
   have lower : 900000 ≤ (secondPost true (some h)).gasLeft := of_decide_eq_true (deposit_views h).2.2.2.2.2.2.2
@@ -140,20 +132,15 @@ theorem exit_memory (h : B256) : (afterDeposit h).memory = SystemWordWriter.word
       firstGas (first_output true (some h))).2.2.2.2.2.2.2.1]
   exact Mem.extends_covered (by rw [show (SystemWordWriter.wordMemory 0).size = 32 from Mem.size_write_word]; rfl)
 private theorem deposit_cfg_agree (h : B256) : Witness.Agree (depositCfg h) := by
-  have keys := (deposit_views h).1; have adrs := (deposit_views h).2.1
-  have start := second_agree true (some h); have done := Witness.wrun_done (second_result true (some h)) start
-  have cf := callChildPost_facts (secondParent true (some h)) (secondPost true (some h)) 0 0 (second_facts true (some h)).2.2.2
-  have wk : (secondParent true (some h)).accessedStorageKeys = (secondCfg true (some h)).devm.accessedStorageKeys := rfl
-  have wa : (secondParent true (some h)).accessedAddresses = (secondCfg true (some h)).devm.accessedAddresses := rfl
-  refine ⟨?_, ?_, ?_, ?_⟩
-  · intro k; dsimp only [depositCfg]; unfold afterDeposit afterSecond
-    rw [cf.2.2.2.2.2.2.2.2.2.2.2.2.1, hashSet_mem_union, wk, keys, start.1 k, done.2.1.1 k]; exact List.mem_append.symm
-  · intro a; dsimp only [depositCfg]; unfold afterDeposit afterSecond
-    rw [cf.2.2.2.2.2.2.2.2.2.2.2.1, hashSet_mem_union, wa, adrs, start.2.1 a, done.2.1.2.1 a]; exact List.mem_append.symm
-  · intro a k; dsimp only [depositCfg]; unfold afterDeposit afterSecond
-    rw [cf.2.2.2.1, done.2.2 (secondPost true (some h)) rfl]; exact done.2.1.2.2.1 a k
-  · intro a; dsimp only [depositCfg]; unfold afterDeposit afterSecond
-    rw [cf.2.2.2.1, done.2.2 (secondPost true (some h)) rfl]; exact done.2.1.2.2.2 a
+  have start := second_agree true (some h)
+  have done := Witness.wrun_done (second_result true (some h)) start
+  change Witness.Agree ⟨callChildPost (secondParent true (some h)) (secondPost true (some h)) 0 0,
+    .undefined, [], (secondCfg true (some h)).keys ++ (secondFinal true (some h)).keys,
+    (secondCfg true (some h)).adrs ++ (secondFinal true (some h)).adrs,
+    (secondFinal true (some h)).stor, (secondFinal true (some h)).acs⟩
+  exact Witness.agree_callChildPost start.1 start.2.1 done.2.1
+    (Witness.wrun_halted_accKeep (second_result true (some h))) (second_facts true (some h)).2.2.2
+
 private theorem exit_installed (h : B256) : (afterDeposit h).getCode exitAddr = Exit.code := by
   have view := (deposit_cfg_agree h).2.2.2 exitAddr; dsimp only [depositCfg] at view
   rw [getCode_of_acctView, view, (deposit_views h).2.2.1, lookupA_accounts_some h]; decide +kernel
@@ -559,7 +546,7 @@ theorem afterExitReset_code_bal (h : B256) :
   exact ⟨by rw [getCode_of_acctView, otherView ordinaryAddr (by decide)]; exact ac.1,
     by rw [getBal_of_acctView, otherView ordinaryAddr (by decide)]; exact ac.2.1,
     by rw [getCode_of_acctView, otherView depositAddr (by decide)]; exact ac.2.2.1,
-    by rw [getCode_eq_state, stEq, sysState_getCode, state_getCode_of_acctView, exit_latch_acct_view h exitAddr]; exact ac.2.2.2.1,
+    by rw [Jaune.Devm.getCode_state, stEq, sysState_getCode, state_getCode_of_acctView, exit_latch_acct_view h exitAddr]; exact ac.2.2.2.1,
     by rw [getCode_of_acctView, otherView withdrawalRequestPredeployAddress (by decide)]; exact ac.2.2.2.2.1,
     by rw [getCode_of_acctView, otherView consolidationRequestPredeployAddress (by decide)]; exact ac.2.2.2.2.2⟩
 
@@ -578,12 +565,34 @@ noncomputable def dResetFrame (h : B256) : Exec.Frame := resetFrame true (some h
 noncomputable def eLatchFrame (h : B256) : Exec.Frame := .ofRun (exitLatchRun h) (exit_latch_commits h)
 noncomputable def eResetFrame (h : B256) : Exec.Frame := .ofRun (exitResetRun h) (exit_reset_commits h)
 
+noncomputable def exitSegment (h : B256) :
+    ConcreteRun.KeptSegment ⟨93, writer h, afterDeposit h⟩ ⟨152, writer h, afterExitReset h⟩ :=
+  (ConcreteRun.KeptSegment.ofStepN 8 (exit_latch_prefix h)).trans
+    ((ConcreteRun.KeptSegment.settled (exit_latch_spawn h) (exit_latch_enter h)
+      (exitLatchRun h) (exit_latch_resume h)
+      (Frame.settlementCommits_ofCall_of_raw_commits (exit_latch_commits h))).trans
+      ((ConcreteRun.KeptSegment.ofStepN 8 (exit_reset_prefix h)).trans
+        (ConcreteRun.KeptSegment.settled (exit_reset_spawn h) (exit_reset_enter h)
+          (exitResetRun h) (exit_reset_resume h)
+          (Frame.settlementCommits_ofCall_of_raw_commits (exit_reset_commits h)))))
+
 noncomputable def exitSuffixRun (h : B256) {out : Execution}
     (rest : Exec 152 (writer h) (afterExitReset h) out) : Exec 93 (writer h) (afterDeposit h) out :=
-  ConcreteRun.Exec.ofStepN 8 (exit_latch_prefix h)
-    (.runOk (exit_latch_spawn h) (exit_latch_enter h) (exitLatchRun h) (exit_latch_resume h)
-      (ConcreteRun.Exec.ofStepN 8 (exit_reset_prefix h)
-        (.runOk (exit_reset_spawn h) (exit_reset_enter h) (exitResetRun h) (exit_reset_resume h) rest)))
+  (exitSegment h).extend rest
+
+theorem exitSuffix_kept_at (h : B256) (a : Adr) {out : Execution}
+    (rest : Exec 152 (writer h) (afterExitReset h) out) :
+    Exec.keptAt a (exitSuffixRun h rest) =
+      (if exitAddr = a then [eLatchFrame h, eResetFrame h]
+       else Exec.keptAt a (exitLatchRun h) ++ Exec.keptAt a (exitResetRun h)) ++
+        Exec.keptAt a rest := by
+  change Exec.keptAt a ((exitSegment h).extend rest) = _
+  rw [(exitSegment h).kept]
+  simp only [exitSegment, ConcreteRun.KeptSegment.trans, ConcreteRun.KeptSegment.ofStepN,
+    ConcreteRun.KeptSegment.settled, List.nil_append]
+  change ((if exitAddr = a then [eLatchFrame h] else Exec.keptAt a (exitLatchRun h)) ++
+    if exitAddr = a then [eResetFrame h] else Exec.keptAt a (exitResetRun h)) ++ Exec.keptAt a rest = _
+  by_cases here : exitAddr = a <;> simp only [here, ite_true, ite_false, List.cons_append, List.nil_append]
 
 noncomputable def prefixFourRun (h : B256) {out : Execution}
     (rest : Exec 152 (writer h) (afterExitReset h) out) : Exec 0 (writer h) (base true (some h)) out :=

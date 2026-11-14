@@ -4,7 +4,8 @@ import Blanc.Lift.SystemWordWriter
 import Blanc.Lift.Witness
 import Blanc.Lift.WithdrawalRequest.DrainTx
 import Blanc.BlockForward
-import Blanc.ConcreteRunKept
+import Blanc.ConcreteRunSegments
+import Blanc.Lift.WitnessCallBoundary
 import Blanc.Lift.KernelBatchForall
 import Blanc.Lift.NodeWalkOrig
 import Jaune.MemoryAccounting
@@ -533,16 +534,8 @@ private theorem second_addresses : (initDevm (secondMsg full parentHash)).access
 
 private theorem first_accesses : (firstPost full parentHash).accessedStorageKeys = (firstFinal full parentHash).devm.accessedStorageKeys ∧
     (firstPost full parentHash).accessedAddresses = (firstFinal full parentHash).devm.accessedAddresses := by
-  cases full
-  all_goals
-    unfold firstPost firstFinal firstResult firstCfg firstMsg SystemWordWriter.childMsg
-    simp only [first_forwarded]
-    constructor
-    all_goals cases parentHash with
-    | none => kernel_rfl
-    | some h =>
-      revert h
-      kernel_forall_rfl_and
+  have keep := Witness.wrun_halted_accKeep (first_result full parentHash)
+  exact ⟨keep.2.1, keep.1⟩
 
 private theorem second_agree : Witness.Agree (secondCfg full parentHash) := by
   have done := Witness.wrun_done (first_result full parentHash) (first_agree full parentHash)
@@ -588,18 +581,30 @@ private def secondCheck : Bool :=
       post.accountsToDelete.isEmpty = true)
   | _ => false
 
-private theorem second_check : (secondCheck full parentHash) = true := by
-  cases full
+/-- One checked boundary supplies the scalar and shadow observations reused
+by the resumed writer. Accessed-set equalities follow symbolically from the
+generic halt theorem and are deliberately absent from this check. -/
+private theorem second_check : (secondCheck full parentHash) = true ∧
+    (match full, parentHash with
+      | true, some h =>
+          (secondFinal true (some h)).acs = accounts true (some h) ∧
+          decide (exitAddr ∈ ((secondCfg true (some h)).adrs ++ (secondFinal true (some h)).adrs)) = false ∧
+          (firstPost true (some h)).logs = [] ∧ (secondPost true (some h)).logs = [] ∧
+          Witness.lookupS (secondFinal true (some h)).stor exitAddr 0 = 0 ∧
+          decide (900000 ≤ (secondPost true (some h)).gasLeft) = true
+      | _, _ => True) := by
+  cases full <;> cases parentHash
   all_goals
-    unfold secondCheck secondResult secondCfg secondMsg secondParent secondBare
+    simp only [and_true]
+    try dsimp only [secondPost, secondFinal]
+    unfold secondCheck secondResult secondCfg secondAddresses firstAddresses secondMsg secondParent secondBare
       secondForwarded secondGas afterFirst SystemWordWriter.post SystemWordWriter.parent
       firstPost firstFinal firstResult firstCfg firstMsg SystemWordWriter.childMsg
     simp only [first_forwarded, first_cost]
-    cases parentHash with
-    | none => kernel_rfl
-    | some h =>
-      revert h
-      kernel_forall_rfl_and
+  case false.none => kernel_rfl
+  case true.none => kernel_rfl
+  case false.some h => revert h; kernel_forall_rfl_and
+  case true.some h => revert h; kernel_forall_rfl_and
 
 private theorem second_status :
     (match (secondResult full parentHash) with
@@ -607,7 +612,7 @@ private theorem second_status :
           Witness.lookupS cl.stor depositAddr 0 = 0 ∧ post.output = [] ∧
           post.accountsToDelete.isEmpty = true
       | _ => False) := by
-  have check := (second_check full parentHash)
+  have check := (second_check full parentHash).1
   cases h : (secondResult full parentHash) with
   | cont c => simp only [secondCheck, h, Bool.false_eq_true] at check
   | stuck => simp only [secondCheck, h, Bool.false_eq_true] at check
@@ -625,6 +630,16 @@ private theorem second_result : (secondResult full parentHash) = .done (.halted 
       cases outcome with
       | returned d => rw [h] at status; contradiction
       | halted post => simp only [secondPost, secondFinal, h]
+
+/-- Only the actual Tail consumer requests these additional observations.
+The original checked status remains available in every full/hash context. -/
+private theorem second_boundary (h : B256) :
+    (secondFinal true (some h)).acs = accounts true (some h) ∧
+    decide (exitAddr ∈ ((secondCfg true (some h)).adrs ++ (secondFinal true (some h)).adrs)) = false ∧
+    (firstPost true (some h)).logs = [] ∧ (secondPost true (some h)).logs = [] ∧
+    Witness.lookupS (secondFinal true (some h)).stor exitAddr 0 = 0 ∧
+    decide (900000 ≤ (secondPost true (some h)).gasLeft) = true := by
+  exact (second_check true (some h)).2
 
 /-- The computation is tied to the original spawned message before lifting. -/
 private theorem second_result_actual :
@@ -720,18 +735,6 @@ private noncomputable def firstRun : Exec 0 (initSevm (firstMsg full parentHash)
 private noncomputable def secondRun : Exec 0 (initSevm (secondMsg full parentHash))
     (initDevm (secondMsg full parentHash)) (.ok (secondPost full parentHash)) := Classical.choice (second_exec full parentHash)
 
-private noncomputable def pairTail {out : Execution}
-    (rest : Exec 93 (sevm full parentHash) (afterSecond full parentHash) out) : Exec 92 (sevm full parentHash) (secondState full parentHash) out :=
-  .runOk (second_spawn full parentHash) (second_enter full parentHash) (secondRun full parentHash) (second_resume full parentHash) rest
-private noncomputable def pairMiddle {out : Execution}
-    (rest : Exec 93 (sevm full parentHash) (afterSecond full parentHash) out) : Exec 64 (sevm full parentHash) (afterFirst full parentHash) out :=
-  ConcreteRun.Exec.ofStepN 8 (second_prefix full parentHash) ((pairTail full parentHash) rest)
-private noncomputable def pairCall {out : Execution}
-    (rest : Exec 93 (sevm full parentHash) (afterSecond full parentHash) out) : Exec 63 (sevm full parentHash) (callState full parentHash) out :=
-  .runOk (first_spawn full parentHash) (first_enter full parentHash) (firstRun full parentHash) (first_resume full parentHash) ((pairMiddle full parentHash) rest)
-private noncomputable def pairRun {out : Execution}
-    (rest : Exec 93 (sevm full parentHash) (afterSecond full parentHash) out) : Exec 0 (sevm full parentHash) (base full parentHash) out :=
-  ConcreteRun.Exec.ofStepN 10 (first_prefix full parentHash) ((pairCall full parentHash) rest)
 
 private theorem first_commits : Execution.commits (.ok (firstPost full parentHash)) = true := by
   change (firstPost full parentHash).error.isNone = true
@@ -745,27 +748,49 @@ private theorem second_commits : Execution.commits (.ok (secondPost full parentH
 private noncomputable def latchFrame : Exec.Frame := .ofRun (firstRun full parentHash) (first_commits full parentHash)
 private noncomputable def resetFrame : Exec.Frame := .ofRun (secondRun full parentHash) (second_commits full parentHash)
 
+private noncomputable def pairSegment :
+    ConcreteRun.KeptSegment (initEvm (msg full parentHash))
+      ⟨93, sevm full parentHash, afterSecond full parentHash⟩ :=
+  (ConcreteRun.KeptSegment.ofStepN 10 (first_prefix full parentHash)).trans
+    ((ConcreteRun.KeptSegment.settled (first_spawn full parentHash) (first_enter full parentHash)
+      (firstRun full parentHash) (first_resume full parentHash)
+      (Frame.settlementCommits_ofCall_of_raw_commits (first_commits full parentHash))).trans
+      ((ConcreteRun.KeptSegment.ofStepN 8 (second_prefix full parentHash)).trans
+        (ConcreteRun.KeptSegment.settled (second_spawn full parentHash) (second_enter full parentHash)
+          (secondRun full parentHash) (second_resume full parentHash)
+          (Frame.settlementCommits_ofCall_of_raw_commits (second_commits full parentHash)))))
+
+private noncomputable def pairRun {out : Execution}
+    (rest : Exec 93 (sevm full parentHash) (afterSecond full parentHash) out) :
+    Exec 0 (sevm full parentHash) (base full parentHash) out :=
+  (pairSegment full parentHash).extend rest
+
+private theorem pair_frames (a : Adr) : (pairSegment full parentHash).frames a =
+    if depositAddr = a then [latchFrame full parentHash, resetFrame full parentHash]
+    else Exec.keptAt a (firstRun full parentHash) ++ Exec.keptAt a (secondRun full parentHash) := by
+  simp only [pairSegment, ConcreteRun.KeptSegment.trans, ConcreteRun.KeptSegment.ofStepN,
+    ConcreteRun.KeptSegment.settled, List.nil_append]
+  change ((if depositAddr = a then [latchFrame full parentHash]
+      else Exec.keptAt a (firstRun full parentHash)) ++
+    if depositAddr = a then [resetFrame full parentHash]
+      else Exec.keptAt a (secondRun full parentHash)) = _
+  by_cases here : depositAddr = a <;> simp only [here, ite_true, ite_false, List.cons_append, List.nil_append]
+
+private theorem pair_kept_at (a : Adr) {out : Execution}
+    (rest : Exec 93 (sevm full parentHash) (afterSecond full parentHash) out) :
+    Exec.keptAt a ((pairRun full parentHash) rest) =
+      (if depositAddr = a then [latchFrame full parentHash, resetFrame full parentHash]
+       else Exec.keptAt a (firstRun full parentHash) ++ Exec.keptAt a (secondRun full parentHash)) ++
+        Exec.keptAt a rest := by
+  change Exec.keptAt a ((pairSegment full parentHash).extend rest) = _
+  rw [(pairSegment full parentHash).kept, pair_frames]
+
 private theorem pair_kept {out : Execution}
     (rest : Exec 93 (sevm full parentHash) (afterSecond full parentHash) out) :
     Exec.keptAt depositAddr ((pairRun full parentHash) rest) =
       (latchFrame full parentHash) :: (resetFrame full parentHash) :: Exec.keptAt depositAddr rest := by
-  have firstSettles : Frame.settlementCommits (Frame.ofCall (firstMsg full parentHash)) (.ok (firstPost full parentHash)) = true :=
-    Frame.settlementCommits_ofCall_of_raw_commits (first_commits full parentHash)
-  have secondSettles : Frame.settlementCommits (Frame.ofCall (secondMsg full parentHash)) (.ok (secondPost full parentHash)) = true :=
-    Frame.settlementCommits_ofCall_of_raw_commits (second_commits full parentHash)
-  calc
-    Exec.keptAt depositAddr ((pairRun full parentHash) rest) = Exec.keptAt depositAddr ((pairCall full parentHash) rest) :=
-      ConcreteRun.Exec.keptAt_ofStepN depositAddr 10 (first_prefix full parentHash) ((pairCall full parentHash) rest)
-    _ = (latchFrame full parentHash) :: Exec.keptAt depositAddr ((pairMiddle full parentHash) rest) :=
-      Exec.keptAt_settled_here (a := depositAddr) (first_spawn full parentHash) (first_enter full parentHash) (firstRun full parentHash)
-        (first_resume full parentHash) ((pairMiddle full parentHash) rest) firstSettles rfl
-    _ = (latchFrame full parentHash) :: Exec.keptAt depositAddr ((pairTail full parentHash) rest) :=
-      congrArg (List.cons (latchFrame full parentHash))
-        (ConcreteRun.Exec.keptAt_ofStepN depositAddr 8 (second_prefix full parentHash) ((pairTail full parentHash) rest))
-    _ = (latchFrame full parentHash) :: (resetFrame full parentHash) :: Exec.keptAt depositAddr rest :=
-      congrArg (List.cons (latchFrame full parentHash))
-        (Exec.keptAt_settled_here (a := depositAddr) (second_spawn full parentHash) (second_enter full parentHash) (secondRun full parentHash)
-          (second_resume full parentHash) rest secondSettles rfl)
+  rw [pair_kept_at full parentHash depositAddr, ite_eq_left rfl]
+  all_goals rfl
 
 private noncomputable def fullRun : Exec 0 (sevm false parentHash) (base false parentHash) (.ok (afterSecond false parentHash)) :=
   (pairRun false parentHash) (.halt (stop_step parentHash))

@@ -49,3 +49,62 @@ creation transaction is recorded in the entry's `provenance` in
 | Contract | Address | Runtime bytes | keccak256 codehash | Creation transaction | Block |
 |---|---|---:|---|---|---:|
 | Beacon deposit | 0x00000000219ab540356cBB839Cbe05303d7705Fa | 6,358 | 0x6c029a231254fadb724d63be769f75eedd66362df034a3e663252b49d062a666 | 0xe75fb554e433e03763a1560646ee22dcb74e5274b34c5ad644e7c0f619a7e1d0 (deployer 0xb20a608c624ca5003905aa834de7156c68b2e1d0, nonce 0) | 11,052,984 |
+
+## Uses of the shared API
+
+`depositFate` uses `Blanc.List.index_eq_of_nodup_filter_map` from
+[`Blanc/ListOccurrence.lean`](../../Blanc/ListOccurrence.lean), selecting rows
+that carry an occurrence tag. Equal selected keys identify original indices;
+equal payloads and unselected rows may repeat.
+The frozen deposit pass relation's extension
+`Blanc.Corpus.Freeze.Deposit.PassPartition.perm_remainder` in
+[`Blanc/Composition/DepositPendingPass.lean`](../../Blanc/Composition/DepositPendingPass.lean)
+turns a partition of `tq.take k` into
+`(applied ++ (tq.drop k ++ postponed)).Perm tq`.
+The actual `d9Pass` freshness and ledger `passFacts` consumers reuse it.
+This permutation law retains the suffix/postponement order and the frozen
+relation's type; chronology remains a separate obligation.
+
+### Certified external operands
+
+[HistEntryPrefix](../../Blanc/Lift/BeaconDeposit/HistEntryPrefix.lean) uses
+[CertifiedOperands](../../Blanc/Lift/CertifiedOperands.lean) at the original
+same-frame cursor. Its observer requires the real six-operand abstract shape:
+
+~~~lean
+private def observeStaticTwo : Xinst → List AVal → Bool
+  | .staticcall, _ :: .const c :: _ :: _ :: _ :: _ :: _ => c == 2
+  | .staticcall, _ => false
+  | _, _ => true
+~~~
+
+Ordinary cert_check and the checked cert_operands establish the observation;
+Cert.check supplies the empty first frame required by Cursor.start.
+From the supplied ParentPrefix, certified code, entry pc and no-state-gas
+fact, the existing cursor bridge supplies reach and ok. The checked proof uses:
+
+~~~lean
+have holds :=
+  Cursor.execOperandsSatisfy_of_reachable cert_check cert_operands reach
+have observed := ok.execOperandsSatisfy holds hat
+-- After decomposing observed to obtain known:
+have actual := ok.stack_getElem?_const known
+~~~
+
+Here hat is the actual decoded STATICCALL, and observed establishes
+known : κ.a[1]? = some (.const (2 : B256)); the last line projects its real
+target word. The existing cursor operand inverse supplies the full stack.
+The observation alone establishes neither native activation nor a child result.
+
+The separate [StaticPrecompileCall](../../Blanc/Lift/StaticPrecompileCall.lean)
+adapter requires rules.stateGas = none, native activation at the actual target,
+conditional nondelegation under the selected rules, and the actual StepRun
+or Xinst.step spawn plus Frame.enter.run equations. The code-preservation
+lemma transports the code-at-target fact; the spawn lemma excludes interpreter
+entry without requiring native success, including native error outcomes.
+
+target_descendantFrames_nilH applies these facts along the original derivation.
+Its successful root, certified image, historical fork, fresh entry and
+ShaReadyRules premises remain in force. BeaconDeploymentTo.classification_inputs
+retains the original deployment/history and settlement premises; this reuse
+adds no new claim to the tables above.

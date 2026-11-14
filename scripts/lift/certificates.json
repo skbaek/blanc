@@ -13,6 +13,9 @@
         "provenance": "Ethereum mainnet deposit contract 0x00000000219ab540356cBB839Cbe05303d7705Fa deployed runtime; the same digest is the installed runtime of scripts/fixtures/beacon-deposit/manifest.json and scripts/fixtures/beacon-deposit-current-mainnet/manifest.json. File is a byte copy of Plans evidence/beacon-deposit-bytecode-v1/w0/deposit-runtime.hex."
       },
       "namespace": "Blanc.Lift.BeaconDeposit",
+      "options": {
+        "retain_constants": [2]
+      },
       "cert": "Blanc/Lift/BeaconDeposit/Cert.lean",
       "tries": {
         "path": "Blanc/Lift/BeaconDeposit/CheckTries.lean",

@@ -362,6 +362,12 @@ def load_cert(row: Dict[str, Any]):
         raise Reject("fold_div_or registry option must be a boolean")
     if opts.get("fold_div_or") is True and opts.get("fold") is not True:
         raise Reject("fold_div_or needs options.fold=true")
+    retained = opts.get("retain_constants", [])
+    if (not isinstance(retained, list)
+            or any(type(v) is not int or not 0 <= v < 2 ** 256 for v in retained)):
+        raise Reject("retain_constants registry option must be a list of uint256 integers")
+    if retained and opts.get("memret", "off") != "off":
+        raise Reject("retain_constants is supported only in regular mode (memret off)")
     with tempfile.TemporaryDirectory(prefix="lift-annot-") as tmp:
         argv = [str(SCRIPT.parent / "lift.py"),
                 "--blanc-root", str(ROOT),
@@ -374,6 +380,8 @@ def load_cert(row: Dict[str, Any]):
             argv.append("--fold")
         if opts.get("fold_div_or") is True:
             argv.append("--fold-div-or")
+        for value in retained:
+            argv += ["--retain-constant", str(value)]
         if opts.get("pc") is True:
             argv.append("--pc")
         if opts.get("decide_jumpi") is True:

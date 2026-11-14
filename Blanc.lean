@@ -118,6 +118,7 @@ import Blanc.Composition.WithdrawalRequestFeeHeadline
 import Blanc.Composition.WithdrawalRequestFeeRefutation
 import Blanc.ConcreteRun
 import Blanc.ConcreteRunKept
+import Blanc.ConcreteRunSegments
 import Blanc.ConsensusSsz
 import Blanc.ConsensusSszConsolidation
 import Blanc.ConsensusSszDeposit
@@ -516,6 +517,7 @@ import Blanc.Lift.BuilderRequest.UserFrameAmsterdam
 import Blanc.Lift.BuilderRequest.ValueKept
 import Blanc.Lift.BuilderRequest.WordFees
 import Blanc.Lift.CallChildren
+import Blanc.Lift.CallCodeResolution
 import Blanc.Lift.CallEffects
 import Blanc.Lift.CallMessageFacts
 import Blanc.Lift.CallProfileTransport
@@ -523,6 +525,7 @@ import Blanc.Lift.CallRestriction
 import Blanc.Lift.CallSite
 import Blanc.Lift.CallSiteChildren
 import Blanc.Lift.CallerProvenance
+import Blanc.Lift.CertifiedOperands
 import Blanc.Lift.Check
 import Blanc.Lift.CheckFast
 import Blanc.Lift.CheckMem
@@ -732,6 +735,7 @@ import Blanc.Lift.StaticGasMessage
 import Blanc.Lift.StaticGasTransport
 import Blanc.Lift.StaticOnlyFrames
 import Blanc.Lift.StaticOnlyFramesIn
+import Blanc.Lift.StaticPrecompileCall
 import Blanc.Lift.StaticcallCapability
 import Blanc.Lift.StepMemory
 import Blanc.Lift.StepTops
@@ -780,6 +784,7 @@ import Blanc.Lift.Token20.Run
 import Blanc.Lift.Token20.RunBalance
 import Blanc.Lift.TransactionAmsterdam
 import Blanc.Lift.Transfer
+import Blanc.Lift.TreePredicate
 import Blanc.Lift.ViewChain
 import Blanc.Lift.Vyper
 import Blanc.Lift.VyperArraySlot
@@ -890,6 +895,7 @@ import Blanc.Lift.WithdrawalRequest.WordReplay
 import Blanc.Lift.Witness
 import Blanc.Lift.WitnessArms
 import Blanc.Lift.WitnessBoundary
+import Blanc.Lift.WitnessCallBoundary
 import Blanc.Lift.WitnessChild
 import Blanc.Lift.WitnessFork
 import Blanc.Lift.WitnessSpawn
@@ -909,6 +915,7 @@ import Blanc.Lift.WriteSiteZero
 import Blanc.ListChunks
 import Blanc.ListFlatMapPosition
 import Blanc.ListFold
+import Blanc.ListOccurrence
 import Blanc.LockExclusion
 import Blanc.LogBloom
 import Blanc.MachineDataFacts

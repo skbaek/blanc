@@ -8,7 +8,7 @@ import Blanc.BlockForward
 import Blanc.Lift.WithdrawalRequest.SystemProtocol
 import Blanc.Lift.ConsolidationRequest.System
 import Blanc.Lift.RequestSystem.Effects
-import Blanc.ConcreteRunKept
+import Blanc.ConcreteRunSegments
 import Blanc.KeptCreateAvoid
 import Blanc.ExecutionKeptConfigured
 import Blanc.SystemWordWriterKept
@@ -151,18 +151,20 @@ private theorem child_commits (h : B256) : Execution.commits (.ok (childPost h))
 private noncomputable def childFrame (h : B256) : Exec.Frame := .ofRun (childRun h) (child_commits h)
 private noncomputable def tailRun (h : B256) : Exec 64 (sevm h) (post h) (.ok (post h)) :=
   .halt (Evm.step_last (at_stop h))
-private noncomputable def callRun (h : B256) : Exec 63 (sevm h) (callState h) (.ok (post h)) :=
-  .runOk (spawn h) (child_enter h) (childRun h) (resume h) (tailRun h)
+private noncomputable def writerSegment (h : B256) :
+    ConcreteRun.KeptSegment (initEvm (msg h)) ⟨64, sevm h, post h⟩ :=
+  (ConcreteRun.KeptSegment.ofStepN 10 (initial_prefix h)).trans
+    (ConcreteRun.KeptSegment.settled (spawn h) (child_enter h) (childRun h) (resume h)
+      (Frame.settlementCommits_ofCall_of_raw_commits (child_commits h)))
 private noncomputable def fullRun (h : B256) : Exec 0 (sevm h) (base h) (.ok (post h)) :=
-  ConcreteRun.Exec.ofStepN 10 (initial_prefix h) (callRun h)
+  (writerSegment h).extend (tailRun h)
 private theorem retained (h : B256) : Exec.keptAt beaconRootsAddress (fullRun h) = [childFrame h] := by
-  rw [show Exec.keptAt beaconRootsAddress (fullRun h) = Exec.keptAt beaconRootsAddress (callRun h) from
-    ConcreteRun.Exec.keptAt_ofStepN _ 10 (initial_prefix h) (callRun h)]
-  have commits : Frame.settlementCommits (Frame.ofCall (childMsg h)) (.ok (childPost h)) = true :=
-    Frame.settlementCommits_ofCall_of_raw_commits (child_commits h)
-  rw [show Exec.keptAt beaconRootsAddress (callRun h) = childFrame h :: Exec.keptAt beaconRootsAddress (tailRun h) from
-    Exec.keptAt_settled_here (spawn h) (child_enter h) (childRun h) (resume h) (tailRun h) commits rfl]
-  rw [tailRun, Exec.keptAt.eq_def]
+  change Exec.keptAt beaconRootsAddress ((writerSegment h).extend (tailRun h)) = _
+  rw [(writerSegment h).kept]
+  change ([] ++ (if beaconRootsAddress = beaconRootsAddress then [childFrame h]
+    else Exec.keptAt beaconRootsAddress (childRun h))) ++
+      Exec.keptAt beaconRootsAddress (tailRun h) = _
+  rw [ite_eq_left rfl, List.nil_append, tailRun, Exec.keptAt.eq_def, List.append_nil]
 
 private theorem snapshot (h : B256) (k : B256) :
     getOrigStorVal (sevm h) beaconRootsAddress k = (base h).getStorVal beaconRootsAddress k := by

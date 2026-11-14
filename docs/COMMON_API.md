@@ -1442,6 +1442,14 @@ The same module splits a list at an index it holds (`Blanc.List.eq_take_cons_dro
 pointwise `Forall₂` relation alike (`Blanc.List.forall₂_split`), and follows a queue entry drained
 at a fixed rate along a list to where it is drained (`Blanc.List.drain_position`: entry `q` of the
 queue at index `j` is entry `q % cap` of what index `j + q / cap` drains).
+To recover original indices from selected occurrence keys, use
+[`Blanc/ListOccurrence.lean`](../Blanc/ListOccurrence.lean)'s
+`Blanc.List.index_eq_of_nodup_filter_map`. Given
+`((xs.filter selected).map key).Nodup`, two successful original `getElem?`
+lookups, both selection facts and equal keys, it concludes that the original
+indices are equal. Unselected rows and equal payloads may repeat; chronology
+and queue-order policy are separate obligations. A use has the shape
+`Blanc.List.index_eq_of_nodup_filter_map fresh at_i at_j selected_i selected_j same`.
 For a configured covered-fork pre-history followed by a joint run (`RingJoint`, with ring-contract header, timestamp and number bounds
 `ObservedPreTip`, `HistoryTimestampsFit`, `HistoryNumbersFit`) or a typed request feed across a `JointRun`
 (`JointFeed.stepRequests`, `JointFeed.feed`, `JointFeed.feedPosition`, `exists_feed_position`, `feedPosition_inj`),
@@ -5594,6 +5602,20 @@ every shared module with its own summary and the branches that cite it.
   addresses. `Checks.replayKept` is the builder consumer of these checks.
   Whole-history budgets and joint-run coupling are checked by the builder
   applicability consumer described above; nontrivial activity remains separate.
+- To compose original continuing prefixes and actual settled child runs, use
+  [`Blanc/ConcreteRunSegments.lean`](../Blanc/ConcreteRunSegments.lean)'s
+  `ConcreteRun.KeptSegment start stop`. Its `extend` accepts the actual
+  continuation at `stop`; `kept` gives the contributed frames followed by that
+  continuation's frames at every observed address, on every outcome.
+  Build a checked continuing prefix with `KeptSegment.ofStepN`, an actual
+  spawn/entry/child/settled resume with `KeptSegment.settled`, and concatenate
+  them with `KeptSegment.trans`. For example, `prefix.trans child` composes a
+  checked prefix and its supplied settled child segment; `(prefix.trans child).kept a tail`
+  recovers their retained-frame contribution at address `a` before the same
+  supplied tail. Settlement commitment remains an explicit premise.
+  `RingHistoryControls`' writer segment and the builder applicability pair/exit
+  segments are concrete consumers. This packages the existing `Jaune.Exec`
+  derivation and its `Exec.keptAt` equation; it adds no execution relation.
 - A concrete frame run over a lifted certificate, as a gas-exact `SProg.RunExact`
   (an executable witness: liveness from one start state, by kernel evaluation): the
   interpreter `Witness.wrun` over the certificate's decoded tree, its single step
@@ -5636,6 +5658,18 @@ every shared module with its own summary and the branches that cite it.
   [`Blanc/Lift/CodeTriesBuild.lean`](../Blanc/Lift/CodeTriesBuild.lean). The machine a code
   child of `CALL` starts with carries the caller's block environment (`childStart_stat`, in
   [`Blanc/Lift/WitnessFork.lean`](../Blanc/Lift/WitnessFork.lean)).
+- Reuse the accessed sets at an already checked witness halt with
+  `Witness.wrun_halted_accKeep` in
+  [`Blanc/Lift/WitnessCallBoundary.lean`](../Blanc/Lift/WitnessCallBoundary.lean).
+  Supply the original `wrun ... = .done (.halted post) cfg` equation; the result
+  relates `cfg.devm` to `post`, including the actual accessed sets and world.
+  `Witness.agree_callChildPost` combines a supplied parent's access-list
+  characterizations, an already checked child's `Agree`, that halt fact and
+  empty output to construct the resumed parent's `Agree` with concatenated
+  access shadows. Parent account/storage shadows are replaced by the child's
+  checked shadows. Builder applicability Calls and Tail reuse the halt fact;
+  Tail reuses the call-boundary adapter before its next original execution.
+  These are symbolic projection lemmas; they do not run or validate a witness.
 - Assemble the free-pointer check of a long certificate from range decisions: `fpRange`
   (entries `k .. k + n - 1` under their annotations, one kernel decision), `fpFrom` over the tails
   `(c.zip ann).drop k`, the link `fpFrom_range`, the end `fpFrom_of_le` and the assembly
@@ -6298,6 +6332,97 @@ every shared module with its own summary and the branches that cite it.
   The existing forward-cut consumers can retain these operands at the same
   actual occurrence; the projection alone supplies no occurrence order.
 
+#### Certified external operands at an actual cursor
+
+Owner: [`Blanc/Lift/CertifiedOperands.lean`](../Blanc/Lift/CertifiedOperands.lean),
+importing Cursor. These declarations relate the checked abstract operand frame
+to the actual decoded same-frame instruction.
+
+| Need / goal shape | Declaration and required facts |
+|---|---|
+| Check each external instruction against its incoming abstract frame | SFunc.execOperandsSatisfy and Cert.execOperandsSatisfy take an observer of type Xinst → List AVal → Bool. The certificate form checks every entry under its declared frame. |
+| Start or reach a cursor with the observation invariant | Cursor.start_execOperandsSatisfy and Cursor.execOperandsSatisfy_of_reachable require both Cert.check code c = true and c.execOperandsSatisfy observe = true; the latter also requires the actual ReflTransGen (SStep c) (Cursor.start c) κ. |
+| Preserve active and suspended observations across one synthetic step | SStep.execOperandsSatisfy takes the certificate observation, SStep c before after and before.ExecOperandsSatisfy c observe. It retains the active tree and every suspended internal return. |
+| Obtain observe x κ.a = true at an actual instruction | CursorOK.execOperandsSatisfy takes ok : CursorOK code c node κ, the cursor invariant and Ninst.At node.sevm.code node.pc (.exec x). |
+| Obtain node.devm.stack[i]? = some w | CursorOK.stack_getElem?_const takes that same ok and κ.a[i]? = some (.const w). It projects the exact indexed real operand, while retaining the original cursor stack suffix. |
+
+Cert.check is needed at start: it establishes that the first entry's frame is
+empty, matching Cursor.start. The Boolean observer alone does not establish that
+fact. The observation and constant projection have no successful-frame or fork
+premise. A caller must separately supply the original actual cursor and its
+reachability; this interface does not manufacture an execution or child effects.
+Internal calls use the existing return-frame abstraction, including unknown
+returned words. See the [actual operand/history walkthrough](claim-map/beacon-deposit.md#certified-external-operands)
+for a checked concrete consumer.
+
+- Probe: Blanc/Lift/CertifiedOperands.lean; actual consumer walkthrough in the existing claim map.
+- Measured cost: 174 source lines; 2.0621 s serial profiled module re-elaboration, peak RSS 1,956,336 KiB, Lean 4.35.0 on WSL2/Linux. This is a module sample, not whole-build wall time.
+- Simplest alternative tried: a local refined certificate and repeated node checks. Shared observation alone did not improve total sampled cost; retaining selected constants in the ordinary registered producer removed the need for that duplicate refinement. The retained serial module sums are 188.3000 s originally, 196.3731 s for consumer-only sharing and 144.7043 s with producer retention; these are not whole-build wall times. See the [producer option contract](LIFT_WORKFLOW.md#selective-constant-retention-in-regular-certificates).
+- Date: 2026-11-14.
+
+#### Direct call-code resolution under selected delegation rules
+
+Owner: [`Blanc/Lift/CallCodeResolution.lean`](../Blanc/Lift/CallCodeResolution.lean),
+downstream of HistStaticCall. The four public names and statements are unchanged.
+
+| Premise / desired result | Declaration |
+|---|---|
+| getDelegatedCodeAddress (s.getCode t) = none and h : CallCodeH deleg s t na code dp; conclude na = t ∧ code = s.getCode t ∧ dp = false | CallCodeH.direct_of_nodeleg |
+| The same raw nondelegation premise; construct CallCodeH deleg s t t (s.getCode t) false | CallCodeH.of_nodeleg |
+| ready : rules.delegatedCodeAddress (s.getCode t) = none and h : CallCodeH rules.delegationEnabled s t na code dp; conclude that same three-part equality | CallCodeH.direct_of_effective |
+| The same effective lookup-none premise; construct CallCodeH rules.delegationEnabled s t t (s.getCode t) false | CallCodeH.of_effective |
+
+The effective forms cover disabled delegation even when the bytes would be a
+designator under enabled rules. These are routing facts: they establish neither
+native activation nor a successful child result. Import this narrow owner for
+new uses; the former importing module continues to reexport the names.
+With ready and resolved as in the effective row above, the symbolic use is:
+
+~~~lean
+have direct : na = t ∧ code = s.getCode t ∧ dp = false :=
+  CallCodeH.direct_of_effective ready resolved
+~~~
+
+An [actual output-consumption adapter](../Blanc/Lift/EcrecoverCall.lean)
+uses this before the separate ProcessMessage, native activation, child
+cleanliness and no-state-gas output facts.
+
+- Probe: Blanc/Lift/CallCodeResolution.lean.
+- Measured cost: 62 source lines; 1.8821 s serial profiled module re-elaboration, peak RSS 1,975,480 KiB, Lean 4.35.0 on WSL2/Linux.
+- Simplest alternative tried: keep the four existing facts at their former owner and reach them through its larger import closure. The additive owner preserves the declaration bodies and leaves HistStaticCall unchanged; there is no claimed timing win from the hoist.
+- Date: 2026-11-14.
+
+#### Native STATICCALL facts at the lifted boundary
+
+Current compiled owner:
+[`Blanc/Lift/StaticPrecompileCall.lean`](../Blanc/Lift/StaticPrecompileCall.lean).
+
+Both public lemmas require the exact six-word stack
+pre.stack = g :: t :: ii :: size :: oi :: outSize :: rest,
+rules.stateGas = none, decide (rules.isPrecomp t.toAdr) = true, and
+rules.delegationEnabled = true →
+getDelegatedCodeAddress (pre.getCode t.toAdr) = none.
+
+| Actual supplied equation | Declaration / conclusion |
+|---|---|
+| Ninst.StepRun pc sevm pre (.exec .staticcall) .none (.ok post) | staticcall_none_getCode_of_precompile gives ∀ a, post.getCode a = pre.getCode a. |
+| Xinst.step sevm pre .staticcall = .spawn frame rsm and frame.enter = .run cevm | staticcall_spawn_not_run_of_precompile gives False. |
+
+The first is a Blanc StepRun/CallCodeH adapter. The second concerns an actual
+spawn and actual Frame.enter equation, including native error outcomes; it
+does not require a success flag or successful native computation. Neither
+constructs liveness, permits a value-carrying CALL substitution, or removes the
+explicit no-state-gas lane.
+
+The raw interpreter law has a checked Jaune owner, pending authorized delivery
+through Blanc's dependency pin. This entry describes the current compiled
+149-line Blanc bridge; the proposed 61-line calling wrapper remains source-only.
+
+- Probe: Blanc/Lift/StaticPrecompileCall.lean; the existing claim-map walkthrough links its actual consumers.
+- Measured cost: current 149 source lines; 2.1300 s serial profiled module re-elaboration, peak RSS 2,001,072 KiB, Lean 4.35.0 on WSL2/Linux.
+- Simplest alternative tried: retain the inline generic raw proof in the consumer. The current shared module removes that authoring copy; the smaller Jaune-backed wrapper is source-only and has no Blanc integration or timing verdict yet.
+- Date: 2026-11-14.
+
 #### C9.9. I need to walk a successful lifted run
 
 - Symbolic environment-push inversion in
@@ -6372,8 +6497,10 @@ every shared module with its own summary and the branches that cite it.
   `CallCodeH.direct_of_nodeleg`/`CallCodeH.of_nodeleg` resolve a non-delegated callee's code
   under either delegation flag. `CallCodeH.direct_of_effective`/`CallCodeH.of_effective`
   use the selected rules' effective lookup-none result, including arbitrary
-  code bytes when delegation is disabled. These helpers live in
-  [`Blanc/Lift/HistEcrecover.lean`](../Blanc/Lift/HistEcrecover.lean);
+  code bytes when delegation is disabled. These four call-code helpers live in
+  [`Blanc/Lift/CallCodeResolution.lean`](../Blanc/Lift/CallCodeResolution.lean);
+  the output-specific helpers retain their existing owner in
+  [`Blanc/Lift/HistEcrecover.lean`](../Blanc/Lift/HistEcrecover.lean), which reexports the four routing facts;
   the forward creation kit under
   historical rule facts (the `SLOAD`/`SSTORE` charges `sloadCostH`/`sstoreCostH` with the
   `sloadCostH_of_eip2929` equation and the exact step
@@ -6879,6 +7006,46 @@ an `Exec` at any system-caller `Sevm`, not only the phase's message), and `SysOu
   The same original run preserves its entry log list under `CoveredFork` and the checked
   instruction/reference predicates; the scanner permits SSTORE and STATICCALL,
   rejects LOG instructions and excludes SELFDESTRUCT terminals.
+- An observation of the same successful synthetic run: for a goal
+  `observe (Outcome.devm out) = observe pre` with an actual
+  `SFunc.Run fs sevm pre f out`,
+  [`Blanc/Lift/TreePredicate.lean`](../Blanc/Lift/TreePredicate.lean) supplies
+  `SFunc.Run.observation_eq`. Its `SFunc.stepsLastsSatisfy next last` checks
+  every ordinary Ninst and terminal Linst. Supply observation equality through
+  `Devm.PopBurn`, `Devm.Burn`, each allowed `Ninst.Run`, and each allowed
+  successful `Linst.Run sevm a l (.ok b)`. PC nodes require the separate
+  `next (.reg .pc) = true` law; the checker alone does not inspect them.
+  The actual tree and every admitted entry must pass the checker, and
+  `ClosedEntrySet` must close the table under the existing `SFunc.refs` from
+  [`Blanc/Lift/Silent.lean`](../Blanc/Lift/Silent.lean). The initial tree also
+  supplies its checked refs membership. `ClosedEntrySet.lookup` projects the
+  checker and refs facts for an actual admitted table lookup. This proves no
+  successful execution, entry lookup, local semantic capability or fork fact
+  by scanning alone; those remain explicit inputs.
+  Worked shared instantiations are `SFunc.Run.world_of_quietH` in
+  [`Blanc/Lift/WalkKitSupport.lean`](../Blanc/Lift/WalkKitSupport.lean), with
+  `observe := fun d => (Devm.getStor d, d.logs)`, `next := Ninst.quiet` and
+  `last := (· != .selfdestruct)`, and `SFunc.Run.logs_of_logSilent_any` in
+  [`Blanc/Lift/LogSilent.lean`](../Blanc/Lift/LogSilent.lean), with
+  `observe := Devm.logs`, `next := Ninst.logSilent` and the same terminal
+  predicate. The quiet instantiation supplies `PopBurn.world`, `Burn.world`,
+  `Ninst.world_of_quietH hsg` and `Linst.world_of_ok`, then projects pair
+  equality back to its original conjunction. It still requires
+  `hsg : sevm.benvStat.rules.stateGas = none` and rejects SSTORE. The log
+  instantiation uses PopBurn/Burn log projections,
+  `Ninst.logs_of_logSilent_any` and the terminal log projection; it permits
+  SSTORE on every fork. Both reuse the original STATICCALL semantics and
+  preserve the original public scanners through the specialization equalities
+  `SFunc.quiet_eq_stepsLastsSatisfy` and `SFunc.logSilent_eq_stepsLastsSatisfy`.
+  Probe: the two shared instantiations above and their existing consumers.
+  Measured cost: WSL matched total 6.4362 s before / 8.4009 s after, including
+  1.9018 s for the new shared module; existing consumer time/RSS unchanged;
+  handwritten Lean source delta +51 lines / +2214 bytes. This is an
+  adopted maintenance tradeoff, not a source or runtime saving.
+  Simplest alternative tried: the original two independent 12-case Run
+  inductions, measured in the same 6.4362 s baseline; both original theorem
+  types remain unchanged in the shared version.
+  Date: 2026-11-14.
 - The preservation ladder over a code image instead of `Prog.compile`:
   `CodeSem` (image, run relation, `correct`) in
   [`Blanc/CommonCore.lean`](../Blanc/CommonCore.lean); `ContractSpecSem`, its

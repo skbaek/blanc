@@ -1,6 +1,7 @@
 import Blanc.Composition.BuilderRequestJointGChargeOnce
 import Blanc.GloasWithdrawalPrefix
 import Blanc.Lift.RequestQueue.Batch
+import Blanc.ListOccurrence
 
 /-!
 # Actual withdrawal prefixes meet the tagged cap-one queue model (`P3`: `payment-debit-at-most-once`)
@@ -232,15 +233,6 @@ private theorem pushed_batches_flatten :
     simp only [List.map_cons, List.flatten_cons, RequestQueue.pushed_append, pushed_stepDebitBatch,
       List.flatMap_cons, pushed_batches_flatten l]
 
-private theorem ge_of_mem_zipIdx {α : Type} :
-    ∀ (l : List α) (n : Nat) {x : α} {j : Nat}, (x, j) ∈ l.zipIdx n → n ≤ j
-  | [], _, _, _, h => by cases h
-  | _ :: l, n, _, _, h => by
-    rw [List.zipIdx_cons] at h
-    rcases List.mem_cons.mp h with heq | hm
-    · cases heq; exact Nat.le_refl n
-    · exact Nat.le_of_lt (Nat.lt_of_lt_of_le (Nat.lt_succ_self n) (ge_of_mem_zipIdx l (n + 1) hm))
-
 private theorem stepDebitTags_fst_nodup (j : Nat) (S : GJointRunStep (P := P) cfg ccfg bls) :
     ((stepDebitTags j S).map Prod.fst).Nodup := by
   unfold stepDebitTags
@@ -267,7 +259,7 @@ private theorem flatMap_stepDebitTags_fst_nodup :
     obtain ⟨⟨S', j⟩, hj, hr2'⟩ := List.mem_flatMap.mp hr2
     dsimp only [stepDebitTags] at hr2'
     obtain ⟨⟨_, k'⟩, _, rfl⟩ := List.mem_map.mp hr2'
-    have hge : n + 1 ≤ j := ge_of_mem_zipIdx l (n + 1) hj
+    have hge : n + 1 ≤ j := List.le_snd_of_mem_zipIdx hj
     cases hxy
     omega
 
@@ -683,21 +675,10 @@ theorem _root_.Blanc.GJointRun.debit_origin_unique
     (h2 : run.steps[i']? = some (.gloas D')) (hk2 : k' < (GJointRunStep.gloas D').drops)
     (hs2 : run.debitSpent[run.debitCursor i' + k']? = some (origin, e')) :
     i = i' ∧ k = k' ∧ e = e' := by
-  have hp1 : run.debitCursor i + k < (run.debitSpent.map Prod.fst).length := by
-    rw [List.length_map]
-    exact (List.getElem?_eq_some_iff.mp hs1).1
-  have hp2 : run.debitCursor i' + k' < (run.debitSpent.map Prod.fst).length := by
-    rw [List.length_map]
-    exact (List.getElem?_eq_some_iff.mp hs2).1
-  have hf1 : (run.debitSpent.map Prod.fst)[run.debitCursor i + k] = origin := by
-    exact Option.some.inj ((List.getElem?_eq_getElem hp1).symm.trans (by
-      rw [List.getElem?_map, hs1]; rfl))
-  have hf2 : (run.debitSpent.map Prod.fst)[run.debitCursor i' + k'] = origin := by
-    exact Option.some.inj ((List.getElem?_eq_getElem hp2).symm.trans (by
-      rw [List.getElem?_map, hs2]; rfl))
   have hpos : run.debitCursor i + k = run.debitCursor i' + k' :=
-    (run.debitSpent_fst_nodup.getElem_inj_iff (i := run.debitCursor i + k)
-      (j := run.debitCursor i' + k') (hi := hp1) (hj := hp2)).mp (hf1.trans hf2.symm)
+    Blanc.List.index_eq_of_nodup_filter_map (selected := fun _ => true) (key := Prod.fst)
+      (by simpa only [List.filter_true] using run.debitSpent_fst_nodup)
+      hs1 hs2 rfl rfl rfl
   have hii : i = i' := by
     rcases lt_trichotomy i i' with hlt | rfl | hlt
     · have hc1 := run.debitCursor_succ hq hspe h1

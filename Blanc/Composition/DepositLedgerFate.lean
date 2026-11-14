@@ -1,5 +1,6 @@
 import Blanc.Composition.DepositLedgerMirrors
 import Blanc.Composition.DepositConsensusOutcomes
+import Blanc.ListOccurrence
 
 /-! Occurrence fate and Nat principal conservation for the existing frozen ledger. -/
 namespace Blanc.Composition.DepositLedgerFate
@@ -8,13 +9,6 @@ open Jaune JauneConsensus JauneConsensus.Facts
 open Blanc.Corpus.Freeze.Deposit
 
 variable {P : Preset} {f : CFork}
-
-private theorem partition_perm {tq ap post : TQueue} (h : PassPartition tq ap post) :
-    (ap ++ post).Perm tq := by
-  induction h with
-  | nil => exact .refl []
-  | apply e _ ih => exact ih.cons e
-  | postpone e _ ih => exact List.perm_middle.trans (ih.cons e)
 
 private theorem passFacts (ctx : Ctx) (state : BeaconState P f) (tq : TQueue)
     (state' : BeaconState P f) (tq' : TQueue) (ap : List (Applied P f))
@@ -25,14 +19,7 @@ private theorem passFacts (ctx : Ctx) (state : BeaconState P f) (tq : TQueue)
     DepositPendingPass.d9Pass ctx state tq state' tq' ap h
   constructor
   · rw [rest]
-    have reorder : ((ap.map fun a => (a.tag, a.deposit)) ++
-        (tq.drop r.next ++ r.postponed)).Perm
-        (((ap.map fun a => (a.tag, a.deposit)) ++ r.postponed) ++ tq.drop r.next) := by
-      simpa only [List.append_assoc] using
-        (List.perm_append_comm (l₁ := tq.drop r.next) (l₂ := r.postponed)).append_left
-          (ap.map fun a => (a.tag, a.deposit))
-    have moved := reorder.trans ((partition_perm partition).append_right (tq.drop r.next))
-    simpa only [List.take_append_drop] using moved
+    exact partition.perm_remainder
   · intro a ha
     obtain ⟨idx, hi⟩ := List.mem_iff_getElem?.mp ha
     exact ⟨_, calls idx a hi⟩
@@ -445,24 +432,13 @@ theorem depositFate : Blanc.Corpus.Freeze.Deposit.D9Fate := by
   intro j D k dr hD hdr
   let d := requestPending dr D.block.2.message.slot
   let all := appliedEntries ap ++ tqF
-  have pairwise : all.Pairwise (fun a b =>
-      a.1.isSome → b.1.isSome → a.1 ≠ b.1) := by
-    change List.Pairwise (fun a b : Tag => a ≠ b)
-      ((tagged all).map Prod.fst) at uniqueTags
-    rw [List.pairwise_map, tagged, List.pairwise_filter] at uniqueTags
-    exact uniqueTags
   have unique : ∀ {p p' : Nat} {e e' : Tag × PendingDeposit},
       all[p]? = some e → all[p']? = some e' →
       e.1 = some dr.index.toNat → e'.1 = some dr.index.toNat → p = p' := by
     intro p p' e e' he he' ht ht'
-    obtain ⟨hp, rfl⟩ := List.getElem?_eq_some_iff.mp he
-    obtain ⟨hp', rfl⟩ := List.getElem?_eq_some_iff.mp he'
-    by_contra hne
-    rcases Nat.lt_or_gt_of_ne hne with hlt | hgt
-    · exact (List.pairwise_iff_getElem.mp pairwise p p' hp hp' hlt
-        (by rw [ht]; rfl) (by rw [ht']; rfl)) (ht.trans ht'.symm)
-    · exact (List.pairwise_iff_getElem.mp pairwise p' p hp' hp hgt
-        (by rw [ht']; rfl) (by rw [ht]; rfl)) (ht'.trans ht.symm)
+    exact Blanc.List.index_eq_of_nodup_filter_map
+      (selected := fun e => e.1.isSome) (key := Prod.fst) uniqueTags he he'
+      (by rw [ht]; rfl) (by rw [ht']; rfl) (ht.trans ht'.symm)
   have atApplied : ∀ {p : Nat} {x : Nat × AppliedAt P}, ap[p]? = some x →
       all[p]? = some (x.2.2.tag, x.2.2.deposit) := by
     intro p x hx

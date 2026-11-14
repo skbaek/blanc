@@ -57,6 +57,10 @@ def SFunc.logSilent : SFunc → Bool
   | .pcAt _ f => f.logSilent
   | .undefined => true
 
+theorem SFunc.logSilent_eq_stepsLastsSatisfy (f : SFunc) :
+    f.logSilent = f.stepsLastsSatisfy Ninst.logSilent (· != .selfdestruct) := by
+  induction f <;> simp_all only [SFunc.logSilent, SFunc.stepsLastsSatisfy]
+
 /-- Entry membership is closed under every referenced internal jump and call. -/
 def LogSilentSet (fs : List SFunc) (entries : List Nat) : Bool :=
   entries.all fun k => match fs[k]? with
@@ -69,50 +73,25 @@ theorem SFunc.Run.logs_of_logSilent_any {fs : List SFunc} {entries : List Nat}
     {pre : Devm} {f : SFunc} {out : Outcome}
     (silent : f.logSilent = true) (refs : f.refs.all (· ∈ entries) = true)
     (run : SFunc.Run fs sevm pre f out) : (Outcome.devm out).logs = pre.logs := by
-  have lookup : ∀ {k g}, k ∈ entries → fs[k]? = some g →
-      g.logSilent = true ∧ g.refs.all (· ∈ entries) = true := by
-    intro k g member found
-    have h := (List.all_eq_true.mp closed) k member
-    rw [found] at h
-    simpa only [Bool.and_eq_true] using h
-  induction run with
-  | zero _ popped _ ih =>
-      simp only [SFunc.logSilent, Bool.and_eq_true] at silent
-      simp only [SFunc.refs, List.all_append, Bool.and_eq_true] at refs
-      exact (ih silent.1 refs.1).trans popped.logs.symm
-  | succ _ _ _ popped _ ih =>
-      simp only [SFunc.logSilent, Bool.and_eq_true] at silent
-      simp only [SFunc.refs, List.all_append, Bool.and_eq_true] at refs
-      exact (ih silent.2 refs.2).trans popped.logs.symm
-  | toZero _ popped _ ih =>
-      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at refs
-      exact (ih silent refs.2).trans popped.logs.symm
-  | toSucc _ _ _ found popped _ ih =>
-      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at refs
-      have target := lookup (of_decide_eq_true refs.1) found
-      exact (ih target.1 target.2).trans popped.logs.symm
-  | last executed =>
-      exact (Linst.world_of_ok (by simpa only [SFunc.logSilent, bne_iff_ne] using silent)
-        executed).2
-  | next step _ ih =>
-      simp only [SFunc.logSilent, Bool.and_eq_true] at silent
-      exact (ih silent.2 refs).trans (Ninst.logs_of_logSilent_any silent.1 step)
-  | dest burned _ ih => exact (ih silent refs).trans burned.logs.symm
-  | jump _ found popped _ ih =>
-      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at refs
-      have target := lookup (of_decide_eq_true refs.1) found
-      exact (ih target.1 target.2).trans popped.logs.symm
-  | ret _ popped => exact popped.logs.symm
-  | callHalt _ found popped _ ih =>
-      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at refs
-      have target := lookup (of_decide_eq_true refs.1) found
-      exact (ih target.1 target.2).trans popped.logs.symm
-  | callRet _ found popped _ _ ihCall ihTail =>
-      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at refs
-      have target := lookup (of_decide_eq_true refs.1) found
-      exact (ihTail silent refs.2).trans ((ihCall target.1 target.2).trans popped.logs.symm)
-  | pcAt step _ _ ih =>
-      exact (ih silent refs).trans (Ninst.logs_of_logSilent_any rfl step)
+  exact SFunc.Run.observation_eq (observe := Devm.logs)
+    (next := Ninst.logSilent) (last := (· != .selfdestruct))
+    (pop := fun h => h.logs.symm) (burn := fun h => h.logs.symm)
+    (step := Ninst.logs_of_logSilent_any)
+    (terminal := fun hl hrun =>
+      (Linst.world_of_ok (by simpa only [bne_iff_ne] using hl) hrun).2)
+    (pc := rfl)
+    (closed := by
+      unfold ClosedEntrySet
+      apply List.all_eq_true.mpr
+      intro k member
+      have admitted := (List.all_eq_true.mp closed) k member
+      cases found : fs[k]? with
+      | none => simp only [found, Bool.false_eq_true] at admitted
+      | some g =>
+        simp only [found, Bool.and_eq_true] at admitted ⊢
+        exact ⟨(SFunc.logSilent_eq_stepsLastsSatisfy g).symm.trans admitted.1, admitted.2⟩)
+    (checked := by simpa only [← SFunc.logSilent_eq_stepsLastsSatisfy] using silent)
+    (refs := refs) run
 
 /-- Compatibility wrapper retaining the original closed-set and covered-fork inputs. -/
 theorem SFunc.Run.logs_of_logSilent {fs : List SFunc} {entries : List Nat}
