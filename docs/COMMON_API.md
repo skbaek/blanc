@@ -6421,9 +6421,9 @@ no-delegation premise, using the selected rules' enabled/disabled laws.
 The `Ninst.StepRun` / `CallCodeH` code-preservation adapter remains in Blanc.
 
 - Probe: Blanc/Lift/StaticPrecompileCall.lean, checked through its actual history and lifted consumers; the existing claim-map walkthrough links those consumers.
-- Measured cost: 61 current source lines; final joined wrapper/upstream timing pending. Historical 149-line inline bridge: 2.1300 s serial profiled module re-elaboration, peak RSS 2,001,072 KiB, Lean 4.35.0 on WSL2/Linux. That sample measures the earlier inline bridge, not this wrapper or the separate Jaune owner.
+- Measured cost: 61 source lines; 1.8025 s serial re-elaboration, peak RSS 1,961,964 KiB. The separate 86-line Jaune owner costs 1.8273 s / 1,833,996 KiB. The joined 12-module C3 sample, including that owner and actual consumers, totals 148.3402 s. Historical 149-line inline bridge: 2.1300 s / 2,001,072 KiB. These are single-run samples with the same profiler flags; small wrapper differences support no additional speedup claim. Lean 4.35.0 on WSL2/Linux.
 - Simplest alternative tried: retain the inline raw interpreter proof. The checked wrapper calls the Jaune law after converting only the existing conditional no-delegation premise; both public statements remain identical.
-- Date: 2026-11-14.
+- Date: 2026-11-15.
 
 #### C9.9. I need to walk a successful lifted run
 
