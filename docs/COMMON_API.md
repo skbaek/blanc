@@ -6414,13 +6414,15 @@ does not require a success flag or successful native computation. Neither
 constructs liveness, permits a value-carrying CALL substitution, or removes the
 explicit no-state-gas lane.
 
-The raw interpreter law has a checked Jaune owner, pending authorized delivery
-through Blanc's dependency pin. This entry describes the current compiled
-149-line Blanc bridge; the proposed 61-line calling wrapper remains source-only.
+The raw interpreter law is `Jaune.Xinst.step_staticcall_not_run_of_precompile`
+in the Git-pinned `Jaune/NativePrecompile.lean` owner. The 61-line Blanc wrapper
+derives its effective-direct lookup premise from the existing conditional
+no-delegation premise, using the selected rules' enabled/disabled laws.
+The `Ninst.StepRun` / `CallCodeH` code-preservation adapter remains in Blanc.
 
-- Probe: Blanc/Lift/StaticPrecompileCall.lean; the existing claim-map walkthrough links its actual consumers.
-- Measured cost: current 149 source lines; 2.1300 s serial profiled module re-elaboration, peak RSS 2,001,072 KiB, Lean 4.35.0 on WSL2/Linux.
-- Simplest alternative tried: retain the inline generic raw proof in the consumer. The current shared module removes that authoring copy; the smaller Jaune-backed wrapper is source-only and has no Blanc integration or timing verdict yet.
+- Probe: Blanc/Lift/StaticPrecompileCall.lean, checked through its actual history and lifted consumers; the existing claim-map walkthrough links those consumers.
+- Measured cost: 61 current source lines; final joined wrapper/upstream timing pending. Historical 149-line inline bridge: 2.1300 s serial profiled module re-elaboration, peak RSS 2,001,072 KiB, Lean 4.35.0 on WSL2/Linux. That sample measures the earlier inline bridge, not this wrapper or the separate Jaune owner.
+- Simplest alternative tried: retain the inline raw interpreter proof. The checked wrapper calls the Jaune law after converting only the existing conditional no-delegation premise; both public statements remain identical.
 - Date: 2026-11-14.
 
 #### C9.9. I need to walk a successful lifted run
